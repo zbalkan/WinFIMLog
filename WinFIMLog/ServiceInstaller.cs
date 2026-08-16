@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 
 namespace WinFIMLog
 {
@@ -158,7 +157,7 @@ namespace WinFIMLog
             (output.Contains("1060", StringComparison.OrdinalIgnoreCase) || output.Contains("1062", StringComparison.OrdinalIgnoreCase));
 
         private static string GetCurrentExecutablePath() =>
-            Environment.ProcessPath ?? Assembly.GetEntryAssembly()?.Location ?? throw new InvalidOperationException("Cannot determine the current executable path.");
+            Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the current executable path.");
 
         private static string GetDefaultInstallDirectory()
         {

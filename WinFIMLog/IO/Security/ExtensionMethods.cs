@@ -13,9 +13,8 @@ using System.IO;
 using System.Linq;
 using System.Security.AccessControl;
 using System.Security.Principal;
-using System.Text;
+using System.Text.Json;
 using Microsoft.Win32;
-using Utf8Json;
 
 namespace WinFIMLog.IO.Security
 {
@@ -243,9 +242,7 @@ namespace WinFIMLog.IO.Security
                 return string.Empty;
             }
 
-            var json = Encoding.UTF8.GetString(JsonSerializer.Serialize(ac));
-
-            return json ?? string.Empty;
+            return JsonSerializer.Serialize(ac, AclJsonSerializerContext.Default.AccessControlList);
         }
     }
 }

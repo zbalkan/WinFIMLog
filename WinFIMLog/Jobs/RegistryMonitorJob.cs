@@ -252,8 +252,7 @@ namespace WinFIMLog.Jobs
                 const KernelTraceEventParser.ParserTrackingOptions options = KernelTraceEventParser.ParserTrackingOptions.None;
                 var kernelParser = new KernelTraceEventParser(traceSessionSource, options);
 
-                var t = traceSessionSource.GetType();
-                var kernelField = t.GetField("_Kernel", BindingFlags.Instance | BindingFlags.SetField | BindingFlags.NonPublic);
+                var kernelField = typeof(ETWTraceEventSource).GetField("_Kernel", BindingFlags.Instance | BindingFlags.NonPublic);
                 kernelField?.SetValue(traceSessionSource, kernelParser);
             }
             catch (Exception ex)

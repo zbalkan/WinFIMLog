@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
@@ -25,11 +25,14 @@ namespace WinFIMLog.Jobs
 
         private readonly IBuffer<FileSystemChange> _messageStore;
 
-        public FileSystemDiscoveryJob(ILogger logger, IBuffer<FileSystemChange> fsStore, ILiteDbContext ctx)
+        private readonly Settings _settings;
+
+        public FileSystemDiscoveryJob(ILogger logger, IBuffer<FileSystemChange> fsStore, ILiteDbContext ctx, Settings settings)
         {
             _logger = logger;
             _messageStore = fsStore;
             _ctx = ctx;
+            _settings = settings;
         }
 
         /// <summary>
@@ -78,7 +81,7 @@ namespace WinFIMLog.Jobs
 
         private void Add(string path)
         {
-            var change = FileSystemChange.FromPath(path, ChangeCategory.Discovery);
+            var change = FileSystemChange.FromPath(path, ChangeCategory.Discovery, _settings.HashLimitMB);
             if (change != null)
             {
                 if (change.ObjectType == FileSystem.ObjectType.File)
@@ -142,7 +145,7 @@ namespace WinFIMLog.Jobs
         {
             Debug.WriteLine("Starting filtering by configuration values...");
             sw.Restart();
-            var filtered = Settings.Instance.FilterPaths(files);
+            var filtered = _settings.FilterPaths(files);
             sw.Stop();
             Debug.WriteLine("Path filtering completed: {0}", sw.Elapsed);
             return filtered;

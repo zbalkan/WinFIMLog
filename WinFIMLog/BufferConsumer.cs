@@ -1,4 +1,4 @@
-﻿// {{ FIM }} Copyright (C) {{ 2022 }} {{ Zafer Balkan }}
+// {{ FIM }} Copyright (C) {{ 2022 }} {{ Zafer Balkan }}
 //
 // This program is free software: you can redistribute it and/or modify it under the terms of the
 // GNU Affero General Public License as published by the Free Software Foundation, either version 3
@@ -30,15 +30,19 @@ namespace WinFIMLog
 
         private readonly IBuffer<RegistryChange> _regStore;
 
+        private readonly Settings _settings;
+
         public BufferConsumer(ILogger<JobOrchestrator> logger,
                       IBuffer<FileSystemChange> fsStore,
                       IBuffer<RegistryChange> regStore,
-                      ILiteDbContext ctx)
+                      ILiteDbContext ctx,
+                      Settings settings)
         {
             _logger = logger;
             _fsStore = fsStore;
             _regStore = regStore;
             _ctx = ctx;
+            _settings = settings;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -63,7 +67,7 @@ namespace WinFIMLog
             {
                 var fsChanges = _fsStore.Take(fsCount);
 
-                if (Settings.Instance.EnableLocalDatabase)
+                if (_settings.EnableLocalDatabase)
                 {
                     _ = _ctx.FileSystemChanges.InsertBulk(fsChanges.Select(m => m));
                     Debug.WriteLine($"Succesfully inserted {fsCount} items.");
@@ -91,7 +95,7 @@ namespace WinFIMLog
             {
                 var regChanges = _regStore.Take(regCount);
 
-                if (Settings.Instance.EnableLocalDatabase)
+                if (_settings.EnableLocalDatabase)
                 {
                     _ = _ctx.RegistryChanges.InsertBulk(regChanges.Select(m => m));
                     Debug.WriteLine($"Succesfully inserted {regCount} items.");

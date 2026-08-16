@@ -34,19 +34,21 @@ namespace WinFIMLog
                         .WriteTo.EventLog("WinFIMLog", "WinFIMLog", manageEventSource: true, eventIdProvider: new EventIdProvider())
                         .CreateLogger());
                 })
+                .ConfigureAppConfiguration(configuration =>
+                {
+                    _ = configuration.AddWindowsRegistry(Registry.RootName, Registry.Hive, false);
+                })
                 .ConfigureServices(services =>
                 {
-                    _ = services.Configure<LiteDbOptions>(options => options.DatabasePath = Settings.Instance.DatabasePath);
+                    _ = services.AddSingleton<Settings>();
+                    _ = services.AddOptions<LiteDbOptions>()
+                        .Configure<Settings>((options, settings) => options.DatabasePath = settings.DatabasePath);
                     _ = services.AddSingleton<ILiteDbContext, LiteDbContext>();
                     _ = services.AddSingleton<BackgroundWorkerQueue>();
                     _ = services.AddSingleton<IBuffer<FileSystemChange>, FileSystemChangeBuffer>();
                     _ = services.AddSingleton<IBuffer<RegistryChange>, RegistryChangeBuffer>();
                     _ = services.AddHostedService<JobOrchestrator>();
                     _ = services.AddHostedService<BufferConsumer>();
-
-                    IConfiguration configuration = new ConfigurationBuilder()
-                    .AddWindowsRegistry(Registry.RootName, Registry.Hive, false)
-                    .Build();
                 })
                 .UseWindowsService();
     }

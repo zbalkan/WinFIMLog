@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
@@ -40,17 +40,20 @@ namespace WinFIMLog.Jobs
 
         private readonly int _pid;
 
+        private readonly Settings _settings;
+
         private readonly ObjectPool<StringBuilder> _sbPool = new DefaultObjectPoolProvider().CreateStringBuilderPool();
 
         private bool _disposedValue;
 
-        public RegistryMonitorJob(ILogger logger, IBuffer<RegistryChange> regStore)
+        public RegistryMonitorJob(ILogger logger, IBuffer<RegistryChange> regStore, Settings settings)
         {
             _logger = logger;
             _pid = Environment.ProcessId;
             _cancellationTokenSource = new CancellationTokenSource();
             _messageStore = regStore;
             _changes = new List<RegistryChange>();
+            _settings = settings;
         }
 
         /// <summary>
@@ -174,7 +177,7 @@ namespace WinFIMLog.Jobs
                 return false;
             }
 
-            return Settings.Instance.IsMonitoredKey(keyName);
+            return _settings.IsMonitoredKey(keyName);
         }
 
         /// <summary>

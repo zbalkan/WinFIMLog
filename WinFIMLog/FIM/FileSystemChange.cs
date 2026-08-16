@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using WinFIMLog.Data;
@@ -32,12 +32,13 @@ namespace WinFIMLog.FIM
         /// <summary> Generates new file system change record from parameters </summary>
         /// <param name="path">The path to filekey</param>
         /// <param name="category"><see cref="ChangeCategory"></param>
+        /// <param name="hashLimitMb">The maximum file size in megabytes for hash calculation.</param>
         /// <param name="fileSystemChange">The change object</param>
         /// <exception cref="NotSupportedException"></exception>
         /// <exception cref="System.Security.SecurityException"></exception>
         /// <exception cref="System.Reflection.TargetInvocationException"></exception>
         /// <exception cref="PathTooLongException"></exception> <exception cref="UnauthorizedAccessException"></exception>
-        public static FileSystemChange? FromPath(string path, ChangeCategory category)
+        public static FileSystemChange? FromPath(string path, ChangeCategory category, int hashLimitMb)
         {
             var objectType = GetObjectType(path);
             if (objectType == ObjectType.Unknown && category != ChangeCategory.Deleted)
@@ -48,7 +49,7 @@ namespace WinFIMLog.FIM
             var hash = string.Empty;
             if (objectType == ObjectType.File &&
                 category != ChangeCategory.Deleted &&
-                IsUnderSizeLimit(path))
+                IsUnderSizeLimit(path, hashLimitMb))
             {
                 hash = CalculateFileHash(path);
             }
@@ -88,11 +89,11 @@ namespace WinFIMLog.FIM
             }
         }
 
-        private static bool IsUnderSizeLimit(string path)
+        private static bool IsUnderSizeLimit(string path, int hashLimitMb)
         {
             try
             {
-                return new FileInfo(path).Length < Settings.Instance.HashLimitMB * 1024L * 1024L;
+                return new FileInfo(path).Length < hashLimitMb * 1024L * 1024L;
             }
             catch (FileNotFoundException)
             {

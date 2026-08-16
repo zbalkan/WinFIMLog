@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -9,7 +9,7 @@ using WinFIMLog.IO;
 
 namespace WinFIMLog
 {
-    internal sealed class Settings
+    public sealed class Settings
     {
         /// <summary>
         ///     Path to LiteDB database file
@@ -100,19 +100,9 @@ namespace WinFIMLog
         /// </summary>
         public bool Success { get; }
 
-        /// <summary>
-        ///     The instance of the Settings singleton
-        /// </summary>
-#pragma warning disable Ex0101 // Member accessor may throw undocumented exception
-
-        internal static Settings Instance => Lazy.Value;
-#pragma warning restore Ex0101 // Member accessor may throw undocumented exception
-
         private const int DEFAULT_HASHLIMIT_MB = 1024;
 
         private const int DEFAULT_HEARTBEAT_INTERVAL = 60;
-
-        private static readonly Lazy<Settings> Lazy = new(() => new Settings());
 
         private Regex? excludedExtensionsPattern;
 
@@ -125,7 +115,7 @@ namespace WinFIMLog
         private Regex monitoredPathsPattern;
 
         /// <summary>
-        ///     Private ctor of the Settings singleton
+        ///     Creates the application settings managed by the host's dependency injection container.
         /// </summary>
         /// <exception cref="IOException">
         /// </exception>
@@ -135,7 +125,7 @@ namespace WinFIMLog
         /// </exception>
         /// <exception cref="System.Security.SecurityException">
         /// </exception>
-        private Settings()
+        public Settings()
         {
             _ = Directory.CreateDirectory(Directory.GetParent(DatabasePath)!.ToString());
             try

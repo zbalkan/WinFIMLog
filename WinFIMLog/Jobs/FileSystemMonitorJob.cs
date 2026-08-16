@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using FastCache;
@@ -27,14 +27,17 @@ namespace WinFIMLog.Jobs
 
         private readonly List<FileSystemWatcher> _watchers;
 
+        private readonly Settings _settings;
+
         private bool _disposedValue;
 
-        public FileSystemMonitorJob(ILogger logger, IBuffer<FileSystemChange> fsStore, ILiteDbContext ctx)
+        public FileSystemMonitorJob(ILogger logger, IBuffer<FileSystemChange> fsStore, ILiteDbContext ctx, Settings settings)
         {
             _logger = logger;
             _watchers = [];
             _messageStore = fsStore;
             _ctx = ctx;
+            _settings = settings;
         }
 
         // This should run async
@@ -59,7 +62,7 @@ namespace WinFIMLog.Jobs
 
         private void InvokeWatchers()
         {
-            foreach (var path in Settings.Instance.MonitoredPaths)
+            foreach (var path in _settings.MonitoredPaths)
             {
                 var watcher = new FileSystemWatcher(path)
                 {
@@ -114,17 +117,17 @@ namespace WinFIMLog.Jobs
 
         private void ProcessEvent(string path, ChangeCategory category)
         {
-            if (!Settings.Instance.IsMonitoredPath(path))
+            if (!_settings.IsMonitoredPath(path))
             {
                 return;
             }
 
-            var change = FileSystemChange.FromPath(path, category);
+            var change = FileSystemChange.FromPath(path, category, _settings.HashLimitMB);
 
             if (change != null)
             {
                 FileSystemChange? previous = null;
-                if (Settings.Instance.EnableLocalDatabase)
+                if (_settings.EnableLocalDatabase)
                 {
                     previous = FileSystemChange.RetrievePreviousChange(path, _ctx);
                     change.PreviousHash = previous?.CurrentHash ?? string.Empty;

@@ -20,15 +20,19 @@ namespace WinFIMLog
 
         private readonly RegistryMonitorJob _regMonitor;
 
+        private readonly Settings _settings;
+
         public JobOrchestrator(ILogger<JobOrchestrator> logger,
                       IBuffer<FileSystemChange> fsStore,
                       IBuffer<RegistryChange> regStore,
-                      ILiteDbContext ctx)
+                      ILiteDbContext ctx,
+                      Settings settings)
         {
             _logger = logger;
-            _fsMonitor = new FileSystemMonitorJob(_logger, fsStore, ctx);
-            _regMonitor = new RegistryMonitorJob(_logger, regStore);
-            _fsDiscovery = new FileSystemDiscoveryJob(_logger, fsStore, ctx);
+            _settings = settings;
+            _fsMonitor = new FileSystemMonitorJob(_logger, fsStore, ctx, settings);
+            _regMonitor = new RegistryMonitorJob(_logger, regStore, settings);
+            _fsDiscovery = new FileSystemDiscoveryJob(_logger, fsStore, ctx, settings);
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
@@ -39,7 +43,7 @@ namespace WinFIMLog
             _fsMonitor.Stop();
             _fsMonitor.Dispose();
 
-            if (Settings.Instance.EnableRegistryMonitoring)
+            if (_settings.EnableRegistryMonitoring)
             {
                 _regMonitor.Stop();
                 _regMonitor.Dispose();
@@ -54,18 +58,18 @@ namespace WinFIMLog
 
             try
             {
-                if (Settings.Instance.EnableLocalDatabase && !Settings.Instance.IsFileDiscoveryCompleted)
+                if (_settings.EnableLocalDatabase && !_settings.IsFileDiscoveryCompleted)
                 {
                     _ = StartFilesystemDiscoveryAsync(stoppingToken);
                 }
                 _fsMonitor.Start();
 
-                if (Settings.Instance.EnableRegistryMonitoring)
+                if (_settings.EnableRegistryMonitoring)
                 {
                     _regMonitor.Start();
                 }
 
-                if (Settings.Instance.HeartbeatInterval <= 0)
+                if (_settings.HeartbeatInterval <= 0)
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
                 }
@@ -73,7 +77,7 @@ namespace WinFIMLog
                 while (!stoppingToken.IsCancellationRequested)
                 {
                     _logger.LogInformation("HEARTBEAT: Worker running at: {time}", DateTimeOffset.Now);
-                    await Task.Delay(TimeSpan.FromSeconds(Settings.Instance.HeartbeatInterval), stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(_settings.HeartbeatInterval), stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -112,7 +116,7 @@ namespace WinFIMLog
                 _logger.LogInformation(
                     "File discovery not completed. Initiating file system discovery. It will take time.");
                 await Task.Run(_fsDiscovery.Start, stoppingToken);
-                Settings.Instance.IsFileDiscoveryCompleted = true;
+                _settings.IsFileDiscoveryCompleted = true;
                 _logger.LogInformation("File system discovery completed.");
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

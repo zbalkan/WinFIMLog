@@ -5,6 +5,7 @@ using WinFIMLog.Utils;
 using WinFIMLog.Configuration;
 using WinFIMLog.Health;
 using WinFIMLog.Jobs;
+using WinFIMLog.Snapshots;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -53,6 +54,8 @@ namespace WinFIMLog
                     _ = services.AddSingleton<HealthMetrics>();
                     _ = services.AddSingleton<IHealthReporter, HealthReporter>();
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
+                    _ = services.AddSingleton<BaselineRepository>();
+                    _ = services.AddHostedService<SnapshotService>();
                     // Hosted services are stopped in reverse registration order. Start the
                     // consumer first so monitors are stopped before the consumer drains buffers.
                     _ = services.AddHostedService<SettingsStartupValidator>();

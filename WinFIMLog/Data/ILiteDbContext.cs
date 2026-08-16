@@ -9,6 +9,7 @@
 using System;
 using WinFIMLog.FIM;
 using LiteDB;
+using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Data
 {
@@ -17,5 +18,13 @@ namespace WinFIMLog.Data
         ILiteCollection<FileSystemChange> FileSystemChanges { get; }
 
         ILiteCollection<RegistryChange> RegistryChanges { get; }
+
+        ILiteCollection<BaselineMetadata> Baselines { get; }
+
+        ILiteCollection<BaselineMember> BaselineMembers { get; }
+
+        ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
+
+        bool ExecuteTransaction(Action action);
     }
 }

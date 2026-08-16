@@ -6,6 +6,10 @@
 
 WinFIMLog is a Windows service for monitoring critical directories and Registry keys.
 
+The recurring snapshot schema, lifecycle, identity limitations and migration are
+specified in [the data model](docs/DATA-MODEL.md). Architecture decisions are
+indexed in [the ADR index](docs/adr/README.md).
+
 ## Usage
 
 1. Publish the service and install it with `WinFIMLog.exe install`.

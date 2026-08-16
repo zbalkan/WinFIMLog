@@ -71,6 +71,12 @@ namespace WinFIMLog
         /// <summary>Seconds between wildcard scope re-resolution checks.</summary>
         public int ScopeReresolutionInterval { get; private set; } = 300;
 
+        /// <summary>Seconds between authoritative filesystem snapshots (default: six hours).</summary>
+        public int FileSystemSnapshotInterval { get; private set; } = 21600;
+
+        /// <summary>Seconds between authoritative registry snapshots (default: six hours).</summary>
+        public int RegistrySnapshotInterval { get; private set; } = 21600;
+
         /// <summary>SHA-256 identity of the canonical effective scope.</summary>
         public string ScopeHash { get; private set; } = string.Empty;
 
@@ -559,6 +565,9 @@ namespace WinFIMLog
             if (scopeInterval < 10) throw new InvalidOperationException("ScopeReresolutionInterval must be at least 10 seconds.");
             ScopeReresolutionInterval = scopeInterval;
 
+            FileSystemSnapshotInterval = ReadPositiveInterval("FileSystemSnapshotInterval", 21600);
+            RegistrySnapshotInterval = ReadPositiveInterval("RegistrySnapshotInterval", 21600);
+
             var enableLocalDatabase = Registry.ReadDwordValue("EnableLocalDatabase");
             if (enableLocalDatabase == -1)
             {
@@ -581,6 +590,14 @@ namespace WinFIMLog
             }
 
             HashLimitMB = hashLimitMb;
+        }
+
+        private static int ReadPositiveInterval(string name, int defaultValue)
+        {
+            var value = Registry.ReadDwordValue(name);
+            if (value == -1) { Registry.WriteDwordValue(name, defaultValue); value = defaultValue; }
+            if (value < 60) throw new InvalidOperationException($"{name} must be at least 60 seconds.");
+            return value;
         }
 
     }

@@ -92,10 +92,8 @@ namespace WinFIMLog
 
             try
             {
-                if (_settings.EnableLocalDatabase && !_settings.IsFileDiscoveryCompleted)
-                {
-                    fileSystemDiscoveryTask = StartFilesystemDiscoveryAsync(stoppingToken);
-                }
+                // Recurring Tier 0 snapshots own completeness. The legacy discovery flag is
+                // retained only for upgrade compatibility and is never an execution gate.
                 _fsMonitor.Start();
                 scopeRefreshTask = RefreshScopeAsync(stoppingToken);
 

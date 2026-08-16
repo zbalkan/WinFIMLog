@@ -2,6 +2,7 @@
 using WinFIMLog.FIM;
 using LiteDB;
 using Microsoft.Extensions.Options;
+using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Data
 {
@@ -10,6 +11,10 @@ namespace WinFIMLog.Data
         public ILiteCollection<FileSystemChange> FileSystemChanges { get; }
 
         public ILiteCollection<RegistryChange> RegistryChanges { get; }
+
+        public ILiteCollection<BaselineMetadata> Baselines { get; }
+        public ILiteCollection<BaselineMember> BaselineMembers { get; }
+        public ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
 
         /// <summary>
         ///     The default size is 80MB
@@ -42,9 +47,34 @@ namespace WinFIMLog.Data
             RegistryChanges = _database.GetCollection<RegistryChange>("registryChanges");
             RegistryChanges.EnsureIndex(x => x.Id);
             RegistryChanges.EnsureIndex(x => x.Entity);
+
+            Baselines = _database.GetCollection<BaselineMetadata>("baselines");
+            Baselines.EnsureIndex(x => x.Status);
+            Baselines.EnsureIndex(x => x.Source);
+            BaselineMembers = _database.GetCollection<BaselineMember>("baselineMembers");
+            BaselineMembers.EnsureIndex(x => x.BaselineId);
+            BaselineMembers.EnsureIndex(x => x.Identity);
+            ReconciliationResults = _database.GetCollection<ReconciliationResult>("reconciliationResults");
+            ReconciliationResults.EnsureIndex(x => x.BaselineId);
         }
 
         #region Dispose
+
+        public bool ExecuteTransaction(Action action) => _database.BeginTrans() && Execute(action);
+
+        private bool Execute(Action action)
+        {
+            try
+            {
+                action();
+                return _database.Commit();
+            }
+            catch
+            {
+                _database.Rollback();
+                throw;
+            }
+        }
 
         public void Dispose()
         {

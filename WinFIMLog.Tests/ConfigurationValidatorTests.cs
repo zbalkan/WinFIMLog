@@ -1,40 +1,41 @@
 using WinFIMLog.Configuration;
-using Xunit;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace WinFIMLog.Tests;
 
+[TestClass]
 public sealed class ConfigurationValidatorTests
 {
-    [Theory]
-    [InlineData(@"C:\Program Files (x86)\App[1]")]
-    [InlineData(@"C:\Users\*\Downloads")]
-    [InlineData(@"C:\Data\a+b (copy)")]
+    [DataTestMethod]
+    [DataRow(@"C:\Program Files (x86)\App[1]")]
+    [DataRow(@"C:\Users\*\Downloads")]
+    [DataRow(@"C:\Data\a+b (copy)")]
     public void Accepts_absolute_paths_with_regex_special_characters(string value) =>
         ConfigurationValidator.ValidatePath(value);
 
-    [Theory]
-    [InlineData("relative\\path")]
-    [InlineData(@"C:\Us*ers\Downloads")]
-    [InlineData(@"C:\Users\*\*\Downloads")]
-    [InlineData(@"C:\Users\?\Downloads")]
+    [DataTestMethod]
+    [DataRow("relative\\path")]
+    [DataRow(@"C:\Us*ers\Downloads")]
+    [DataRow(@"C:\Users\*\*\Downloads")]
+    [DataRow(@"C:\Users\?\Downloads")]
     public void Rejects_malformed_paths_and_names_value(string value)
     {
-        var exception = Assert.Throws<ConfigurationValidationException>(() => ConfigurationValidator.ValidatePath(value));
-        Assert.Contains(value, exception.Message);
+        var exception = Assert.ThrowsException<ConfigurationValidationException>(() => ConfigurationValidator.ValidatePath(value));
+        StringAssert.Contains(exception.Message, value);
     }
 
-    [Theory]
-    [InlineData(@"HKEY_LOCAL_MACHINE\Software\A+B (test)")]
-    [InlineData(@"HKEY_CURRENT_USER\Software\Example[1]")]
+    [DataTestMethod]
+    [DataRow(@"HKEY_LOCAL_MACHINE\Software\A+B (test)")]
+    [DataRow(@"HKEY_CURRENT_USER\Software\Example[1]")]
     public void Accepts_keys_with_regex_special_characters(string value) => ConfigurationValidator.ValidateKey(value);
 
-    [Theory]
-    [InlineData(@"HKLM\Software\Example")]
-    [InlineData(@"HKEY_USERS\*\Software")]
-    [InlineData("")]
+    [DataTestMethod]
+    [DataRow(@"HKLM\Software\Example")]
+    [DataRow(@"HKEY_USERS\*\Software")]
+    [DataRow("")]
     public void Rejects_malformed_keys_and_names_value(string value)
     {
-        var exception = Assert.Throws<ConfigurationValidationException>(() => ConfigurationValidator.ValidateKey(value));
-        Assert.Contains(value, exception.Message);
+        var exception = Assert.ThrowsException<ConfigurationValidationException>(() => ConfigurationValidator.ValidateKey(value));
+        StringAssert.Contains(exception.Message, value);
     }
 }

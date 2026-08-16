@@ -1,15 +1,16 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.FIM;
 using WinFIMLog.Health;
-using Xunit;
 
 namespace WinFIMLog.Tests;
 
+[TestClass]
 public sealed class FileSystemCaptureQueueTests
 {
-    [Fact]
+    [TestMethod]
     public async Task SaturationIsBoundedAndReportedAsCoverageGap()
     {
         var metrics = new HealthMetrics();
@@ -18,20 +19,20 @@ public sealed class FileSystemCaptureQueueTests
         var first = new RawFileSystemNotification("C:\\", "C:\\one", ChangeCategory.Changed, DateTimeOffset.UtcNow);
         var second = new RawFileSystemNotification("C:\\", "C:\\two", ChangeCategory.Changed, DateTimeOffset.UtcNow);
 
-        Assert.True(queue.TryAdmit(first));
-        Assert.False(queue.TryAdmit(second));
-        Assert.Equal(1, metrics.QueueDepth);
-        Assert.Equal(1, metrics.Accepted);
-        Assert.Equal(1, metrics.Dropped);
-        Assert.Equal("CaptureQueueFull", reporter.Reason);
+        Assert.IsTrue(queue.TryAdmit(first));
+        Assert.IsFalse(queue.TryAdmit(second));
+        Assert.AreEqual(1, metrics.QueueDepth);
+        Assert.AreEqual(1, metrics.Accepted);
+        Assert.AreEqual(1, metrics.Dropped);
+        Assert.AreEqual("CaptureQueueFull", reporter.Reason);
 
-        Assert.Equal(first, await queue.ReadAsync(CancellationToken.None));
+        Assert.AreEqual(first, await queue.ReadAsync(CancellationToken.None));
         queue.Complete(succeeded: true);
-        Assert.Equal(0, metrics.QueueDepth);
-        Assert.Equal(1, metrics.Processed);
+        Assert.AreEqual(0, metrics.QueueDepth);
+        Assert.AreEqual(1, metrics.Processed);
     }
 
-    [Fact]
+    [TestMethod]
     public async Task FailedEnrichmentIsCountedSeparately()
     {
         var metrics = new HealthMetrics();
@@ -39,8 +40,8 @@ public sealed class FileSystemCaptureQueueTests
         queue.TryAdmit(new("C:\\", "C:\\one", ChangeCategory.Created, DateTimeOffset.UtcNow));
         _ = await queue.ReadAsync(CancellationToken.None);
         queue.Complete(succeeded: false);
-        Assert.Equal(1, metrics.EnrichmentFailures);
-        Assert.Equal(0, metrics.Processed);
+        Assert.AreEqual(1, metrics.EnrichmentFailures);
+        Assert.AreEqual(0, metrics.Processed);
     }
 
     private sealed class RecordingReporter : IHealthReporter

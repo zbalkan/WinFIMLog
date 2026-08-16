@@ -95,7 +95,7 @@ namespace WinFIMLog
                     if (change.ChangeCategory != ChangeCategory.Discovery)
                     {
                         _logger.LogInformation("Change Type: {changeType:l}\nCategory: {category:l}\nPath: {path:l}\nCurrent Hash: {currentHash:l}\nPreviousHash: {previousHash:l}",
-                            Enum.GetName(change.ChangeCategory), Enum.GetName(ConfigChangeType.FileSystem), change.Entity, change.CurrentHash, change.PreviousHash);
+                            Enum.GetName(ConfigChangeType.FileSystem), Enum.GetName(change.ChangeCategory), change.Entity, change.CurrentHash, change.PreviousHash);
                     }
                 }
 

@@ -2,6 +2,7 @@ using WinFIMLog.Data;
 using WinFIMLog.FIM;
 using WinFIMLog.IO;
 using WinFIMLog.Utils;
+using WinFIMLog.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -49,6 +50,7 @@ namespace WinFIMLog
                     _ = services.AddSingleton<IBuffer<RegistryChange>, RegistryChangeBuffer>();
                     // Hosted services are stopped in reverse registration order. Start the
                     // consumer first so monitors are stopped before the consumer drains buffers.
+                    _ = services.AddHostedService<SettingsStartupValidator>();
                     _ = services.AddHostedService<BufferConsumer>();
                     _ = services.AddHostedService<JobOrchestrator>();
                 })

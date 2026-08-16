@@ -162,6 +162,7 @@ namespace WinFIMLog.Jobs
                     change.ProcessName = attribution.ProcessName;
                     change.Username = attribution.Username;
                     change.UserSID = attribution.UserSID;
+                    change.AttributionStatus = AttributionStatus.Attributed;
                     return;
                 }
 

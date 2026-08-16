@@ -119,7 +119,7 @@ For ease of use, an ADMX file is created. So, the monitored paths, excluded path
                     <li>HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\RunServices</li>
                     <li>HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL</li>
                     <li>HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy</li>
-                    <li>HKEY_LOCAL_MACHINE\SHKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002</li>
+                    <li>HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002</li>
                     <li>HKEY_CURRENT_USER\Software\Classes\Mscfile\Shell\Open\Command</li>
                     <li>HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\App Paths\Control.exe</li>
                     <li>HKEY_CURRENT_USER\Software\Classes\Exefile\Shell\Runas\Command\IsolatedCommand</li>
@@ -179,6 +179,13 @@ For ease of use, an ADMX file is created. So, the monitored paths, excluded path
         </tr>
     </tbody>
 </table>
+
+## Phase 1 reference documentation
+
+* [Event ID contract and Windows release gate](docs/EVENTS.md)
+* [Attribution semantics and limitations](docs/ATTRIBUTION.md)
+* [Architecture decisions](docs/adr/README.md)
+* [Defect register](docs/defects/REGISTER.md)
 
 ### Event Logs
 

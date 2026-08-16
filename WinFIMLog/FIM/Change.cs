@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 
 namespace WinFIMLog.FIM
 {
     public class Change : IChange
     {
         public string ACLs { get; set; }
+
+        public AttributionStatus AttributionStatus { get; set; } = AttributionStatus.Unattributed;
 
         public ChangeCategory ChangeCategory { get; set; }
 

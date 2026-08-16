@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+<Project Sdk="Microsoft.NET.Sdk.Worker">
 
     <PropertyGroup>
         <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
@@ -6,6 +6,7 @@
         <ImplicitUsings>disable</ImplicitUsings>
         <UserSecretsId>dotnet-WinFIMLog-393DD967-2EB1-49CF-AC41-ECF289DC3BB8</UserSecretsId>
         <StartupObject>WinFIMLog.Program</StartupObject>
+        <ApplicationManifest>app.manifest</ApplicationManifest>
         <ApplicationIcon>..\Assets\fim.ico</ApplicationIcon>
         <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
         <PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>

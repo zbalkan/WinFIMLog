@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using WinFIMLog.IO;
+using WinFIMLog.Configuration;
 
 namespace WinFIMLog
 {
@@ -114,6 +115,10 @@ namespace WinFIMLog
 
         private Regex monitoredPathsPattern;
 
+        private RegistryScopeMatcher registryScopeMatcher;
+
+        public string? FailureReason { get; private set; }
+
         /// <summary>
         ///     Creates the application settings managed by the host's dependency injection container.
         /// </summary>
@@ -136,6 +141,7 @@ namespace WinFIMLog
             catch (Exception ex)
             {
                 Debug.WriteLine(ex);
+                FailureReason = ex.Message;
                 Success = false;
             }
         }
@@ -170,14 +176,7 @@ namespace WinFIMLog
 
         public bool IsMonitoredKey(string keyName)
         {
-            var monitored = monitoredKeysPattern.IsMatch(keyName);
-
-            var excluded = false;
-            if (excludedKeysPattern != null)
-            {
-                excluded = excludedKeysPattern.IsMatch(keyName);
-            }
-            return monitored && !excluded;
+            return registryScopeMatcher.IsMatch(keyName);
         }
 
         public bool IsMonitoredPath(string path)
@@ -238,7 +237,7 @@ namespace WinFIMLog
             {
                 var sb = new StringBuilder(20);
                 sb.Append("^.*(?:");
-                sb.Append(Sanitize(new StringBuilder(20).AppendJoin("|", ExcludedExtensions)));
+                sb.AppendJoin("|", ExcludedExtensions.Select(Regex.Escape));
                 sb.Append(")$");
                 return new Regex(sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
             }
@@ -259,7 +258,7 @@ namespace WinFIMLog
             {
                 var sb = new StringBuilder(100);
                 sb.Append("^(?:");
-                sb.Append(Sanitize(new StringBuilder(20).AppendJoin("|", ExcludedKeys)));
+                sb.AppendJoin("|", ExcludedKeys.Select(Regex.Escape));
                 sb.Append(").*$");
                 return new Regex(sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
             }
@@ -280,7 +279,7 @@ namespace WinFIMLog
             {
                 var sb = new StringBuilder(100);
                 sb.Append("^(?:");
-                sb.Append(Sanitize(new StringBuilder(20).AppendJoin("|", ExcludedPaths)));
+                sb.AppendJoin("|", ExcludedPaths.Select(Regex.Escape));
                 sb.Append(").*$");
                 return new Regex(sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
             }
@@ -299,7 +298,7 @@ namespace WinFIMLog
         {
             var sb = new StringBuilder(100);
             sb.Append("^(?:\"?(");
-            sb.Append(Sanitize(new StringBuilder(20).AppendJoin("|", MonitoredKeys)));
+            sb.AppendJoin("|", MonitoredKeys.Select(Regex.Escape));
             sb.Append(")).*$");
             return new Regex(sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
         }
@@ -316,7 +315,7 @@ namespace WinFIMLog
         {
             var sb = new StringBuilder(100);
             sb.Append("(?:^(");
-            sb.Append(Sanitize(new StringBuilder(20).AppendJoin('|', MonitoredPaths)));
+            sb.AppendJoin("|", MonitoredPaths.Select(Regex.Escape));
             sb.Append(@")\\?.*$)");
             return new Regex(sb.ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
         }
@@ -429,7 +428,7 @@ namespace WinFIMLog
                     @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\RunServices",
                     @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL",
                     @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy",
-                    @"HKEY_LOCAL_MACHINE\SHKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002",
+                    @"HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002",
                     @"HKEY_CURRENT_USER\Software\Classes\Mscfile\Shell\Open\Command",
                     @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\App Paths\Control.exe",
                     @"HKEY_CURRENT_USER\Software\Classes\Exefile\Shell\Runas\Command\IsolatedCommand",
@@ -491,6 +490,9 @@ namespace WinFIMLog
             ExcludedKeys = excludedKeys.Order().ToArray();
             excludedKeysPattern = ExcludedKeys.Length == 1 && ExcludedKeys[0]?.Length == 0 ? null : GenerateExcludedKeysPattern();
 
+            ConfigurationValidator.Validate(monitoredPaths, excludedPaths, MonitoredKeys, ExcludedKeys);
+            registryScopeMatcher = new RegistryScopeMatcher(MonitoredKeys, ExcludedKeys);
+
             var heartbeat = Registry.ReadDwordValue("HeartbeatInterval");
             if (heartbeat == -1)
             {
@@ -524,13 +526,5 @@ namespace WinFIMLog
             HashLimitMB = hashLimitMb;
         }
 
-        private StringBuilder Sanitize(StringBuilder sb) => sb
-            .Replace(@"\", @"\\")
-            .Replace(@"\\\\", @"\\")
-            .Replace(".", @"\.")
-            .Replace(" ", "\\ ")
-            .Replace("(", "\\(")
-            .Replace(")", "\\)")
-            .Replace("-", "\\-");
     }
 }

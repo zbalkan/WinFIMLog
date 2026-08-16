@@ -1,4 +1,4 @@
-﻿// {{ FIM }} Copyright (C) {{ 2022 }} {{ Zafer Balkan }}
+// {{ FIM }} Copyright (C) {{ 2022 }} {{ Zafer Balkan }}
 //
 // This program is free software: you can redistribute it and/or modify it under the terms of the
 // GNU Affero General Public License as published by the Free Software Foundation, either version 3
@@ -13,6 +13,8 @@ namespace WinFIMLog.FIM
     public interface IChange
     {
         string ACLs { get; set; }
+
+        AttributionStatus AttributionStatus { get; set; }
 
         ChangeCategory ChangeCategory { get; set; }
 

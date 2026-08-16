@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -75,20 +75,16 @@ namespace WinFIMLog.FIM
                 }
             }
 
-            try
+            var attribution = ProcessAttribution.Resolve(data.ProcessID, data.ProcessName, processId =>
             {
-                using var process = Process.GetProcessById(data.ProcessID);
-                ProcessName = process.ProcessName;
+                using var process = Process.GetProcessById(processId);
                 var userInfo = SidUserInfoCache.Get(process);
-                Username = userInfo.Username;
-                UserSID = userInfo.SID;
-            }
-            catch (Exception)
-            {
-                // Registry events must still be recorded if the process exits before lookup
-                // or its access token cannot be queried.
-                ProcessName = data.ProcessName;
-            }
+                return (process.ProcessName, userInfo.Username, userInfo.SID);
+            });
+            AttributionStatus = attribution.Status;
+            ProcessName = attribution.ProcessName;
+            Username = attribution.Username;
+            UserSID = attribution.UserSid;
 
             ACLs = _key?.GetACL() ?? string.Empty;
         }
@@ -177,6 +173,6 @@ namespace WinFIMLog.FIM
             return StrippedKeyNameRegex().Replace(fullName, "$1");
         }
 
-        public override string ToString() => $"Timestamp: {DateTime:O}\nEvent Name: {EventName}\nChange Category: {ChangeCategory}\nEntity: {Entity}\nKey Name: {KeyName}\nValue Name: {ValueName}\nValue Data: {ValueData}\nProcess: {ProcessName} (PID: {ProcessID})\nUser Info: {Username} (SID: {UserSID})";
+        public override string ToString() => $"Timestamp: {DateTime:O}\nEvent Name: {EventName}\nChange Category: {ChangeCategory}\nEntity: {Entity}\nKey Name: {KeyName}\nValue Name: {ValueName}\nValue Data: {ValueData}\nProcess: {ProcessName} (PID: {ProcessID})\nUser Info: {Username} (SID: {UserSID})\nAttribution Status: {AttributionStatus}";
     }
 }

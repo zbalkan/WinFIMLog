@@ -1,9 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Security;
+using NUlid;
 using WinFIMLog.Data;
 using WinFIMLog.IO.Security;
-using NUlid;
 using static WinFIMLog.IO.FileSystem;
 
 namespace WinFIMLog.FIM
@@ -85,13 +86,43 @@ namespace WinFIMLog.FIM
                 return string.Empty;
             }
 
+            return GetAclOrEmpty(path.GetACL);
+        }
+
+        internal static string GetAclOrEmpty(Func<string> getAcl)
+        {
+            ArgumentNullException.ThrowIfNull(getAcl);
+
             try
             {
-                return path.GetACL();
+                return getAcl();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Access to security descriptors is independent of access to file contents.
+                // A denied ACL is expected on protected paths and must not discard the event.
+                return string.Empty;
+            }
+            catch (SecurityException)
+            {
+                return string.Empty;
+            }
+            catch (FileNotFoundException)
+            {
+                // FileSystemWatcher notifications race with subsequent changes and deletion.
+                return string.Empty;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return string.Empty;
+            }
+            catch (IOException)
+            {
+                return string.Empty;
             }
             catch (Exception ex)
             {
-                // ACL collection must not prevent the filesystem event from being recorded.
+                // Unexpected failures remain diagnosable without preventing event capture.
                 Debug.WriteLine(ex);
                 return string.Empty;
             }

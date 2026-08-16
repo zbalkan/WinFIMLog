@@ -1,7 +1,10 @@
 using System;
 using System.ComponentModel;
+using System.IO;
+using System.Security;
 using System.Security.Principal;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using WinFIMLog.FIM;
 using WinFIMLog.IO.Security;
 
 namespace WinFIMLog.Tests
@@ -34,6 +37,31 @@ namespace WinFIMLog.Tests
                 () => throw new IdentityNotMappedException());
 
             Assert.AreEqual(sid, result);
+        }
+
+        [TestMethod]
+        [DataRow(typeof(UnauthorizedAccessException))]
+        [DataRow(typeof(SecurityException))]
+        [DataRow(typeof(FileNotFoundException))]
+        [DataRow(typeof(DirectoryNotFoundException))]
+        [DataRow(typeof(IOException))]
+        public void FileSystemChangeContinuesWhenAclIsUnavailable(Type exceptionType)
+        {
+            var exception = (Exception)Activator.CreateInstance(exceptionType)!;
+
+            var result = FileSystemChange.GetAclOrEmpty(() => throw exception);
+
+            Assert.AreEqual(string.Empty, result);
+        }
+
+        [TestMethod]
+        public void FileSystemChangeKeepsAvailableAcl()
+        {
+            const string acl = "{\"Owner\":\"CONTOSO\\\\Alice\"}";
+
+            var result = FileSystemChange.GetAclOrEmpty(() => acl);
+
+            Assert.AreEqual(acl, result);
         }
     }
 }

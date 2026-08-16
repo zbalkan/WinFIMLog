@@ -11,7 +11,6 @@ jobs:
     runs-on: windows-latest
     env:
       BINARY_OUTPUT: ${{ github.workspace }}\artifacts\binaries
-      PUBLISH_OUTPUT: ${{ runner.temp }}\WinFIMLog-win-x64
     steps:
       - uses: actions/checkout@v7
         with:
@@ -67,6 +66,7 @@ jobs:
       - name: Publish single-file service binary
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+          PUBLISH_OUTPUT: ${{ runner.temp }}\WinFIMLog-win-x64
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -89,6 +89,7 @@ jobs:
       - name: Package release asset
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+          PUBLISH_OUTPUT: ${{ runner.temp }}\WinFIMLog-win-x64
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'

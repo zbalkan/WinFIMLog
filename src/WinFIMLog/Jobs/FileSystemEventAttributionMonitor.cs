@@ -83,9 +83,10 @@ namespace WinFIMLog.Jobs
                 session.Source.Kernel.ProcessDCStart += RecordProcess;
                 session.Source.Kernel.ProcessStop += EndProcess;
                 session.Source.Kernel.All += Record;
-                // Existing processes must be captured before file events are trusted. Without
-                // rundown a PID could be joined to a later, unrelated process instance.
-                session.CaptureState(KernelTraceEventParser.ProviderGuid);
+                // Enabling the kernel Process keyword supplies Process/DCStart rundown events
+                // for processes which already exist. Do not call CaptureState here: that API
+                // sends a user-mode provider control command, which the kernel system provider
+                // rejects with E_INVALIDARG.
                 session.Source.Process();
             }
             catch (Exception ex)

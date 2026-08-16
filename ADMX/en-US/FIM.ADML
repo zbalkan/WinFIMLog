@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <policyDefinitionResources revision="1.0" schemaVersion="1.0" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-    <displayName>FIM</displayName>
-    <description>This policy includes the settings for FIM (File Integrity Monitoring) Service.</description>
+    <displayName>WinFIMLog</displayName>
+    <description>This policy includes the settings for WinFIMLog File Integrity Monitoring Service.</description>
     <resources>
         <stringTable>
-            <string id="FIM">FIM</string>
-            <string id="FIM_HELP">Configure FIM (File Integrity Monitoring) Service</string>
+            <string id="WinFIMLog">WinFIMLog</string>
+            <string id="WinFIMLog_HELP">Configure WinFIMLog File Integrity Monitoring Service</string>
             <string id="polHeartbeat">Configure heartbeat</string>
-            <string id="polHeartbeat_HELP">This policy includes the heartbeat settings for FIM (File Integrity Monitoring) Service. FIM Service generates an event log in INFORMATION level in an interval.
+            <string id="polHeartbeat_HELP">This policy includes the heartbeat settings for WinFIMLog File Integrity Monitoring Service. WinFIMLog Service generates an event log in INFORMATION level in an interval.
             
 If this policy is disabled or not configured, the default value is hardcoded as 60 seconds.
 The value can be specified between 0 to 3600 seconds. 0 means no heartbeat logs.
 
 Interval is not an exact timing. The exact logging will occur on each interval value plus a random offset.</string>
             <string id="polFileSystem">Configure file system monitoring</string>
-            <string id="polFileSystem_HELP">This policy includes the file system monitoring settings for FIM (File Integrity Monitoring) Service.
+            <string id="polFileSystem_HELP">This policy includes the file system monitoring settings for WinFIMLog File Integrity Monitoring Service.
 
 When disabled or not configured, there is no default value. Service will run without any monitoring activity.
 
 Monitored Paths:
-The paths enumerated in this list will be monitored by the FIM service. Please type each full path in one line without quotation marks, for instance:
+The paths enumerated in this list will be monitored by the WinFIMLog service. Please type each full path in one line without quotation marks, for instance:
 %SystemRoot%\System32
 %SystemRoot%\SysWOW64
 %ProgramFiles%
@@ -68,7 +68,7 @@ Hashing limit:
 Larger files may take longer processing time and even block the process while calculating SHA256 hashes. By default the files with size 1GB or more are ignored for calculation.
 The spin uses steps of 256 MB to help easy configuration.</string>
             <string id="polRegistry">Configure registry monitoring</string>
-            <string id="polRegistry_HELP">This policy includes the registry monitoring settings for FIM (File Integrity Monitoring) Service.
+            <string id="polRegistry_HELP">This policy includes the registry monitoring settings for WinFIMLog File Integrity Monitoring Service.
 
 When disabled or not configured, Registry monitoring will not run. Service will run without any monitoring activity.
 

@@ -7,18 +7,18 @@
     <supersededAdm fileName="" />
     <resources minRequiredRevision="1.0" fallbackCulture="en-US"/>
     <categories>
-        <category name="FIM" displayName="$(string.FIM)" explainText="$(string.FIM_HELP)"/>
+        <category name="WinFIMLog" displayName="$(string.WinFIMLog)" explainText="$(string.WinFIMLog_HELP)"/>
     </categories>
     <policies>
-        <policy name="polHeartbeat" displayName="$(string.polHeartbeat)" explainText="$(string.polHeartbeat_HELP)" key="SOFTWARE\FIM" class="Machine" presentation="$(presentation.presHeartbeat)">
-            <parentCategory ref="FIM"/>
+        <policy name="polHeartbeat" displayName="$(string.polHeartbeat)" explainText="$(string.polHeartbeat_HELP)" key="SOFTWARE\WinFIMLog" class="Machine" presentation="$(presentation.presHeartbeat)">
+            <parentCategory ref="WinFIMLog"/>
             <supportedOn ref="windows:SUPPORTED_WindowsVista"/>
             <elements>
                 <decimal id="presHeartbeatInterval" valueName="HeartbeatInterval" minValue="0" maxValue="3600" required="true"/>
             </elements>
         </policy>
-        <policy name="polFileSystem" displayName="$(string.polFileSystem)" explainText="$(string.polFileSystem_HELP)" key="SOFTWARE\FIM" class="Machine" presentation="$(presentation.presFileSystem)">
-            <parentCategory ref="FIM"/>
+        <policy name="polFileSystem" displayName="$(string.polFileSystem)" explainText="$(string.polFileSystem_HELP)" key="SOFTWARE\WinFIMLog" class="Machine" presentation="$(presentation.presFileSystem)">
+            <parentCategory ref="WinFIMLog"/>
             <supportedOn ref="windows:SUPPORTED_WindowsVista"/>
             <elements>
                 <multiText id="presMonitoredPaths" valueName="MonitoredPaths"/>
@@ -35,8 +35,8 @@
                 <decimal id="presHashLimitMB" valueName="HashLimitMB" required="true"/>
             </elements>
         </policy>
-        <policy name="polRegistry" displayName="$(string.polRegistry)" explainText="$(string.polRegistry_HELP)" key="SOFTWARE\FIM" valueName="EnableRegistryMonitoring" class="Machine" presentation="$(presentation.presRegistry)">
-            <parentCategory ref="FIM"/>
+        <policy name="polRegistry" displayName="$(string.polRegistry)" explainText="$(string.polRegistry_HELP)" key="SOFTWARE\WinFIMLog" valueName="EnableRegistryMonitoring" class="Machine" presentation="$(presentation.presRegistry)">
+            <parentCategory ref="WinFIMLog"/>
             <supportedOn ref="windows:SUPPORTED_WindowsVista"/>
             <enabledValue>
                 <decimal value="1" />

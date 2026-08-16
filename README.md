@@ -7,10 +7,9 @@
 WinFIMLog is a Windows service for monitoring critical directories and Registry keys.
 
 The recurring snapshot schema, lifecycle, identity limitations and migration are
-specified in [the data model](docs/DATA-MODEL.md). Architecture decisions are
-indexed in [the ADR index](docs/adr/README.md). Open design risks and their
-ordered remediation milestones are tracked in the
-[architecture remediation roadmap](docs/ARCHITECTURE-ROADMAP.md).
+specified in [ADR-0011](docs/adr/0011-baseline-and-evidence-data-model.md).
+All operational and architecture decisions are indexed in the
+[ADR index](docs/adr/README.md); the completed remediation record is ADR-0018.
 
 ## Usage
 
@@ -30,21 +29,22 @@ ordered remediation milestones are tracked in the
 
 WinFIMLog supplies a hard-coded default scope when no effective preference or
 policy value exists. Configuration precedence, defaults and validation rules are
-listed in [the configuration reference](docs/CONFIGURATION.md).
+listed in [ADR-0010](docs/adr/0010-configuration-contract.md).
 
 Recurring versioned snapshots are the Tier 0 completeness mechanism. Filesystem
 snapshots include files, directories, reparse-point nodes, ACL evidence and ADS
 names; reparse points are not traversed. Registry snapshots enumerate configured
-keys and typed values. A cursorless filesystem scan uses a second pass before it
-is committed atomically as complete. Persistent differences found by comparison
+keys and typed values. A cursorless filesystem scan is committed only after two
+consecutive observations agree. Persistent differences found by comparison
 are emitted as baseline finding event 7795.
 
 Notifications reduce latency but do not prove completeness. Filesystem
 attribution is best-effort ETW path/time correlation. Registry attribution is a
 post-event PID lookup and can be unavailable after process exit or access
 denial. Known watcher overflow and registry ETW loss emit a coverage gap and
-request a Tier 0 reconciliation snapshot. See [attribution](docs/ATTRIBUTION.md),
-[health](docs/HEALTH.md), and [current limitations](docs/LIMITATIONS.md).
+request a Tier 0 reconciliation snapshot. See [ADR-0009](docs/adr/0009-attribution-evidence-boundary.md),
+[ADR-0013](docs/adr/0013-health-and-coverage-contract.md), and
+[ADR-0014](docs/adr/0014-product-limitations.md).
 
 The repository is AGPL-3.0 licensed and contains the separately licensed
 LGPL-2.1 `NtfsReader` component; its licence is retained in
@@ -203,10 +203,10 @@ For ease of use, an ADMX file is created. So, the monitored paths, excluded path
 
 ## Phase 1 reference documentation
 
-* [Event ID contract and Windows release gate](docs/EVENTS.md)
-* [Attribution semantics and limitations](docs/ATTRIBUTION.md)
+* [Event ID contract and Windows release gate](docs/adr/0012-event-contract.md)
+* [Attribution semantics and limitations](docs/adr/0009-attribution-evidence-boundary.md)
 * [Architecture decisions](docs/adr/README.md)
-* [Defect register](docs/defects/REGISTER.md)
+* [Architecture remediation closure](docs/adr/0018-architecture-remediation-closure.md)
 
 ### Event Logs
 
@@ -276,10 +276,11 @@ Add `--remove-files` to remove the installed application directory as well. If y
 
 ## Development
 
-You need .NET 8 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish WinFIMLog release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
+You need .NET 10 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish WinFIMLog release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
 
-Operational contracts are documented in [events](docs/EVENTS.md),
-[health and coverage](docs/HEALTH.md), [performance qualification](docs/PERFORMANCE.md),
+Operational contracts are documented in [ADR-0012](docs/adr/0012-event-contract.md),
+[ADR-0013](docs/adr/0013-health-and-coverage-contract.md),
+[ADR-0016](docs/adr/0016-performance-qualification.md),
 and the [architecture decisions](docs/adr/README.md).
 
 ## Special thanks to:

@@ -13,17 +13,9 @@ namespace WinFIMLog.Snapshots
         public static string FileSystem(IEnumerable<string> paths) => string.Join(";",
             paths.Select(VolumeIdentity).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase));
 
-        public static string Registry(IEnumerable<string> keys)
-        {
-            var loadedUsers = OperatingSystem.IsWindows()
-                ? string.Join(",", Microsoft.Win32.Registry.Users.GetSubKeyNames()
-                    .Where(name => name.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase) && !name.EndsWith("_Classes", StringComparison.OrdinalIgnoreCase))
-                    .Order(StringComparer.OrdinalIgnoreCase))
-                : "non-windows";
-            return string.Join(";", keys.Select(key => key.Split('\\', 2)[0].ToUpperInvariant())
-                .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)
-                .Select(hive => hive == "HKEY_CURRENT_USER" ? $"{hive}:{loadedUsers}" : hive));
-        }
+        public static string RegistryResolved(IEnumerable<string> resolvedKeys) => string.Join(";",
+            resolvedKeys.Select(key => key.TrimEnd('\\').ToUpperInvariant())
+                .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase));
 
         private static string VolumeIdentity(string path)
         {

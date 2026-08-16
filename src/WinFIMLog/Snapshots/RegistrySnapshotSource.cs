@@ -18,10 +18,20 @@ namespace WinFIMLog.Snapshots
         public IReadOnlyList<BaselineMember> Capture(IEnumerable<string> roots)
         {
             if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
+            return CaptureResolved(ResolveRoots(roots));
+        }
+
+        public IReadOnlyList<BaselineMember> CaptureResolved(IEnumerable<string> resolvedRoots)
+        {
+            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
             var members = new List<BaselineMember>();
-            foreach (var root in ExpandCurrentUserRoots(roots).Distinct(StringComparer.OrdinalIgnoreCase)) CaptureRoot(root, members);
+            foreach (var root in resolvedRoots.Distinct(StringComparer.OrdinalIgnoreCase)) CaptureRoot(root, members);
             return members;
         }
+
+        public static IReadOnlyList<string> ResolveRoots(IEnumerable<string> roots) =>
+            ExpandCurrentUserRoots(roots).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase).ToArray();
 
         internal static IEnumerable<string> ExpandCurrentUserRoots(IEnumerable<string> roots)
         {

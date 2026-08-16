@@ -1,8 +1,13 @@
-# Configuration
+# ADR-0010 — Configuration contract
+
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
 
 ## Optional attribution
 
-`Attribution:Sacl:Enabled` (Boolean, default `false`) opts in to Security-audit attribution. `FileScopes` and `RegistryScopes` are arrays of literal, deployment-owned SACL locations. An enabled tier requires at least one location, rejects wildcards, and permits no more than 64 combined locations. These application settings do not install SACLs or change audit policy; see [Attribution](ATTRIBUTION.md).
+`Attribution:Sacl:Enabled` (Boolean, default `false`) opts in to Security-audit attribution. `FileScopes` and `RegistryScopes` are arrays of literal, deployment-owned SACL locations. An enabled tier requires at least one location, rejects wildcards, and permits no more than 64 combined locations. These application settings do not install SACLs or change audit policy; see [Attribution](0009-attribution-evidence-boundary.md).
 
 Local finding aggregation was removed by ADR-0008. Findings enter the durable
 outbox individually; aggregation is a downstream SIEM responsibility.
@@ -25,7 +30,7 @@ WinFIMLog reads machine policy from `HKLM\SOFTWARE\WinFIMLog` preference. Policy
 | `EnableLocalDatabase` | `REG_DWORD` | `1` | `1` maintains latest-state projections. The delivery outbox and Tier 0 baselines remain mandatory. |
 | `HashLimitMB` | `REG_DWORD` | `1024` | Maximum file size considered for hashing. |
 | `HeartbeatInterval` | `REG_DWORD` | `60` | Seconds; `0` disables heartbeat. |
-| `CaptureQueueCapacity` | `REG_DWORD` | `8192` | Must exceed zero. |
+| `CaptureQueueCapacity` | `REG_DWORD` | `8192` | Must exceed zero; runtime changes are rejected and require service restart because admission capacity is fixed at construction. |
 | `WatcherBufferSizeKB` | `REG_DWORD` | `64` | 8–64 KiB. |
 | `ScopeReresolutionInterval` | `REG_DWORD` | `300` | At least 10 seconds; controls policy refresh and wildcard re-resolution. |
 | `FileSystemSnapshotInterval` | `REG_DWORD` | `21600` | At least 60 seconds; Tier 0 filesystem scan interval and principal component of the detection SLA. |

@@ -199,9 +199,12 @@ namespace WinFIMLog
                     building.Value = new EffectiveSettings();
                     ReadOrCreateRegistrySettings();
                     var next = building.Value!;
+                    if (previousState.CaptureQueueCapacity != next.CaptureQueueCapacity)
+                        throw new ConfigurationValidationException(
+                            "CaptureQueueCapacity is fixed at startup; restart the service to apply this change.");
                     Volatile.Write(ref current, next);
                     building.Value = null;
-                    return (previous, next.ScopeHash, !string.Equals(previous, next.ScopeHash, StringComparison.Ordinal));
+                    return (previous, next.ScopeHash, GenerationChanged(previousState, next));
                 }
                 catch
                 {
@@ -213,6 +216,17 @@ namespace WinFIMLog
 
         private EffectiveSettings ReadState() => building.Value ?? Volatile.Read(ref current);
         private EffectiveSettings WriteState() => building.Value ?? throw new InvalidOperationException("Settings can only be changed while building a generation.");
+
+        internal static bool GenerationChanged(EffectiveSettings left, EffectiveSettings right) => !(
+            left.EnableLocalDatabase == right.EnableLocalDatabase &&
+            left.EnableRegistryMonitoring == right.EnableRegistryMonitoring &&
+            left.HashLimitMB == right.HashLimitMB && left.HeartbeatInterval == right.HeartbeatInterval &&
+            left.CaptureQueueCapacity == right.CaptureQueueCapacity &&
+            left.WatcherBufferSizeKB == right.WatcherBufferSizeKB &&
+            left.ScopeReresolutionInterval == right.ScopeReresolutionInterval &&
+            left.FileSystemSnapshotInterval == right.FileSystemSnapshotInterval &&
+            left.RegistrySnapshotInterval == right.RegistrySnapshotInterval &&
+            string.Equals(left.ScopeHash, right.ScopeHash, StringComparison.Ordinal));
 
         private ParallelQuery<string> FilterMonitoredPaths(IEnumerable<string> paths) => from path in paths.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
                                                                                          where ReadState().MonitoredPathsPattern.IsMatch(path)

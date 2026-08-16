@@ -1,4 +1,9 @@
-# Current limitations
+# ADR-0014 — Explicit product limitations
+
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
 
 WinFIMLog is snapshot-first. Recurring snapshots provide eventual detection of
 persistent state differences; notification sources provide lower latency and
@@ -15,6 +20,9 @@ best-effort attribution. The following limitations remain explicit.
 * A failed or interrupted snapshot is retained as `Building` or `Invalid` and
   is never completeness evidence. Detection is delayed until a later successful
   snapshot.
+* Cursorless filesystem capture proves consecutive agreement, not a transactional
+  point-in-time volume image. A scope that continues changing is rejected and
+  retried rather than published as complete.
 * Path is the current entity identity. Rename and delete/recreate continuity is
   therefore not authoritative; snapshot comparison reports path creation and
   deletion, while live rename evidence may carry old/new paths.
@@ -29,6 +37,9 @@ best-effort attribution. The following limitations remain explicit.
 * Registry ETW can lose events under load. Runtime loss counters produce a gap
   event and a registry snapshot request; attribution for the lost operations is
   unrecoverable.
+* HKCU means every currently loaded SID hive. Offline profiles are not mounted;
+  the concrete loaded-hive manifest is recorded in baseline lineage so logon and
+  logoff do not masquerade as Registry deletion or creation.
 * Admission uses a bounded in-memory queue. Queue-full shedding and forced
   process termination are explicit gaps bounded, for persistent changes, by the
   next complete snapshot.

@@ -64,14 +64,16 @@ public sealed class BaselineRepositoryTests
     }
 
     [TestMethod]
-    public void Applicability_change_invalidates_old_complete_baseline()
+    public void Applicability_change_supersedes_but_preserves_old_complete_baseline()
     {
         var old = repository.Begin(BaselineSource.Registry, "old-scope", "hive", algorithmVersion: "registry-v1");
         repository.ReconcileAndComplete(old, [Member("A", "one")]);
 
         _ = repository.Begin(BaselineSource.Registry, "new-scope", "hive", algorithmVersion: "registry-v1");
 
-        Assert.AreEqual(BaselineStatus.Invalid, context.Baselines.FindById(new BsonValue(old.Id)).Status);
+        var historical = context.Baselines.FindById(new BsonValue(old.Id));
+        Assert.AreEqual(BaselineStatus.Complete, historical.Status);
+        Assert.AreEqual(BaselineApplicability.Superseded, historical.Applicability);
         Assert.IsNull(repository.LatestComplete(BaselineSource.Registry, "old-scope", "hive", algorithmVersion: "registry-v1"));
     }
 
@@ -108,6 +110,37 @@ public sealed class BaselineRepositoryTests
         Assert.AreEqual(2, context.Baselines.Count());
         Assert.AreEqual(2, context.BaselineMembers.Count());
         Assert.IsTrue(context.Baselines.FindAll().All(x => x.Status == BaselineStatus.Complete));
+    }
+
+    [TestMethod]
+    public void Resolved_hive_manifest_change_starts_lineage_without_mass_deletion()
+    {
+        var first = repository.Begin(BaselineSource.Registry, "scope", "HKEY_USERS\\S-1-1",
+            algorithmVersion: "registry-v1");
+        repository.ReconcileAndComplete(first, [Member("HKEY_USERS\\S-1-1\\RUN", "one")]);
+
+        var second = repository.Begin(BaselineSource.Registry, "scope", "HKEY_USERS\\S-1-2",
+            algorithmVersion: "registry-v1");
+        var results = repository.ReconcileAndComplete(second,
+            [Member("HKEY_USERS\\S-1-2\\RUN", "two")]);
+
+        Assert.IsEmpty(results);
+        Assert.AreEqual(BaselineApplicability.Superseded,
+            context.Baselines.FindById(new BsonValue(first.Id)).Applicability);
+        Assert.AreEqual(BaselineApplicability.Current, second.Applicability);
+    }
+
+    [TestMethod]
+    public void Consistency_evidence_is_committed_with_complete_metadata()
+    {
+        var baseline = repository.Begin(BaselineSource.FileSystem, "scope", "volume");
+        baseline.ConsistencyMethod = "CursorlessConsecutiveAgreement";
+        baseline.ObservationPasses = 3;
+        repository.ReconcileAndComplete(baseline, [Member("A", "hash")]);
+
+        var persisted = context.Baselines.FindById(new BsonValue(baseline.Id));
+        Assert.AreEqual("CursorlessConsecutiveAgreement", persisted.ConsistencyMethod);
+        Assert.AreEqual(3, persisted.ObservationPasses);
     }
 
     private static BaselineMember Member(string identity, string hash) => new()

@@ -1,6 +1,12 @@
-# Defect register
+# ADR-0019 — Defect closure register
 
-This register records Phase 1 findings carried forward from the architecture review. Status **Resolved** means the named automated test or operational check provides closure; later-phase architectural risks remain open.
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
+
+This register preserves findings from the completed architecture review. Status
+**Resolved** means the named automated test or operational check provides closure.
 
 | ID | Severity | Finding | Source location | Owner | Status | Resolving change / evidence |
 |---|---|---|---|---|---|---|
@@ -25,12 +31,10 @@ This register records Phase 1 findings carried forward from the architecture rev
 | P4-04 | High | Directories, reparse points and ADS names lacked distinct evidence | `Snapshots/FileSystemSnapshotSource.cs` | Maintainers | Resolved | ADR-0006 and snapshot evidence tests |
 | P4-05 | High | Registry had no recurring before/after state | `Snapshots/RegistrySnapshotSource.cs` | Maintainers | Resolved | Typed recurring registry membership and reconciliation |
 
-## Open architecture findings
+## Architecture closure evidence
 
-The consolidated [architecture remediation roadmap](../ARCHITECTURE-ROADMAP.md)
-owns sequencing, dependencies, exit criteria and verification for the current
-open findings. The IDs below remain stable when individual changes are linked to
-the register.
+ADR-0018 records the completed remediation architecture. The IDs below remain
+stable closure evidence for subsequent audits.
 
 | ID | Severity | Finding | Owner | Status | Target |
 |---|---|---|---|---|---|
@@ -45,7 +49,7 @@ the register.
 | AR-09 | P1 | Snapshot recovery requests are unbounded and ignore affected scope | Maintainers | Resolved | Bounded coalescing tests |
 | AR-10 | P1 | Bulk baseline writes contend with live persistence | Maintainers | Resolved | Chunked staging and serialized transactions |
 | AR-11 | P1 | Local baseline and observation storage has no bounded lifecycle | Maintainers | Resolved | Projection/outbox/baseline retention tests |
-| AR-12 | P2 | Cursorless traversal is not a point-in-time filesystem snapshot | Maintainers | Open | M5 |
-| AR-13 | P2 | Loaded-hive HKCU scope is not host-wide per-user completeness | Maintainers | Open | M5 |
-| AR-14 | P2 | Superseded valid baselines are conflated with failed baselines | Maintainers | Open | M4 |
+| AR-12 | P2 | Cursorless traversal is not a point-in-time filesystem snapshot | Maintainers | Resolved | Consecutive-agreement convergence tests |
+| AR-13 | P2 | Loaded-hive HKCU scope is not host-wide per-user completeness | Maintainers | Resolved | Resolved-hive manifest lineage |
+| AR-14 | P2 | Superseded valid baselines are conflated with failed baselines | Maintainers | Resolved | Separate applicability state |
 | AR-15 | P2 | Burst summaries discard entity and attribution distribution | Maintainers | Resolved | Aggregation moved downstream |

@@ -31,6 +31,16 @@ public sealed class SettingsAtomicPublicationTests
         Assert.IsEmpty(mixed);
     }
 
+    [TestMethod]
+    public void Registry_enablement_is_a_generation_change_even_when_scope_hash_is_unchanged()
+    {
+        var disabled = Generation("same-scope", @"C:\A");
+        var enabled = Generation("same-scope", @"C:\A");
+        enabled.EnableRegistryMonitoring = true;
+
+        Assert.IsTrue(Settings.GenerationChanged(disabled, enabled));
+    }
+
     internal static EffectiveSettings GenerationForTest(string hash, string path) => Generation(hash, path);
 
     private static EffectiveSettings Generation(string hash, string path)

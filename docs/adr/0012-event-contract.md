@@ -1,6 +1,11 @@
-# Versioned event contract
+# ADR-0012 — Structured event contract
 
-Filesystem finding fields include `attributionStatus`, `attributionMethod`, `attributionConfidence`, `attributionSourceTimestamp`, `attributionMissingReason`, and `processSequenceNumber`. These fields are optional evidence and do not affect whether a finding is emitted. Their meanings and trust boundaries are defined in [Attribution](ATTRIBUTION.md).
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
+
+Filesystem finding fields include `attributionStatus`, `attributionMethod`, `attributionConfidence`, `attributionSourceTimestamp`, `attributionMissingReason`, and `processSequenceNumber`. These fields are optional evidence and do not affect whether a finding is emitted. Their meanings and trust boundaries are defined in [Attribution](0009-attribution-evidence-boundary.md).
 
 Phase 5 records are UTF-8 JSON objects in one of the `WinFIMLog-Operational`,
 `WinFIMLog-Baseline`, or opt-in `WinFIMLog-Diagnostic` Windows Event Logs. The
@@ -48,7 +53,7 @@ Filesystem fields are `category`, `path`, `oldPath`, `newPath`, `currentHash`,
 `valueName`, `valueData` and the same attribution fields. Baseline fields are
 `baselineId`, `source`, `change`, `identity`, `oldPath`, `newPath`, and
 `detectedAt`. Health, gap and configuration records additionally use the fields
-defined in [HEALTH.md](HEALTH.md). Event 7796 remains schema-compatible for
+defined in [ADR-0013](0013-health-and-coverage-contract.md). Event 7796 remains schema-compatible for
 older consumers but local aggregation is no longer emitted.
 
 Baseline finding 7795 contains `baselineId`, `source`, `scopeHash`, `change`,
@@ -58,4 +63,4 @@ unsupported claim of stable rename continuity.
 
 ## Release-gate smoke check
 
-Run [`scripts/phase1-smoke-test.ps1`](../scripts/phase1-smoke-test.ps1) from an elevated PowerShell prompt on the minimum supported Windows host after installing and starting the service. The script creates, changes, and removes a file, writes a value under the current user's Run key, then reads matching `WinFIMLog-Operational` records. It fails unless IDs 7776, 7777, 7778, and 7787 are observed. The minimum-host workflow runs this operational release gate and retains all dedicated-channel exports.
+Run [`scripts/phase1-smoke-test.ps1`](../../scripts/phase1-smoke-test.ps1) from an elevated PowerShell prompt on the minimum supported Windows host after installing and starting the service. The script creates, changes, and removes a file, writes a value under the current user's Run key, then reads matching `WinFIMLog-Operational` records. It fails unless IDs 7776, 7777, 7778, and 7787 are observed. The minimum-host workflow runs this operational release gate and retains all dedicated-channel exports.

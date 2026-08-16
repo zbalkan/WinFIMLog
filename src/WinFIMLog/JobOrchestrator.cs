@@ -24,6 +24,9 @@ namespace WinFIMLog
         private readonly IHealthReporter _health;
         private readonly ISnapshotCoordinator _snapshots;
         private readonly FileSystemCaptureQueue _capture;
+        private readonly object _registryLifecycleLock = new();
+        private CancellationTokenSource? _registryMonitorCancellation;
+        private Task? _registryMonitorTask;
 
         public JobOrchestrator(ILogger<JobOrchestrator> logger,
                       FileSystemCaptureQueue capture,
@@ -49,11 +52,17 @@ namespace WinFIMLog
         {
             // Wait for both monitor sources to stop before closing admission. The enrichment
             // worker then drains the completed raw channel before persistence is stopped.
-            await base.StopAsync(cancellationToken);
-            _capture.CompleteWriter();
+            try { await base.StopAsync(cancellationToken); }
+            finally
+            {
+                _capture.CompleteWriter();
+                if (cancellationToken.IsCancellationRequested && _metrics.QueueDepth > 0)
+                    _health.CoverageGap("ShutdownPipeline", _settings.ScopeHash,
+                        "HostShutdownTimeout", _metrics.QueueDepth);
+            }
         }
 
-        private async Task CleanupAsync(Task? fileSystemMonitorTask, Task? registryMonitorTask)
+        private async Task CleanupAsync(Task? fileSystemMonitorTask)
         {
             try
             {
@@ -62,10 +71,7 @@ namespace WinFIMLog
                     await fileSystemMonitorTask;
                 }
 
-                if (registryMonitorTask != null)
-                {
-                    await registryMonitorTask;
-                }
+                await StopRegistryMonitorAsync();
             }
             finally
             {
@@ -79,7 +85,6 @@ namespace WinFIMLog
         private async Task ExecutableTask(CancellationToken stoppingToken)
         {
             Task? fileSystemMonitorTask = null;
-            Task? registryMonitorTask = null;
             Task? scopeRefreshTask = null;
 
             try
@@ -93,7 +98,7 @@ namespace WinFIMLog
                 {
                     // TraceEventSource.Process is synchronous and blocks until the ETW session is
                     // stopped. Run it independently so heartbeat and host cancellation can proceed.
-                    registryMonitorTask = RunRegistryMonitorWithRecoveryAsync(stoppingToken);
+                    StartRegistryMonitor(stoppingToken);
                 }
 
                 if (_settings.HeartbeatInterval <= 0)
@@ -113,35 +118,77 @@ namespace WinFIMLog
             }
             finally
             {
-                await CleanupAsync(fileSystemMonitorTask, registryMonitorTask);
                 if (scopeRefreshTask != null)
                 {
                     try { await scopeRefreshTask; }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
                 }
+                await CleanupAsync(fileSystemMonitorTask);
             }
         }
 
         private async Task RunRegistryMonitorWithRecoveryAsync(CancellationToken stoppingToken)
         {
+            var recovering = false;
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await _regMonitor.RunAsync(stoppingToken);
+                    await _regMonitor.RunAsync(stoppingToken, () =>
+                    {
+                        if (!recovering) return;
+                        recovering = false;
+                        _health.SourceRecovered("RegistryETW", "ConfiguredRegistryKeys",
+                            "SourceRestarted;ReconciliationRequested");
+                    });
                     if (stoppingToken.IsCancellationRequested) return;
                     throw new InvalidOperationException("Registry ETW source stopped unexpectedly.");
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
                 catch (Exception exception)
                 {
+                    recovering = true;
                     _health.CoverageGap("RegistryETW", "ConfiguredRegistryKeys",
                         $"SourceFailed:{exception.GetType().Name}");
                     _snapshots.RequestRegistrySnapshot("Registry ETW source failure", "ConfiguredRegistryKeys");
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
-                    _health.SourceRecovered("RegistryETW", "ConfiguredRegistryKeys", "SourceRestarted;ReconciliationRequested");
                 }
             }
+        }
+
+        private void StartRegistryMonitor(CancellationToken serviceToken)
+        {
+            lock (_registryLifecycleLock)
+            {
+                if (_registryMonitorTask is { IsCompleted: false }) return;
+                _registryMonitorCancellation?.Dispose();
+                _registryMonitorCancellation = CancellationTokenSource.CreateLinkedTokenSource(serviceToken);
+                _registryMonitorTask = RunRegistryMonitorWithRecoveryAsync(_registryMonitorCancellation.Token);
+            }
+        }
+
+        private async Task StopRegistryMonitorAsync()
+        {
+            Task? task;
+            CancellationTokenSource? cancellation;
+            lock (_registryLifecycleLock)
+            {
+                task = _registryMonitorTask;
+                cancellation = _registryMonitorCancellation;
+                _registryMonitorTask = null;
+                _registryMonitorCancellation = null;
+            }
+            if (task is null) return;
+            cancellation!.Cancel();
+            try { await task; }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            finally { cancellation.Dispose(); }
+        }
+
+        private async Task ReconfigureRegistryMonitorAsync(CancellationToken serviceToken)
+        {
+            if (_settings.EnableRegistryMonitoring) StartRegistryMonitor(serviceToken);
+            else await StopRegistryMonitorAsync();
         }
 
         private async Task RefreshScopeAsync(CancellationToken stoppingToken)
@@ -154,6 +201,7 @@ namespace WinFIMLog
                     var result = _settings.Reload();
                     if (!result.Changed) continue;
                     _fsMonitor.Reconfigure();
+                    await ReconfigureRegistryMonitorAsync(stoppingToken);
                     _health.ConfigurationChanged(result.PreviousHash, result.CurrentHash);
                     _snapshots.RequestScopeSnapshot("Effective configuration changed");
                 }

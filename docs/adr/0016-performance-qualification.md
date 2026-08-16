@@ -1,6 +1,11 @@
-# Performance qualification
+# ADR-0016 — Performance qualification gate
 
-## Phase 4 snapshot release gate
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
+
+## Snapshot release gate
 
 The initial snapshot interval is 21,600 seconds (six hours). Until Windows
 measurements are recorded for the lowest supported host, this is a provisional
@@ -10,7 +15,7 @@ set, bytes read/written and database growth for both snapshot sources. Scan
 duration must remain below the configured interval; otherwise reduce scope or
 increase the interval and record the approved value.
 
-Phase 2 supplies bounded instrumentation rather than claiming an unmeasured host
+The service supplies bounded instrumentation rather than claiming an unmeasured host
 envelope. Release qualification must record Windows version, CPU, memory, storage,
 scope item count and watcher count, then capture:
 

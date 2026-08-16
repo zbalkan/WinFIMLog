@@ -15,4 +15,4 @@ An explicitly configured `HKEY_USERS` path remains literal. It selects only that
 
 ## Consequences
 
-The effective HKCU scope changes as user hives load and unload. This phase observes loaded hives only; it neither loads profiles nor provides a registry baseline. Operators requiring one particular account must configure its explicit `HKEY_USERS\<SID>` path.
+The effective HKCU scope changes as user hives load and unload. The service observes loaded hives only and does not load offline profiles. Each Registry baseline records its concrete resolved SID-root manifest; a logon or logoff starts a distinct lineage and cannot appear as mass value creation or deletion. Operators requiring one particular account configure its explicit `HKEY_USERS\<SID>` path.

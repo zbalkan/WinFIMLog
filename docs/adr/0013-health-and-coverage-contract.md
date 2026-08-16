@@ -1,4 +1,9 @@
-# Health and coverage
+# ADR-0013 — Health and coverage contract
+
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
 
 Health records use structured log properties so a quiet source is distinguishable
 from a blind source.

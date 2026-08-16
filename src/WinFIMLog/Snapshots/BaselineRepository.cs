@@ -28,7 +28,7 @@ namespace WinFIMLog.Snapshots
             };
             if (!context.ExecuteTransaction(() =>
             {
-                InvalidateInapplicable(source, scopeHash, sourceIdentity, schemaVersion, algorithmVersion);
+                SupersedeInapplicable(source, scopeHash, sourceIdentity, schemaVersion, algorithmVersion);
                 context.Baselines.Insert(baseline);
             })) throw new InvalidOperationException("Could not commit the baseline start transaction.");
             return baseline;
@@ -39,7 +39,8 @@ namespace WinFIMLog.Snapshots
             context.Baselines.Query()
                 .Where(x => x.Source == source && x.ScopeHash == scopeHash &&
                     x.SourceIdentity == sourceIdentity && x.SchemaVersion == schemaVersion &&
-                    x.AlgorithmVersion == algorithmVersion && x.Status == BaselineStatus.Complete)
+                    x.AlgorithmVersion == algorithmVersion && x.Status == BaselineStatus.Complete &&
+                    x.Applicability == BaselineApplicability.Current)
                 .OrderByDescending(x => x.CompletedAt).FirstOrDefault();
 
         public IReadOnlyList<BaselineMember> Members(string baselineId) =>
@@ -123,16 +124,14 @@ namespace WinFIMLog.Snapshots
             }
         }
 
-        /// <summary>Completes a cursorless scan using the second observation for every identity.</summary>
-        public IReadOnlyList<ReconciliationResult> ReconcileAndCompleteAfterSecondPass(BaselineMetadata baseline,
-            IEnumerable<BaselineMember> firstPass, IEnumerable<BaselineMember> secondPass)
+        /// <summary>Completes a cursorless scan after the coordinator establishes convergence.</summary>
+        public IReadOnlyList<ReconciliationResult> ReconcileAndCompleteAfterConvergence(BaselineMetadata baseline,
+            IEnumerable<BaselineMember> convergedMembers)
         {
             if (baseline.Status != BaselineStatus.Building && baseline.Status != BaselineStatus.Reconciling)
                 throw new InvalidOperationException("The baseline is not being built.");
-            // An item seen in pass one but absent in pass two was transient and cannot represent
-            // persistent state. Pass-two evidence wins when an item changed during the scan.
             baseline.Status = BaselineStatus.Building;
-            return ReconcileAndComplete(baseline, secondPass);
+            return ReconcileAndComplete(baseline, convergedMembers);
         }
 
         public void MarkInvalid(BaselineMetadata baseline, string reason)
@@ -170,15 +169,14 @@ namespace WinFIMLog.Snapshots
             OldPath = oldPath, NewPath = newPath, DetectedAt = when
         };
 
-        private void InvalidateInapplicable(BaselineSource source, string scopeHash, string identity,
+        private void SupersedeInapplicable(BaselineSource source, string scopeHash, string identity,
             int schema, string algorithm)
         {
             foreach (var item in context.Baselines.Find(x => x.Source == source && x.Status == BaselineStatus.Complete).ToList())
             {
                 if (item.ScopeHash == scopeHash && item.SourceIdentity == identity &&
                     item.SchemaVersion == schema && item.AlgorithmVersion == algorithm) continue;
-                item.Status = BaselineStatus.Invalid;
-                item.InvalidReason = "Applicability identity changed";
+                item.Applicability = BaselineApplicability.Superseded;
                 context.Baselines.Update(item);
             }
         }

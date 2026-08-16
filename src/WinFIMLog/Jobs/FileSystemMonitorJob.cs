@@ -74,7 +74,8 @@ namespace WinFIMLog.Jobs
                 if (_stopping) return;
                 foreach (var watcher in _watchers.ToArray())
                 {
-                    if (desired.Contains(watcher.Path)) continue;
+                    if (desired.Contains(watcher.Path) &&
+                        watcher.InternalBufferSize == configuration.WatcherBufferSizeKB * 1024) continue;
                     DisposeWatcher(watcher);
                     _watchers.Remove(watcher);
                     _logger.LogInformation("Removed file system watcher for directory {Directory}", watcher.Path);

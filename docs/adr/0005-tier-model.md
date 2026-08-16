@@ -16,6 +16,6 @@ They never advance or complete a Tier 0 baseline, and overlap with a snapshot
 does not suppress the snapshot reconciliation result. Snapshot-first therefore
 does not promise detection of create-delete activity wholly between scans.
 
-Cursorless filesystem scans use a second pass. The later observation wins,
-making overlap deterministic. Interrupted or failed scans are invalid and are
-never comparison inputs.
+Cursorless filesystem scans require two consecutive complete observations to agree.
+A scope that does not converge within the bounded pass limit is invalid and retried.
+Interrupted, unstable or failed scans are never comparison inputs.

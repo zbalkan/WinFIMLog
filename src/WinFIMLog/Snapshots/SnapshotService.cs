@@ -108,12 +108,21 @@ namespace WinFIMLog.Snapshots
         internal async Task<bool> RunRegistrySnapshot(CancellationToken cancellationToken)
         {
             var configuration = settings.Capture();
+            IReadOnlyList<string> resolvedRoots;
+            try { resolvedRoots = RegistrySnapshotSource.ResolveRoots(configuration.MonitoredKeys); }
+            catch (Exception exception)
+            {
+                logger.LogError(exception, "Could not resolve the active-user registry hive manifest");
+                return false;
+            }
             var baseline = repository.Begin(BaselineSource.Registry, configuration.ScopeHash,
-                SourceIdentityProvider.Registry(configuration.MonitoredKeys), algorithmVersion: "registry-v1");
+                SourceIdentityProvider.RegistryResolved(resolvedRoots), algorithmVersion: "registry-v1");
+            baseline.ConsistencyMethod = "ResolvedLoadedHiveManifest";
+            baseline.ObservationPasses = 1;
             try
             {
                 var members = await Task.Run(() => new RegistrySnapshotSource(configuration.IsMonitoredKey)
-                    .Capture(configuration.MonitoredKeys), cancellationToken);
+                    .CaptureResolved(resolvedRoots), cancellationToken);
                 _ = repository.ReconcileAndComplete(baseline, members);
                 logger.LogInformation("Completed registry baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}",
                     baseline.Id, baseline.ItemCount, baseline.ScopeHash);
@@ -134,11 +143,12 @@ namespace WinFIMLog.Snapshots
             try
             {
                 var source = new FileSystemSnapshotSource(configuration.HashLimitMB, configuration.IsMonitoredPath);
-                _ = await Task.Run(() => source.Capture(configuration.MonitoredPaths), cancellationToken);
-                baseline.Status = BaselineStatus.Reconciling;
-                var second = await Task.Run(() => source.Capture(configuration.MonitoredPaths), cancellationToken);
+                var observation = await Task.Run(() => CursorlessSnapshotConvergence.Capture(
+                    () => source.Capture(configuration.MonitoredPaths)), cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                _ = repository.ReconcileAndCompleteAfterSecondPass(baseline, Array.Empty<BaselineMember>(), second);
+                baseline.ConsistencyMethod = "CursorlessConsecutiveAgreement";
+                baseline.ObservationPasses = observation.Passes;
+                _ = repository.ReconcileAndCompleteAfterConvergence(baseline, observation.Members);
                 logger.LogInformation("Completed filesystem baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}",
                     baseline.Id, baseline.ItemCount, baseline.ScopeHash);
                 repository.CompactAfterCompletion(baseline, retention.BaselineGenerations);

@@ -1,4 +1,9 @@
-# Configuration ownership
+# ADR-0015 — Configuration ownership
+
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
 
 The Windows/GPO team owns `HKLM\SOFTWARE\WinFIMLog`. Security monitoring approves scope changes. Policy has value-by-value precedence over local baselines and preferences.
 

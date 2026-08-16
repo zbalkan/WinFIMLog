@@ -4,6 +4,7 @@ using NUlid;
 namespace WinFIMLog.Snapshots
 {
     public enum BaselineStatus { Building, Reconciling, Complete, Invalid }
+    public enum BaselineApplicability { Current, Superseded }
     public enum BaselineSource { FileSystem, Registry }
     public enum EvidenceAvailability { Available, AccessDenied, Vanished, Failed }
     public enum HashEvidenceState { Hashed, SkippedBySizeCap, Locked, AccessDenied, Vanished, Failed, NotApplicable }
@@ -22,6 +23,9 @@ namespace WinFIMLog.Snapshots
         public DateTimeOffset? CompletedAt { get; set; }
         public long ItemCount { get; set; }
         public BaselineStatus Status { get; set; }
+        public BaselineApplicability Applicability { get; set; } = BaselineApplicability.Current;
+        public string ConsistencyMethod { get; set; } = string.Empty;
+        public int ObservationPasses { get; set; }
         public string? StartCursor { get; set; }
         public string? EndCursor { get; set; }
         public string? InvalidReason { get; set; }

@@ -1,4 +1,9 @@
-# Attribution
+# ADR-0009 — Attribution evidence boundary
+
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
 
 Attribution is optional evidence attached to an observation. It is never a correctness dependency: disabling either attribution tier does not disable filesystem or registry snapshots, alter a baseline, or suppress a finding.
 

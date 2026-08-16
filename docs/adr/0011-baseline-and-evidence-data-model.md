@@ -1,8 +1,13 @@
-# Data model
+# ADR-0011 — Baseline and evidence data model
+
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
 
 ## Identity decision (D4)
 
-Phase 4 uses case-insensitive, normalised absolute **path identity**. Rename is
+Filesystem baselines use case-insensitive, normalised absolute **path identity**. Rename is
 represented explicitly by `OldPath` and `NewPath` in reconciliation results,
 but path identity cannot prove rename continuity: a rename appears as deletion
 plus creation, and delete/recreate at one path is ambiguous. Reuse-safe file ID
@@ -10,12 +15,14 @@ is deferred. Registry values use their canonical hive/key/value path.
 
 ## Baseline lifecycle
 
-`BaselineMetadata` records an ID, source, scope hash, volume/hive identity,
-schema and algorithm versions, timestamps, count, optional cursors, and status.
+`BaselineMetadata` records an ID, source, scope hash, volume/resolved-hive
+identity, schema and algorithm versions, timestamps, count, optional cursors,
+consistency method, observation-pass count, status and applicability.
 A scan moves `Building` → `Reconciling` → `Complete`. Failure or cancellation
 makes it `Invalid`. Only an applicable `Complete` baseline can be a comparison
 input. Changing database, scope, source identity, schema or algorithm starts a
-new lineage and invalidates incompatible metadata.
+new lineage and marks the older valid lineage `Superseded`; it does not relabel
+historical evidence as failed.
 
 Membership is held separately from historical live observations. Members and
 reconciliation results are committed in the same LiteDB transaction as the
@@ -39,13 +46,20 @@ temporary and offline attributes. Directories and reparse
 points are evidence nodes; reparse points are not traversed. Registry membership
 supports typed raw value data and unavailable states. Configured HKCU roots are
 expanded across every currently loaded SID hive; explicit HKU roots remain
-literal. See ADR-0006 for attribute
+literal. The resolved roots form the Registry source identity, so hive load or
+unload starts a new lineage rather than producing mass create/delete results.
+See ADR-0006 for attribute
 semantics.
+
+Cursorless filesystem capture completes only when two consecutive full
+observations have identical identity/fingerprint sets. Failure to converge in
+the bounded pass limit invalidates the candidate and invokes normal snapshot
+retry; it is not completeness evidence.
 
 ## Migration
 
 Legacy `fileSystemChanges` and `registryChanges` remain historical observations.
-They are not silently promoted to a complete baseline. The first Phase 4 scan
+They are not silently promoted to a complete baseline. The first stable scan
 builds the new baseline collections; the old discovery flag remains only so an
 older binary can be rolled back safely.
 

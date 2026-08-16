@@ -1,10 +1,15 @@
-# SIEM integration
+# ADR-0017 — SIEM integration contract
+
+* Status: Accepted
+* Date: 2026-08-16
+
+## Decision
 
 ## Deployment and delivery boundary
 
 Create the three secured channels after creating the service by running
 `scripts/install-event-channels.ps1` elevated. WinFIMLog guarantees successful local
-write only, as decided in [ADR-0007](adr/0007-event-log-as-transport.md). WEF queueing,
+write only, as decided in [ADR-0007](0007-event-log-as-transport.md). WEF queueing,
 collector availability, and forwarded-log retention are operated downstream. Alert if
 event 7790 is missing for more than twice the configured heartbeat interval and monitor
 Event Log service/channel errors.

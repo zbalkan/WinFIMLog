@@ -69,7 +69,9 @@ namespace WinFIMLog.Jobs
         /// </exception>
         /// <exception cref="TargetException">
         /// </exception>
-        public async Task RunAsync(CancellationToken cancellationToken)
+        public Task RunAsync(CancellationToken cancellationToken) => RunAsync(cancellationToken, null);
+
+        public async Task RunAsync(CancellationToken cancellationToken, Action? sourceStarted)
         {
             CleanupExistingSession();
             using var session = CreateSession();
@@ -82,6 +84,7 @@ namespace WinFIMLog.Jobs
             {
                 using var cancellationRegistration = cancellationToken.Register(() => session.Stop());
                 _logger.LogInformation("Started ETW session '{SessionName}' for Registry changes.", ETWSessionName);
+                sourceStarted?.Invoke();
                 using var lossPoll = new Timer(_ => ReportEventLoss(session), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
                 await Task.Run(session.Source.Process, CancellationToken.None);
                 ReportEventLoss(session);

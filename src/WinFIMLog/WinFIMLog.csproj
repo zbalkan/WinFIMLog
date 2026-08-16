@@ -43,11 +43,7 @@
         <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />
         <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="10.0.11" />
         <PackageReference Include="NUlid" Version="1.7.3" />
-        <PackageReference Include="Serilog" Version="4.4.0" />
-        <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
-        <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
-        <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
-        <PackageReference Include="Serilog.Sinks.EventLog" Version="4.0.0" />
+        <PackageReference Include="System.Diagnostics.EventLog" Version="10.0.11" />
         <PackageReference Include="System.IO.FileSystem.AccessControl" Version="5.0.0" />
         <PackageReference Include="TBC.Common.Configuration.Registry" Version="3.1.0" />
     </ItemGroup>

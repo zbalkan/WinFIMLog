@@ -1,0 +1,55 @@
+using System;
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+
+namespace WinFIMLog.Utils
+{
+    internal sealed class EventIdEventLogLoggerProvider(string sourceName, string logName) : ILoggerProvider
+    {
+        private readonly EventIdProvider eventIds = new();
+        private readonly object sourceLock = new();
+
+        public ILogger CreateLogger(string categoryName) =>
+            new EventIdEventLogLogger(sourceName, logName, eventIds, sourceLock);
+
+        public void Dispose() { }
+
+        private sealed class EventIdEventLogLogger(string sourceName, string logName,
+            EventIdProvider eventIds, object sourceLock) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+                Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                if (!IsEnabled(logLevel)) return;
+
+                var message = formatter(state, exception);
+                if (exception != null) message = $"{message}{Environment.NewLine}{exception}";
+
+                EnsureSource();
+                EventLog.WriteEntry(sourceName, message, EntryType(logLevel),
+                    eventIds.ComputeEventId(logLevel, eventId, state));
+            }
+
+            private void EnsureSource()
+            {
+                if (EventLog.SourceExists(sourceName)) return;
+                lock (sourceLock)
+                {
+                    if (!EventLog.SourceExists(sourceName))
+                        EventLog.CreateEventSource(new EventSourceCreationData(sourceName, logName));
+                }
+            }
+
+            private static EventLogEntryType EntryType(LogLevel level) => level switch
+            {
+                LogLevel.Warning => EventLogEntryType.Warning,
+                LogLevel.Error or LogLevel.Critical => EventLogEntryType.Error,
+                _ => EventLogEntryType.Information
+            };
+        }
+    }
+}

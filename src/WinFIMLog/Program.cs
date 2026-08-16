@@ -12,7 +12,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Serilog;
 
 namespace WinFIMLog
 {
@@ -35,10 +34,7 @@ namespace WinFIMLog
                     logging.ClearProviders();
                     logging.SetMinimumLevel(LogLevel.Information);
 
-                    // Add Serilog for event logging
-                    _ = logging.AddSerilog(new LoggerConfiguration()
-                        .WriteTo.EventLog("WinFIMLog", "WinFIMLog", manageEventSource: true, eventIdProvider: new EventIdProvider())
-                        .CreateLogger());
+                    logging.AddProvider(new EventIdEventLogLoggerProvider("WinFIMLog", "WinFIMLog"));
                 })
                 .ConfigureAppConfiguration(configuration =>
                 {

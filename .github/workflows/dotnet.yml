@@ -23,7 +23,7 @@ jobs:
           wix --version
       - name: Install Wix extension
         run: |
-          cd IntegrityService.Installer
+          cd WinFIMLog.Installer
           wix extension add WixToolset.Util.wixext/5.0.0
           wix extension list
       - name: Add msbuild to PATH
@@ -32,13 +32,13 @@ jobs:
           msbuild-architecture: x64
 
       - name: Restore and publish main project
-        run: msbuild IntegrityService\IntegrityService.csproj /t:restore /t:publish /p:Configuration=Release /p:SelfContained=true /p:RuntimeIdentifier=win-x64 /p:PublishsingleFile=true
+        run: msbuild WinFIMLog\WinFIMLog.csproj /t:restore /t:publish /p:Configuration=Release /p:SelfContained=true /p:RuntimeIdentifier=win-x64 /p:PublishsingleFile=true
 
       - name: Create a publish directory
-        run: mkdir D:\a\IntegrityService\IntegrityService\publish
+        run: mkdir D:\a\WinFIMLog\WinFIMLog\publish
 
       - name: Copy executable in the publish directory
-        run: Copy-Item -Path D:\a\IntegrityService\IntegrityService\IntegrityService\bin\Release\net8.0-windows10.0.17763.0\win-x64\IntegrityService.exe -Destination D:\a\IntegrityService\IntegrityService\publish\ -Verbose
+        run: Copy-Item -Path D:\a\WinFIMLog\WinFIMLog\WinFIMLog\bin\Release\net8.0-windows10.0.17763.0\win-x64\WinFIMLog.exe -Destination D:\a\WinFIMLog\WinFIMLog\publish\ -Verbose
 
       - name: Enumerate root folder
         shell: powershell
@@ -46,19 +46,19 @@ jobs:
 
       - name: Build installer
         run: |
-          cd IntegrityService.Installer
+          cd WinFIMLog.Installer
           wix extension list
-          wix build -arch x64 -ext "D:\a\IntegrityService\IntegrityService\IntegrityService.Installer\.wix\extensions\WixToolset.Util.wixext\5.0.0\wixext5\WixToolset.Util.wixext.dll" -pdbtype none -i publish -o "D:\a\IntegrityService\IntegrityService\publish\IntegrityService.msi" "D:\a\IntegrityService\IntegrityService\IntegrityService.Installer\Product.wxs"
+          wix build -arch x64 -ext "D:\a\WinFIMLog\WinFIMLog\WinFIMLog.Installer\.wix\extensions\WixToolset.Util.wixext\5.0.0\wixext5\WixToolset.Util.wixext.dll" -pdbtype none -i publish -o "D:\a\WinFIMLog\WinFIMLog\publish\WinFIMLog.msi" "D:\a\WinFIMLog\WinFIMLog\WinFIMLog.Installer\Product.wxs"
           Write-Output "Testing installer file location:"
-          Test-Path -Path D:\a\IntegrityService\IntegrityService\publish\IntegrityService.msi
-          Remove-Item -Path D:\a\IntegrityService\IntegrityService\publish\IntegrityService.exe -Confirm:$false
+          Test-Path -Path D:\a\WinFIMLog\WinFIMLog\publish\WinFIMLog.msi
+          Remove-Item -Path D:\a\WinFIMLog\WinFIMLog\publish\WinFIMLog.exe -Confirm:$false
       - name: Enumerate root folder
         shell: powershell
         run: ls -r
 
       - name: Enumerate files to publish
         shell: powershell
-        run: Get-ChildItem -Path D:\a\IntegrityService\IntegrityService\publish
+        run: Get-ChildItem -Path D:\a\WinFIMLog\WinFIMLog\publish
 
       - name: Create Release
         id: create_release
@@ -79,6 +79,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: D:\a\IntegrityService\IntegrityService\publish\IntegrityService.msi
-          asset_name: IntegrityService.msi
+          asset_path: D:\a\WinFIMLog\WinFIMLog\publish\WinFIMLog.msi
+          asset_name: WinFIMLog.msi
           asset_content_type: application/zip

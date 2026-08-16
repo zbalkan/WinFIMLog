@@ -1,4 +1,4 @@
-name: Publish IntegrityService release
+name: Publish WinFIMLog release
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ jobs:
     runs-on: windows-latest
     env:
       BINARY_OUTPUT: ${{ github.workspace }}\artifacts\binaries
-      PUBLISH_OUTPUT: ${{ runner.temp }}\IntegrityService-win-x64
+      PUBLISH_OUTPUT: ${{ runner.temp }}\WinFIMLog-win-x64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,10 +59,10 @@ jobs:
           git push origin $env:RELEASE_TAG
 
       - name: Restore dependencies
-        run: msbuild IntegrityService.sln /t:Restore /p:Configuration=Release
+        run: msbuild WinFIMLog.sln /t:Restore /p:Configuration=Release
 
       - name: Build solution
-        run: msbuild IntegrityService.sln /p:Configuration=Release /p:RestorePackages=false
+        run: msbuild WinFIMLog.sln /p:Configuration=Release /p:RestorePackages=false
 
       - name: Publish single-file service binary
         env:
@@ -70,7 +70,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          msbuild IntegrityService/IntegrityService.csproj `
+          msbuild WinFIMLog/WinFIMLog.csproj `
             /t:Publish `
             /p:Configuration=Release `
             /p:RuntimeIdentifier=win-x64 `
@@ -81,7 +81,7 @@ jobs:
             /p:EnableCompressionInSingleFile=true `
             /p:PackageVersion=$env:PACKAGE_VERSION
 
-          $binary = Join-Path $env:PUBLISH_OUTPUT 'IntegrityService.exe'
+          $binary = Join-Path $env:PUBLISH_OUTPUT 'WinFIMLog.exe'
           if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
             throw "Expected '$binary' to be produced by the publish target."
           }
@@ -93,7 +93,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Path $env:BINARY_OUTPUT -Force | Out-Null
-          $asset = Join-Path $env:BINARY_OUTPUT "IntegrityService-$env:PACKAGE_VERSION-win-x64.zip"
+          $asset = Join-Path $env:BINARY_OUTPUT "WinFIMLog-$env:PACKAGE_VERSION-win-x64.zip"
           Compress-Archive -Path (Join-Path $env:PUBLISH_OUTPUT '*') -DestinationPath $asset -Force
           Get-ChildItem -LiteralPath $env:BINARY_OUTPUT | Format-Table Name, Length
 
@@ -105,12 +105,12 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $asset = Join-Path $env:BINARY_OUTPUT "IntegrityService-$env:PACKAGE_VERSION-win-x64.zip"
+          $asset = Join-Path $env:BINARY_OUTPUT "WinFIMLog-$env:PACKAGE_VERSION-win-x64.zip"
           if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
             throw "No release asset found at '$asset'."
           }
 
           gh release create $env:RELEASE_TAG `
-            --title "IntegrityService $env:PACKAGE_VERSION" `
-            --notes "Published IntegrityService $env:PACKAGE_VERSION. The attached win-x64 asset contains the self-installing service executable." `
+            --title "WinFIMLog $env:PACKAGE_VERSION" `
+            --notes "Published WinFIMLog $env:PACKAGE_VERSION. The attached win-x64 asset contains the self-installing service executable." `
             $asset

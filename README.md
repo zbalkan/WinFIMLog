@@ -1,16 +1,14 @@
-# IntegrityService
+# WinFIMLog
 
-[![DevSkim](https://github.com/zbalkan/IntegrityService/actions/workflows/devskim.yml/badge.svg)](https://github.com/zbalkan/IntegrityService/actions/workflows/devskim.yml) [![Release](https://github.com/zbalkan/IntegrityService/actions/workflows/dotnet.yml/badge.svg)](https://github.com/zbalkan/IntegrityService/actions/workflows/dotnet.yml)
+[![DevSkim](https://github.com/zbalkan/WinFIMLog/actions/workflows/devskim.yml/badge.svg)](https://github.com/zbalkan/WinFIMLog/actions/workflows/devskim.yml) [![Release](https://github.com/zbalkan/WinFIMLog/actions/workflows/dotnet.yml/badge.svg)](https://github.com/zbalkan/WinFIMLog/actions/workflows/dotnet.yml)
 
 ## Overview
 
-Integrity Service is a security related requirement for monitoring critical directories and Registry keys in Windows.
-
-Yes, we need a better name.
+WinFIMLog is a Windows service for monitoring critical directories and Registry keys.
 
 ## Usage
 
-1. Publish the service and install it with `IntegrityService.exe install`.
+1. Publish the service and install it with `WinFIMLog.exe install`.
 2. The default values will be written to Registry.
 3. The filesystem monitoring will always be started.
 4. If the database is not disabled, and there is not a completed filesystem discovery, a filesystem discovery will be started.
@@ -201,12 +199,12 @@ Event logs IDs are taken from [WINFIM.NET](https://github.com/redblueteam/WinFIM
 
 ### Self-installing service executable
 
-IntegrityService now follows a Sysmon-like self-installer pattern: publish the service, copy or run the published `IntegrityService.exe` on the target host, and let the executable create or remove its own Windows Service registration. This avoids the old WiX/MSI project and keeps deployment to a single published application folder.
+WinFIMLog now follows a Sysmon-like self-installer pattern: publish the service, copy or run the published `WinFIMLog.exe` on the target host, and let the executable create or remove its own Windows Service registration. This avoids the old WiX/MSI project and keeps deployment to a single published application folder.
 
 Publish the self-contained Windows build first:
 
 ```powershell
-dotnet publish .\IntegrityService\IntegrityService.csproj `
+dotnet publish .\WinFIMLog\WinFIMLog.csproj `
   --configuration Release `
   --runtime win-x64 `
   --self-contained true `
@@ -219,19 +217,19 @@ dotnet publish .\IntegrityService\IntegrityService.csproj `
 Install or update the service from an elevated PowerShell prompt:
 
 ```powershell
-.\publish\win-x64\IntegrityService.exe install
+.\publish\win-x64\WinFIMLog.exe install
 ```
 
 To start the service immediately after installation, add `--start`:
 
 ```powershell
-.\publish\win-x64\IntegrityService.exe install --start
+.\publish\win-x64\WinFIMLog.exe install --start
 ```
 
-The default install directory is `%ProgramFiles%\FIM`. Override it when needed:
+The default install directory is `%ProgramFiles%\WinFIMLog`. Override it when needed:
 
 ```powershell
-.\publish\win-x64\IntegrityService.exe install --install-dir 'C:\Program Files\FIM'
+.\publish\win-x64\WinFIMLog.exe install --install-dir 'C:\Program Files\WinFIMLog'
 ```
 
 ### Uninstall
@@ -239,18 +237,18 @@ The default install directory is `%ProgramFiles%\FIM`. Override it when needed:
 Run the self-installer from an elevated PowerShell prompt to stop and delete the service:
 
 ```powershell
-.\publish\win-x64\IntegrityService.exe uninstall
+.\publish\win-x64\WinFIMLog.exe uninstall
 ```
 
 Add `--remove-files` to remove the installed application directory as well. If you run uninstall from inside the install directory, delete the remaining executable after the command exits.
 
 ```powershell
-.\publish\win-x64\IntegrityService.exe uninstall --remove-files
+.\publish\win-x64\WinFIMLog.exe uninstall --remove-files
 ```
 
 ## Development
 
-You need .NET 8 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish IntegrityService release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
+You need .NET 8 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish WinFIMLog release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
 
 ## Special thanks to:
 

@@ -25,7 +25,7 @@ Ordinary kernel process attribution is **not impersonation-safe**. It identifies
 
 SACL attribution is disabled by default. Configure a small list of literal `Attribution:Sacl:FileScopes` and/or `RegistryScopes`; wildcards are rejected and the combined list is capped at 64. Deployment owners, rather than WinFIMLog, own applying and restoring SACLs. Broad auditing is expressly unsupported.
 
-At startup the tier calls `AuditQuerySystemPolicy` for the **File System** and **Registry** audit subcategories, then verifies access to the Security channel. A missing policy or access dependency emits a coverage-gap health event and fails service startup visibly. The consumer selects events 4663 and 4657 and preserves their native XML, including native subject and old/new registry evidence where Windows supplies it.
+At startup the tier calls `AuditQuerySystemPolicy` for the **File System** and **Registry** audit subcategories, then verifies access to the Security channel. A missing policy or access dependency emits a coverage-gap health event and fails service startup visibly. The consumer selects events 4663 and 4657 and emits structured Diagnostic event 7797 containing the native subject, object name, prior/new value fields where Windows supplies them, and the complete native XML evidence.
 
 Enabling object-access auditing can materially increase Security-log and forwarding volume. Operators must measure the declared scope, size retention for peak load, restrict Security-log readers, and ensure collection before overwrite. Uninstall or scope removal must restore SACLs and audit policy through the organisation's configuration owner; WinFIMLog deliberately does not mutate either dependency.
 

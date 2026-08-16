@@ -7,6 +7,7 @@ using WinFIMLog.Health;
 using WinFIMLog.Jobs;
 using WinFIMLog.Snapshots;
 using WinFIMLog.Attribution;
+using WinFIMLog.Events;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -47,6 +48,8 @@ namespace WinFIMLog
                 {
                     _ = services.AddOptions<SaclAttributionOptions>()
                         .BindConfiguration("Attribution:Sacl");
+                    _ = services.AddOptions<BurstAggregationOptions>()
+                        .BindConfiguration("Events:Aggregation");
                     _ = services.AddSingleton<IAuditPolicyConformance, WindowsAuditPolicyConformance>();
                     _ = services.AddSingleton<Settings>();
                     _ = services.AddOptions<LiteDbOptions>()
@@ -57,7 +60,11 @@ namespace WinFIMLog
                     _ = services.AddSingleton<IBuffer<RegistryChange>, RegistryChangeBuffer>();
                     _ = services.AddSingleton<HealthMetrics>();
                     _ = services.AddSingleton<IHealthReporter, HealthReporter>();
-                    _ = services.AddSingleton<ILocalEventSink, WindowsEventLogSink>();
+                    _ = services.AddSingleton<WindowsEventLogSink>();
+                    _ = services.AddSingleton<IEventRecordWriter>(provider => provider.GetRequiredService<WindowsEventLogSink>());
+                    _ = services.AddSingleton<BurstAggregatingEventSink>();
+                    _ = services.AddSingleton<ILocalEventSink>(provider => provider.GetRequiredService<BurstAggregatingEventSink>());
+                    _ = services.AddHostedService(provider => provider.GetRequiredService<BurstAggregatingEventSink>());
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
                     _ = services.AddSingleton<BaselineRepository>();
                     // Reject invalid settings before any source or snapshot hosted service starts.

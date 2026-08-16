@@ -10,11 +10,6 @@ The recurring snapshot schema, lifecycle, identity limitations and migration are
 specified in [the data model](docs/DATA-MODEL.md). Architecture decisions are
 indexed in [the ADR index](docs/adr/README.md).
 
-The current delivery status against roadmap Phases 1–4 is recorded in the
-[Phase 1–4 completion review](docs/PHASE-1-4-REVIEW.md). The review identifies
-the implementation and evidence still required before any of those phases can
-be closed.
-
 ## Usage
 
 1. Publish the service and install it with `WinFIMLog.exe install`.

@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Security.Principal;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -22,6 +23,11 @@ namespace WinFIMLog.Tests
         [TestMethod]
         public void AccountNameOrSidReturnsSidWhenIdentityIsNotMapped()
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.Inconclusive("IdentityNotMappedException requires Windows Principal support.");
+                return;
+            }
             const string sid = "S-1-5-21-1000-2000-3000-4001";
             var result = ExtensionMethods.AccountNameOrSid(
                 sid,

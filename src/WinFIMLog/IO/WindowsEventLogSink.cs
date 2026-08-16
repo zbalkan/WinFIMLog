@@ -3,7 +3,7 @@ using WinFIMLog.Events;
 
 namespace WinFIMLog.IO
 {
-    internal sealed class WindowsEventLogSink : ILocalEventSink
+    internal sealed class WindowsEventLogSink : IEventRecordWriter
     {
         public void Write(EventContract record, bool error = false)
         {

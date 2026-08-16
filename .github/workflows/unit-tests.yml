@@ -67,6 +67,9 @@ jobs:
           [xml](Get-Content -Raw ADMX/FIM.ADMX) | Out-Null
           [xml](Get-Content -Raw ADMX/en-US/FIM.ADML) | Out-Null
 
+      - name: Validate Markdown links
+        run: python scripts/check-markdown-links.py
+
       - name: Publish supported mode
         run: >-
           dotnet publish src/WinFIMLog/WinFIMLog.csproj --configuration Release

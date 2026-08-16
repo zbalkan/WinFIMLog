@@ -1,13 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.Eventing.Reader;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Linq;
 using System.Xml.Linq;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using WinFIMLog.Events;
 using WinFIMLog.Health;
+using WinFIMLog.IO;
 
 namespace WinFIMLog.Attribution
 {
@@ -18,16 +21,21 @@ namespace WinFIMLog.Attribution
         private readonly IAuditPolicyConformance policy;
         private readonly IHealthReporter health;
         private readonly ILogger<SecurityAuditAttributionService> logger;
+        private readonly ILocalEventSink eventSink;
+        private readonly Settings settings;
         private EventLogWatcher? watcher;
 
         public SecurityAuditAttributionService(IOptions<SaclAttributionOptions> options,
             IAuditPolicyConformance policy, IHealthReporter health,
-            ILogger<SecurityAuditAttributionService> logger)
+            ILogger<SecurityAuditAttributionService> logger, ILocalEventSink eventSink,
+            Settings settings)
         {
             this.options = options.Value;
             this.policy = policy;
             this.health = health;
             this.logger = logger;
+            this.eventSink = eventSink;
+            this.settings = settings;
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)
@@ -71,8 +79,32 @@ namespace WinFIMLog.Attribution
             // Preserve native XML: it contains SubjectUserSid/Name and, for 4657, old/new values.
             var xml = record?.ToXml();
             if (xml == null || !IsDeclaredScope(xml)) return;
-            logger.LogInformation("SACL ATTRIBUTION EventId={EventId} NativeEvidence={NativeEvidence}",
-                record?.Id, xml);
+            var document = XDocument.Parse(xml);
+            var data = document.Descendants().Where(element => element.Name.LocalName == "Data")
+                .Where(element => element.Attribute("Name") != null)
+                .GroupBy(element => element.Attribute("Name")!.Value, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => (object?)group.Last().Value,
+                    StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                eventSink.Write(EventContract.Create(7797, "SecurityAuditAttribution",
+                    record?.RecordId?.ToString() ?? Guid.NewGuid().ToString("N"), settings.ScopeHash,
+                    new Dictionary<string, object?>
+                    {
+                        ["nativeEventId"] = record?.Id,
+                        ["provider"] = record?.ProviderName,
+                        ["subjectUserSid"] = data.GetValueOrDefault("SubjectUserSid"),
+                        ["subjectUserName"] = data.GetValueOrDefault("SubjectUserName"),
+                        ["objectName"] = data.GetValueOrDefault("ObjectName") ?? data.GetValueOrDefault("KeyName"),
+                        ["oldValue"] = data.GetValueOrDefault("OldValue"),
+                        ["newValue"] = data.GetValueOrDefault("NewValue"),
+                        ["nativeEvidence"] = xml
+                    }, EventChannel.Diagnostic));
+            }
+            catch (Exception exception)
+            {
+                health.CoverageGap("SACLAttribution", "Security", $"EvidenceWriteFailure:{exception.GetType().Name}");
+            }
         }
 
         private bool IsDeclaredScope(string xml)

@@ -1,20 +1,50 @@
+using System;
+using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
+using WinFIMLog.Events;
+using WinFIMLog.IO;
 
 namespace WinFIMLog.Health
 {
-    internal sealed class HealthReporter(ILogger<HealthReporter> logger, Settings settings) : IHealthReporter
+    internal sealed class HealthReporter(ILogger<HealthReporter> logger, Settings settings, ILocalEventSink eventSink) : IHealthReporter
     {
         public void CoverageGap(string source, string scope, string reason, long lostCount = 1) =>
-            logger.LogError((int)HealthEventId.CoverageGap, "COVERAGE GAP Source={Source} Scope={Scope} ScopeHash={ScopeHash} Reason={Reason} LostCount={LostCount}", source, scope, settings.ScopeHash, reason, lostCount);
+            Write(HealthEventId.CoverageGap, "CoverageGap", new Dictionary<string, object?>
+            { ["source"] = source, ["scope"] = scope, ["reason"] = reason, ["lostCount"] = lostCount }, true);
 
         public void SourceRecovered(string source, string scope, string action) =>
-            logger.LogInformation((int)HealthEventId.SourceRecovered, "SOURCE RECOVERED Source={Source} Scope={Scope} ScopeHash={ScopeHash} Action={Action}", source, scope, settings.ScopeHash, action);
+            Write(HealthEventId.SourceRecovered, "SourceRecovered", new Dictionary<string, object?>
+            { ["source"] = source, ["scope"] = scope, ["action"] = action });
 
         public void SinkFailure(string sink, string reason, int attempt) =>
-            logger.LogError((int)HealthEventId.SinkFailure, "SINK FAILURE Sink={Sink} ScopeHash={ScopeHash} Reason={Reason} Attempt={Attempt}", sink, settings.ScopeHash, reason, attempt);
+            Write(HealthEventId.SinkFailure, "SinkFailure", new Dictionary<string, object?>
+            { ["sink"] = sink, ["reason"] = reason, ["attempt"] = attempt }, true);
 
         public void ConfigurationChanged(string previousScopeHash, string newScopeHash) =>
-            logger.LogWarning((int)HealthEventId.ConfigurationChanged,
-                "CONFIGURATION CHANGED PreviousScopeHash={PreviousScopeHash} NewScopeHash={NewScopeHash}", previousScopeHash, newScopeHash);
+            Write(HealthEventId.ConfigurationChanged, "ConfigurationChanged", new Dictionary<string, object?>
+            { ["previousScopeHash"] = previousScopeHash, ["newScopeHash"] = newScopeHash });
+
+        public void Heartbeat(HealthMetrics metrics) =>
+            Write(HealthEventId.Heartbeat, "Health", new Dictionary<string, object?>
+            {
+                ["queueDepth"] = metrics.QueueDepth,
+                ["oldestItemAgeMs"] = metrics.OldestItemAge.TotalMilliseconds,
+                ["accepted"] = metrics.Accepted,
+                ["processed"] = metrics.Processed,
+                ["dropped"] = metrics.Dropped,
+                ["enrichmentFailures"] = metrics.EnrichmentFailures
+            });
+
+        private void Write(HealthEventId id, string type, IReadOnlyDictionary<string, object?> fields, bool error = false)
+        {
+            var record = EventContract.Create((ushort)id, type, Guid.NewGuid().ToString("N"), settings.ScopeHash, fields);
+            try { eventSink.Write(record, error); }
+            catch (Exception exception)
+            {
+                // The reporting sink itself may be the failed component. Never recurse through
+                // SinkFailure; retain a last-resort Application-log/console diagnostic instead.
+                logger.LogError(exception, "Structured health record {RecordType} ({EventId}) could not be written", type, (ushort)id);
+            }
+        }
     }
 }

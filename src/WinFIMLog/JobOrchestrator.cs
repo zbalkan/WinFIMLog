@@ -93,10 +93,7 @@ namespace WinFIMLog
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogInformation((int)HealthEventId.Heartbeat,
-                        "HEARTBEAT Time={Time} ScopeHash={ScopeHash} QueueDepth={QueueDepth} OldestItemAgeMs={OldestItemAgeMs} Accepted={Accepted} Processed={Processed} Dropped={Dropped} EnrichmentFailures={EnrichmentFailures}",
-                        DateTimeOffset.Now, _settings.ScopeHash, _metrics.QueueDepth, _metrics.OldestItemAge.TotalMilliseconds,
-                        _metrics.Accepted, _metrics.Processed, _metrics.Dropped, _metrics.EnrichmentFailures);
+                    _health.Heartbeat(_metrics);
                     await Task.Delay(TimeSpan.FromSeconds(_settings.HeartbeatInterval), stoppingToken);
                 }
             }

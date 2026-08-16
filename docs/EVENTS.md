@@ -40,6 +40,7 @@ The WinFIMLog channels use the following stable ID allocation.
 | 7794 | Warning | Effective configuration changed (previous/new scope hashes) |
 | 7795 | Warning | Tier 0 baseline reconciliation finding |
 | 7796 | Information | Burst aggregation summary |
+| 7797 | Information | Optional native Security-audit attribution evidence |
 
 Filesystem fields are `category`, `path`, `oldPath`, `newPath`, `currentHash`,
 `previousHash`, `objectType`, `attributionStatus`, `processId`, `processName`,
@@ -57,4 +58,4 @@ unsupported claim of stable rename continuity.
 
 ## Release-gate smoke check
 
-Run [`scripts/phase1-smoke-test.ps1`](../scripts/phase1-smoke-test.ps1) from an elevated PowerShell prompt on the minimum supported Windows host after installing and starting the service. The script creates, changes, and removes a file, writes a value under the current user's Run key, then exports matching Application log records. It fails unless IDs 7776, 7777, 7778, and 7787 are observed. This operational check is a required release gate until it runs in Windows CI.
+Run [`scripts/phase1-smoke-test.ps1`](../scripts/phase1-smoke-test.ps1) from an elevated PowerShell prompt on the minimum supported Windows host after installing and starting the service. The script creates, changes, and removes a file, writes a value under the current user's Run key, then reads matching `WinFIMLog-Operational` records. It fails unless IDs 7776, 7777, 7778, and 7787 are observed. The minimum-host workflow runs this operational release gate and retains all dedicated-channel exports.

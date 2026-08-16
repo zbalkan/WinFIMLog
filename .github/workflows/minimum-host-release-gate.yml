@@ -33,12 +33,30 @@ jobs:
       - name: Phase 4 offline and database-loss checks
         shell: pwsh
         run: ./scripts/phase4-snapshot-smoke-test.ps1
+      - name: Phase 5 channel contract and ACL checks
+        shell: pwsh
+        run: ./scripts/phase5-event-channel-test.ps1
+      - name: Phase 6 attribution prerequisites
+        shell: pwsh
+        run: ./scripts/phase6-attribution-check.ps1
       - name: Export evidence
         if: always()
         shell: pwsh
-        run: wevtutil epl Application "$env:RUNNER_TEMP\WinFIMLog-Application.evtx" /ow:true
+        run: |
+          wevtutil epl Application "$env:RUNNER_TEMP\WinFIMLog-Application.evtx" /ow:true
+          wevtutil epl WinFIMLog-Operational "$env:RUNNER_TEMP\WinFIMLog-Operational.evtx" /ow:true
+          wevtutil epl WinFIMLog-Baseline "$env:RUNNER_TEMP\WinFIMLog-Baseline.evtx" /ow:true
+          wevtutil epl WinFIMLog-Diagnostic "$env:RUNNER_TEMP\WinFIMLog-Diagnostic.evtx" /ow:true
+      - name: Clean uninstall gate
+        if: always()
+        shell: pwsh
+        run: |
+          ./publish/WinFIMLog.exe uninstall
+          foreach ($log in 'WinFIMLog-Operational','WinFIMLog-Baseline','WinFIMLog-Diagnostic') {
+            if ((wevtutil el) -contains $log) { throw "$log remains after uninstall" }
+          }
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: minimum-host-event-evidence
-          path: ${{ runner.temp }}\WinFIMLog-Application.evtx
+          path: ${{ runner.temp }}\WinFIMLog-*.evtx

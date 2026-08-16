@@ -6,5 +6,6 @@ namespace WinFIMLog.Health
         void SourceRecovered(string source, string scope, string action);
         void SinkFailure(string sink, string reason, int attempt);
         void ConfigurationChanged(string previousScopeHash, string newScopeHash) { }
+        void Heartbeat(HealthMetrics metrics) { }
     }
 }

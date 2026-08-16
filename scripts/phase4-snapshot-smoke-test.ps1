@@ -4,7 +4,6 @@ param(
     [int]$TimeoutMinutes = 60
 )
 $ErrorActionPreference = 'Stop'
-$source = 'WinFIMLog'
 $preferences = 'HKLM:\SOFTWARE\WinFIMLog'
 $policy = 'HKLM:\SOFTWARE\Policies\WinFIMLog'
 $scopeConfiguration = if ((Get-ItemProperty $policy -Name MonitoredPaths -ErrorAction SilentlyContinue).MonitoredPaths) { $policy } else { $preferences }
@@ -14,10 +13,11 @@ $root = (Get-ItemProperty $scopeConfiguration -Name MonitoredPaths).MonitoredPat
     Select-Object -First 1
 if (-not $root) { throw 'No concrete monitored root is available for the Phase 4 check.' }
 
-function Wait-WinFIMLogEvent([datetime]$after, [scriptblock]$predicate, [string]$description) {
+function Wait-WinFIMLogEvent([datetime]$after, [scriptblock]$predicate, [string]$description,
+    [string]$logName = 'Application', [string]$providerName = 'WinFIMLog') {
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     do {
-        $event = Get-WinEvent -FilterHashtable @{ LogName='Application'; ProviderName=$source; StartTime=$after } -ErrorAction SilentlyContinue |
+        $event = Get-WinEvent -FilterHashtable @{ LogName=$logName; ProviderName=$providerName; StartTime=$after } -ErrorAction SilentlyContinue |
             Where-Object $predicate | Select-Object -First 1
         if ($event) { return $event }
         Start-Sleep -Seconds 5
@@ -36,7 +36,8 @@ $offlineFile = Join-Path $root "winfimlog-offline-$([Guid]::NewGuid()).txt"
 Set-Content -LiteralPath $offlineFile -Value 'created while WinFIMLog was stopped'
 $restart = Get-Date
 Start-Service $ServiceName
-$finding = Wait-WinFIMLogEvent $restart { $_.Id -eq 7795 -and $_.Message -like "*$offlineFile*" } 'event 7795 for the offline persistent change'
+$finding = Wait-WinFIMLogEvent $restart { $_.Id -eq 7795 -and $_.Message -like "*$offlineFile*" } `
+    'event 7795 for the offline persistent change' 'WinFIMLog-Baseline' 'WinFIMLog-Baseline'
 $finding | Select-Object TimeCreated, Id, Message | Format-List
 
 # Database deletion must build a complete baseline regardless of the legacy flag.

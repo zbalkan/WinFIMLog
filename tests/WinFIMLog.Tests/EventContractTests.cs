@@ -36,4 +36,27 @@ public sealed class EventContractTests
     [DataRow(2, false)]
     public void Consumers_have_an_explicit_version_rule(int version, bool expected) =>
         Assert.AreEqual(expected, EventContract.IsSupported(version));
+
+    [TestMethod]
+    public void Every_record_type_has_its_required_machine_readable_fields()
+    {
+        AssertFields("FileSystemFinding", "category", "path", "objectType", "attributionStatus");
+        AssertFields("RegistryFinding", "category", "key", "hive", "attributionStatus");
+        AssertFields("BaselineFinding", "baselineId", "source", "change", "identity", "detectedAt");
+        AssertFields("CoverageGap", "source", "scope", "reason", "lostCount");
+        AssertFields("Health", "queueDepth", "oldestItemAgeMs", "accepted", "processed", "dropped", "enrichmentFailures");
+        AssertFields("ConfigurationChanged", "previousScopeHash", "newScopeHash");
+        AssertFields("Aggregation", "sourceEventId", "groupKey", "count", "windowStartedAt", "windowEndedAt", "sampleRecordId");
+        AssertFields("SecurityAuditAttribution", "nativeEventId", "subjectUserSid", "objectName", "nativeEvidence");
+    }
+
+    private static void AssertFields(string recordType, params string[] names)
+    {
+        var fields = new Dictionary<string, object?>();
+        foreach (var name in names) fields[name] = name.EndsWith("At", StringComparison.Ordinal) ? DateTimeOffset.UtcNow : "value";
+        var record = EventContract.Create(7790, recordType, "record", "scope", fields);
+        using var json = JsonDocument.Parse(record.ToJson());
+        foreach (var name in names)
+            Assert.IsTrue(json.RootElement.GetProperty("fields").TryGetProperty(name, out _), $"{recordType}.{name} is absent");
+    }
 }

@@ -36,7 +36,7 @@ namespace WinFIMLog.Configuration
             if (expanded.Contains('?'))
                 throw Invalid("path", value, "only a whole-segment '*' wildcard is supported");
 
-            var segments = expanded.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+            var segments = expanded.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
             if (segments.Count(segment => segment.Contains('*')) > 1 ||
                 segments.Any(segment => segment.Contains('*') && segment != "*"))
                 throw Invalid("path", value, "'*' must occupy one complete path segment");

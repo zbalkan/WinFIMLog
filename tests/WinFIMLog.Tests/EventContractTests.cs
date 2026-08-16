@@ -9,7 +9,7 @@ namespace WinFIMLog.Tests;
 [TestClass]
 public sealed class EventContractTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(7776, "FileSystemFinding", EventChannel.Operational)]
     [DataRow(7787, "RegistryFinding", EventChannel.Operational)]
     [DataRow(7795, "BaselineFinding", EventChannel.Baseline)]
@@ -30,7 +30,7 @@ public sealed class EventContractTests
         Assert.AreEqual(channel.ToString(), json.RootElement.GetProperty("channel").GetString());
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(0, false)]
     [DataRow(1, true)]
     [DataRow(2, false)]

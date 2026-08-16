@@ -19,8 +19,8 @@ public sealed class EventIdProviderTests
         yield return ["Registry", "Deleted", (ushort)7788];
     }
 
-    [DataTestMethod]
-    [DynamicData(nameof(Categories), DynamicDataSourceType.Method)]
+    [TestMethod]
+    [DynamicData(nameof(Categories))]
     public void Maps_change_type_and_category_to_contract_id(string type, string category, ushort expected)
     {
         var properties = new[]

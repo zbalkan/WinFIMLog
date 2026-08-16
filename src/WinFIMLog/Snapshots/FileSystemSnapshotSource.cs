@@ -82,12 +82,10 @@ namespace WinFIMLog.Snapshots
             catch { member.AclState = EvidenceAvailability.Failed; }
         }
 
-        private static string[] EnumerateStreamNames(string path)
-        {
+        private static string[] EnumerateStreamNames(string path) =>
             // The unnamed $DATA stream is represented by ContentHash. Named stream discovery is
             // available on Windows through FindFirstStreamW; an empty array means none observed.
-            return OperatingSystem.IsWindows() ? AlternateDataStreams.Enumerate(path) : Array.Empty<string>();
-        }
+            OperatingSystem.IsWindows() ? AlternateDataStreams.Enumerate(path) : Array.Empty<string>();
 
         private static BaselineMember Unavailable(string path, EvidenceAvailability state) => new()
         { Identity = Normalise(path), Path = Path.GetFullPath(path), NodeType = SnapshotNodeType.File,

@@ -20,19 +20,19 @@ namespace WinFIMLog.Tests
         [TestMethod]
         public void EnsureConfigurationKeysMonitored_AddsBothLocationsOnce()
         {
-            ICollection<string> keys = new List<string> { @"HKEY_LOCAL_MACHINE\Software\Example" };
+            var keys = new List<string> { @"HKEY_LOCAL_MACHINE\Software\Example" };
             ScopeIdentity.EnsureConfigurationKeysMonitored(keys);
             ScopeIdentity.EnsureConfigurationKeysMonitored(keys);
-            CollectionAssert.Contains((System.Collections.ICollection)keys, ScopeIdentity.PolicyKey);
-            Assert.AreEqual(3, keys.Count);
+            Assert.Contains(ScopeIdentity.PolicyKey, keys);
+            Assert.HasCount(3, keys);
         }
 
-        [DataTestMethod]
-        [DataRow(@"HKEY_LOCAL_MACHINE")]
+        [TestMethod]
+        [DataRow("HKEY_LOCAL_MACHINE")]
         [DataRow(@"HKEY_LOCAL_MACHINE\SOFTWARE")]
         [DataRow(@"HKEY_LOCAL_MACHINE\SOFTWARE\Policies\WinFIMLog")]
         [DataRow(@"HKEY_LOCAL_MACHINE\SOFTWARE\WinFIMLog")]
         public void RejectProtectedExclusions_RejectsCoveringKey(string exclusion) =>
-            Assert.ThrowsException<ConfigurationValidationException>(() => ScopeIdentity.RejectProtectedExclusions([exclusion]));
+            Assert.Throws<ConfigurationValidationException>(() => ScopeIdentity.RejectProtectedExclusions([exclusion]));
     }
 }

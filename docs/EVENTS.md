@@ -1,5 +1,7 @@
 # Versioned event contract
 
+Filesystem finding fields include `attributionStatus`, `attributionMethod`, `attributionConfidence`, `attributionSourceTimestamp`, `attributionMissingReason`, and `processSequenceNumber`. These fields are optional evidence and do not affect whether a finding is emitted. Their meanings and trust boundaries are defined in [Attribution](ATTRIBUTION.md).
+
 Phase 5 records are UTF-8 JSON objects in one of the `WinFIMLog-Operational`,
 `WinFIMLog-Baseline`, or opt-in `WinFIMLog-Diagnostic` Windows Event Logs. The
 rendered Event Viewer message is **not** the interface. Every envelope contains:

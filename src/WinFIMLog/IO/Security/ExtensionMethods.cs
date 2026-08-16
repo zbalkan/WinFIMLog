@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -159,17 +160,7 @@ namespace WinFIMLog.IO.Security
                     return string.Empty;
                 }
 
-                if (sid.Translate(typeof(NTAccount)) is not NTAccount ntAccount)
-                {
-                    return sid.Value;
-                }
-
-                return ntAccount.Value;
-            }
-            catch (IdentityNotMappedException ex)
-            {
-                Debug.WriteLine(ex);
-                return sid != null ? sid.ToString() : string.Empty;
+                return AccountNameOrSid(sid);
             }
             catch (Exception ex)
             {
@@ -202,22 +193,48 @@ namespace WinFIMLog.IO.Security
                     return string.Empty;
                 }
 
-                if (primaryGroup.Translate(typeof(NTAccount)) is not NTAccount ntAccount)
-                {
-                    return primaryGroup.Value;
-                }
-
-                return ntAccount.Value;
-            }
-            catch (IdentityNotMappedException ex)
-            {
-                Debug.WriteLine(ex);
-                return primaryGroup != null ? primaryGroup.ToString() : string.Empty;
+                return AccountNameOrSid(primaryGroup);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine(ex);
                 return string.Empty;
+            }
+        }
+
+        /// <summary>
+        ///     Resolve an identity to its account name, falling back to its stable SID when Windows
+        ///     cannot contact the account's domain or does not know the identity.
+        /// </summary>
+        private static string AccountNameOrSid(IdentityReference identity)
+        {
+            ArgumentNullException.ThrowIfNull(identity);
+            return AccountNameOrSid(identity.Value, () => identity.Translate(typeof(NTAccount)));
+        }
+
+        internal static string AccountNameOrSid(string identityValue, Func<IdentityReference> translate)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(identityValue);
+            ArgumentNullException.ThrowIfNull(translate);
+
+            try
+            {
+                return translate() is NTAccount account
+                    ? account.Value
+                    : identityValue;
+            }
+            catch (IdentityNotMappedException ex)
+            {
+                Debug.WriteLine(ex);
+                return identityValue;
+            }
+            catch (Win32Exception ex)
+            {
+                // Domain identities cannot always be resolved (for example, while a laptop is
+                // offline or its domain trust is unavailable). The SID still identifies the
+                // principal and allows ACL collection to continue without losing the value.
+                Debug.WriteLine(ex);
+                return identityValue;
             }
         }
 

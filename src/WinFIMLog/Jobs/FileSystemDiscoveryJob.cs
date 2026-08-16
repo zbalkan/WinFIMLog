@@ -91,7 +91,7 @@ namespace WinFIMLog.Jobs
                     change.PreviousHash = FileSystemChange.RetrievePreviousHash(path, _ctx);
                 }
 
-                if (!change.CurrentHash.Equals(change.PreviousHash, System.StringComparison.InvariantCultureIgnoreCase))
+                if (!change.CurrentHash.Equals(change.PreviousHash, StringComparison.InvariantCultureIgnoreCase))
                 {
                     _messageStore.Add(change);
                 }

@@ -17,9 +17,9 @@ public sealed class FileSystemSnapshotSourceTests
         {
             var file = Path.Combine(root.FullName, "evidence.txt");
             File.WriteAllText(file, "persistent evidence");
-            var members = new FileSystemSnapshotSource(1).Capture(new[] { root.FullName });
+            var members = new FileSystemSnapshotSource(1).Capture([root.FullName]);
 
-            Assert.AreEqual(2, members.Count);
+            Assert.HasCount(2, members);
             Assert.AreEqual(SnapshotNodeType.Directory, members.Single(x => x.Path == root.FullName).NodeType);
             var evidence = members.Single(x => x.Path == file);
             Assert.AreEqual(SnapshotNodeType.File, evidence.NodeType);
@@ -36,8 +36,8 @@ public sealed class FileSystemSnapshotSourceTests
         try
         {
             var file = Path.Combine(root.FullName, "large.bin");
-            File.WriteAllBytes(file, new byte[] { 1 });
-            var evidence = new FileSystemSnapshotSource(0).Capture(new[] { root.FullName }).Single(x => x.Path == file);
+            File.WriteAllBytes(file, [1]);
+            var evidence = new FileSystemSnapshotSource(0).Capture([root.FullName]).Single(x => x.Path == file);
             Assert.AreEqual(HashEvidenceState.SkippedBySizeCap, evidence.HashState);
             Assert.IsNull(evidence.ContentHash);
         }
@@ -67,7 +67,7 @@ public sealed class FileSystemSnapshotSourceTests
 
             var members = new FileSystemSnapshotSource(1).Capture([root.FullName]);
             Assert.AreEqual(SnapshotNodeType.ReparsePoint, members.Single(x => x.Path == link).NodeType);
-            Assert.IsFalse(members.Any(x => x.Path.EndsWith("outside.txt", StringComparison.Ordinal)));
+            Assert.DoesNotContain(x => x.Path.EndsWith("outside.txt", StringComparison.Ordinal), members);
         }
         finally { root.Delete(true); target.Delete(true); }
     }
@@ -99,7 +99,7 @@ public sealed class FileSystemSnapshotSourceTests
             File.WriteAllText(file, "unnamed");
             File.WriteAllText(file + ":evidence", "named");
             var member = new FileSystemSnapshotSource(1).Capture([file]).Single();
-            Assert.IsTrue(member.StreamNames.Any(name => name.Contains(":evidence:", StringComparison.OrdinalIgnoreCase)));
+            Assert.Contains(name => name.Contains(":evidence:", StringComparison.OrdinalIgnoreCase), member.StreamNames);
             Assert.AreEqual(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("unnamed"))), member.ContentHash);
         }
         finally { root.Delete(true); }

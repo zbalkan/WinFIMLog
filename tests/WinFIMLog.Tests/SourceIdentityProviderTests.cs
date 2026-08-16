@@ -14,8 +14,8 @@ public sealed class SourceIdentityProviderTests
             @"hkey_local_machine\Software\B",
             @"HKEY_USERS\S-1-5-18\Software\A"]);
 
-        StringAssert.Contains(identity, "HKEY_LOCAL_MACHINE");
-        StringAssert.Contains(identity, "HKEY_USERS");
-        Assert.AreEqual(2, identity.Split(';').Length);
+        Assert.Contains("HKEY_LOCAL_MACHINE", identity);
+        Assert.Contains("HKEY_USERS", identity);
+        Assert.HasCount(2, identity.Split(';'));
     }
 }

@@ -129,6 +129,9 @@ namespace WinFIMLog
                                     ["oldPath"] = change.OldPath, ["newPath"] = change.NewPath,
                                     ["currentHash"] = change.CurrentHash, ["previousHash"] = change.PreviousHash,
                                     ["objectType"] = change.ObjectType.ToString(), ["attributionStatus"] = change.AttributionStatus.ToString(),
+                                    ["attributionMethod"] = change.AttributionMethod, ["attributionConfidence"] = change.AttributionConfidence,
+                                    ["attributionSourceTimestamp"] = change.AttributionSourceTimestamp, ["attributionMissingReason"] = change.AttributionMissingReason,
+                                    ["processSequenceNumber"] = change.ProcessSequenceNumber,
                                     ["processId"] = change.ProcessID, ["processName"] = change.ProcessName,
                                     ["userSid"] = change.UserSID, ["username"] = change.Username });
                             Retry(() => _eventSink.Write(record), "EventLog");
@@ -191,6 +194,8 @@ namespace WinFIMLog
                                 ["category"] = change.ChangeCategory.ToString(), ["key"] = change.Entity,
                                 ["hive"] = change.Hive, ["valueName"] = change.ValueName,
                                 ["valueData"] = change.ValueData, ["attributionStatus"] = change.AttributionStatus.ToString(),
+                                ["attributionMethod"] = change.AttributionMethod, ["attributionConfidence"] = change.AttributionConfidence,
+                                ["attributionSourceTimestamp"] = change.AttributionSourceTimestamp, ["attributionMissingReason"] = change.AttributionMissingReason,
                                 ["processId"] = change.ProcessID, ["processName"] = change.ProcessName,
                                 ["userSid"] = change.UserSID, ["username"] = change.Username });
                         Retry(() => _eventSink.Write(record), "EventLog");

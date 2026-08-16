@@ -7,16 +7,10 @@ namespace WinFIMLog.Tests;
 public sealed class ConfigurationPrecedenceTests
 {
     [TestMethod]
-    public void Policy_overrides_preference_and_legacy()
-    {
-        Assert.AreEqual("policy", ConfigurationPrecedence.Resolve("policy", "preference", "legacy"));
-    }
+    public void Policy_overrides_preference_and_legacy() => Assert.AreEqual("policy", ConfigurationPrecedence.Resolve("policy", "preference", "legacy"));
 
     [TestMethod]
-    public void Policy_removal_reveals_preference()
-    {
-        Assert.AreEqual("preference", ConfigurationPrecedence.Resolve(null, "preference", "legacy"));
-    }
+    public void Policy_removal_reveals_preference() => Assert.AreEqual("preference", ConfigurationPrecedence.Resolve(null, "preference", "legacy"));
 
     [TestMethod]
     public void Legacy_is_only_the_last_migration_fallback()

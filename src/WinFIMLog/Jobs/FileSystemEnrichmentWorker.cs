@@ -73,10 +73,22 @@ namespace WinFIMLog.Jobs
                     change.ProcessName = attribution.ProcessName;
                     change.Username = attribution.Username;
                     change.UserSID = attribution.UserSID;
-                    change.AttributionStatus = AttributionStatus.Attributed;
+                    change.ProcessSequenceNumber = attribution.ProcessSequenceNumber;
+                    change.AttributionStatus = attribution.Status;
+                    change.AttributionMethod = "KernelETWProcessSequence";
+                    change.AttributionConfidence = attribution.Status == AttributionStatus.Attributed ? "High" : "None";
+                    change.AttributionSourceTimestamp = attribution.SourceTimestamp;
+                    change.AttributionMissingReason = attribution.MissingReason;
                     break;
                 }
                 await Task.Delay(10, cancellationToken);
+            }
+
+            if (change.AttributionStatus == AttributionStatus.Unattributed)
+            {
+                change.AttributionMethod = "KernelETWProcessSequence";
+                change.AttributionConfidence = "None";
+                change.AttributionMissingReason = "NoCorrelatedFileEvent";
             }
 
             FileSystemChange? previous = null;

@@ -16,6 +16,16 @@ namespace WinFIMLog.FIM
 
         AttributionStatus AttributionStatus { get; set; }
 
+        string AttributionMethod { get; set; }
+
+        string AttributionConfidence { get; set; }
+
+        DateTimeOffset? AttributionSourceTimestamp { get; set; }
+
+        string? AttributionMissingReason { get; set; }
+
+        ulong? ProcessSequenceNumber { get; set; }
+
         ChangeCategory ChangeCategory { get; set; }
 
         ConfigChangeType ConfigChangeType { get; set; }

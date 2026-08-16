@@ -172,10 +172,7 @@ namespace WinFIMLog
             return matches.ToList();
         }
 
-        public bool IsMonitoredKey(string keyName)
-        {
-            return registryScopeMatcher.IsMatch(keyName);
-        }
+        public bool IsMonitoredKey(string keyName) => registryScopeMatcher.IsMatch(keyName);
 
         public bool IsMonitoredPath(string path)
         {

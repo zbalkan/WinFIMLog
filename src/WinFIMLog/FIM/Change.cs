@@ -8,6 +8,21 @@ namespace WinFIMLog.FIM
 
         public AttributionStatus AttributionStatus { get; set; } = AttributionStatus.Unattributed;
 
+        /// <summary>Technique used to obtain the optional identity evidence.</summary>
+        public string AttributionMethod { get; set; } = "None";
+
+        /// <summary>Consumer-facing confidence in the optional attribution.</summary>
+        public string AttributionConfidence { get; set; } = "None";
+
+        /// <summary>Timestamp of the source event used for correlation.</summary>
+        public DateTimeOffset? AttributionSourceTimestamp { get; set; }
+
+        /// <summary>Machine-readable explanation when attribution is incomplete.</summary>
+        public string? AttributionMissingReason { get; set; }
+
+        /// <summary>Kernel process sequence number; unlike PID, this identifies an instance.</summary>
+        public ulong? ProcessSequenceNumber { get; set; }
+
         public ChangeCategory ChangeCategory { get; set; }
 
         public ConfigChangeType ConfigChangeType { get; set; }

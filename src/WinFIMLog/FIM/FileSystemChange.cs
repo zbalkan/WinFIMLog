@@ -25,13 +25,10 @@ namespace WinFIMLog.FIM
         public static string RetrievePreviousHash(string path, ILiteDbContext ctx)
             => RetrievePreviousChange(path, ctx)?.CurrentHash ?? string.Empty;
 
-        public static FileSystemChange? RetrievePreviousChange(string path, ILiteDbContext ctx)
-        {
-            return ctx.FileSystemChanges.Query()
+        public static FileSystemChange? RetrievePreviousChange(string path, ILiteDbContext ctx) => ctx.FileSystemChanges.Query()
                       .Where(x => x.Entity == path)
                       .OrderByDescending(c => c.DateTime)
                       .FirstOrDefault();
-        }
 
         /// <summary> Generates new file system change record from parameters </summary>
         /// <param name="path">The path to filekey</param>

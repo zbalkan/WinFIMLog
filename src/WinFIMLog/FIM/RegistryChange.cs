@@ -82,6 +82,11 @@ namespace WinFIMLog.FIM
                 return (process.ProcessName, userInfo.Username, userInfo.SID);
             });
             AttributionStatus = attribution.Status;
+            AttributionMethod = "RegistryETWPostEventPid";
+            AttributionConfidence = attribution.Status == AttributionStatus.Attributed ? "Low" : "None";
+            AttributionSourceTimestamp = new DateTimeOffset(data.TimeStamp);
+            AttributionMissingReason = attribution.Status == AttributionStatus.Unavailable
+                ? "ProcessExitedOrAccessDenied" : null;
             ProcessName = attribution.ProcessName;
             Username = attribution.Username;
             UserSID = attribution.UserSid;

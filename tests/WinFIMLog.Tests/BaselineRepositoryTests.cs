@@ -36,11 +36,11 @@ public sealed class BaselineRepositoryTests
     public void Complete_baseline_is_atomic_and_subsequent_diff_records_all_change_kinds()
     {
         var first = repository.Begin(BaselineSource.FileSystem, "scope", "volume");
-        Assert.AreEqual(0, repository.ReconcileAndComplete(first,
+        Assert.IsEmpty(repository.ReconcileAndComplete(first,
         [
             Member("A", "hash-a"),
             Member("B", "hash-b")
-        ]).Count);
+        ]));
 
         var second = repository.Begin(BaselineSource.FileSystem, "scope", "volume");
         var results = repository.ReconcileAndComplete(second,
@@ -52,14 +52,14 @@ public sealed class BaselineRepositoryTests
         Assert.AreEqual(BaselineStatus.Complete, second.Status);
         Assert.AreEqual(2L, second.ItemCount);
         Assert.IsNotNull(second.CompletedAt);
-        CollectionAssert.AreEquivalent(
-            new[] { ReconciliationChange.Changed, ReconciliationChange.Created, ReconciliationChange.Deleted },
-            results.Select(x => x.Change).ToArray());
-        Assert.AreEqual(2, repository.Members(second.Id).Count);
+        Assert.AreSequenceEqual(
+            [ReconciliationChange.Changed, ReconciliationChange.Created, ReconciliationChange.Deleted], results
+                .Select(x => x.Change), SequenceOrder.InAnyOrder);
+        Assert.HasCount(2, repository.Members(second.Id));
         Assert.AreEqual(second.Id, repository.Find(second.Id)?.Id);
-        Assert.AreEqual(3, repository.PendingResults().Count);
+        Assert.HasCount(3, repository.PendingResults());
         repository.RecordDeliveryAttempt(results[0], true);
-        Assert.AreEqual(2, repository.PendingResults().Count);
+        Assert.HasCount(2, repository.PendingResults());
         Assert.IsNotNull(context.ReconciliationResults.FindById(new BsonValue(results[0].Id)).DeliveredAt);
     }
 
@@ -89,7 +89,7 @@ public sealed class BaselineRepositoryTests
     public void Duplicate_identity_cannot_be_published_as_complete()
     {
         var baseline = repository.Begin(BaselineSource.FileSystem, "scope", "volume");
-        Assert.ThrowsException<InvalidOperationException>(() => repository.ReconcileAndComplete(baseline,
+        Assert.Throws<InvalidOperationException>(() => repository.ReconcileAndComplete(baseline,
             [Member("A", "one"), Member("a", "two")]));
         Assert.AreEqual(BaselineStatus.Building, context.Baselines.FindById(new BsonValue(baseline.Id)).Status);
     }

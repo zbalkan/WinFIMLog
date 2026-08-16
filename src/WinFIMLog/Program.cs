@@ -6,6 +6,7 @@ using WinFIMLog.Configuration;
 using WinFIMLog.Health;
 using WinFIMLog.Jobs;
 using WinFIMLog.Snapshots;
+using WinFIMLog.Attribution;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -44,6 +45,9 @@ namespace WinFIMLog
                 })
                 .ConfigureServices(services =>
                 {
+                    _ = services.AddOptions<SaclAttributionOptions>()
+                        .BindConfiguration("Attribution:Sacl");
+                    _ = services.AddSingleton<IAuditPolicyConformance, WindowsAuditPolicyConformance>();
                     _ = services.AddSingleton<Settings>();
                     _ = services.AddOptions<LiteDbOptions>()
                         .Configure<Settings>((options, settings) => options.DatabasePath = settings.DatabasePath);
@@ -58,6 +62,8 @@ namespace WinFIMLog
                     _ = services.AddSingleton<BaselineRepository>();
                     // Reject invalid settings before any source or snapshot hosted service starts.
                     _ = services.AddHostedService<SettingsStartupValidator>();
+                    // Optional and deliberately independent of snapshot/completeness services.
+                    _ = services.AddHostedService<SecurityAuditAttributionService>();
                     _ = services.AddSingleton<SnapshotService>();
                     _ = services.AddSingleton<ISnapshotCoordinator>(provider => provider.GetRequiredService<SnapshotService>());
                     _ = services.AddHostedService(provider => provider.GetRequiredService<SnapshotService>());

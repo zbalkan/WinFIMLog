@@ -39,7 +39,7 @@ The WinFIMLog channels use the following stable ID allocation.
 | 7793 | Error | Database or Event Log sink failure |
 | 7794 | Warning | Effective configuration changed (previous/new scope hashes) |
 | 7795 | Warning | Tier 0 baseline reconciliation finding |
-| 7796 | Information | Burst aggregation summary |
+| 7796 | Information | Reserved legacy burst aggregation summary (not emitted) |
 | 7797 | Information | Optional native Security-audit attribution evidence |
 
 Filesystem fields are `category`, `path`, `oldPath`, `newPath`, `currentHash`,
@@ -48,8 +48,8 @@ Filesystem fields are `category`, `path`, `oldPath`, `newPath`, `currentHash`,
 `valueName`, `valueData` and the same attribution fields. Baseline fields are
 `baselineId`, `source`, `change`, `identity`, `oldPath`, `newPath`, and
 `detectedAt`. Health, gap and configuration records additionally use the fields
-defined in [HEALTH.md](HEALTH.md). Aggregation records contain `sourceEventId`,
-`groupKey`, `count`, `windowStartedAt`, `windowEndedAt`, and `sampleRecordId`.
+defined in [HEALTH.md](HEALTH.md). Event 7796 remains schema-compatible for
+older consumers but local aggregation is no longer emitted.
 
 Baseline finding 7795 contains `baselineId`, `source`, `scopeHash`, `change`,
 `identity`, `oldPath`, `newPath`, and `detectedAt`. With path identity, a rename

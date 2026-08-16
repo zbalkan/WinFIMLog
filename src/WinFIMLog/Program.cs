@@ -48,8 +48,8 @@ namespace WinFIMLog
                 {
                     _ = services.AddOptions<SaclAttributionOptions>()
                         .BindConfiguration("Attribution:Sacl");
-                    _ = services.AddOptions<BurstAggregationOptions>()
-                        .BindConfiguration("Events:Aggregation");
+                    _ = services.AddOptions<RetentionOptions>()
+                        .BindConfiguration("Retention");
                     _ = services.AddSingleton<IAuditPolicyConformance, WindowsAuditPolicyConformance>();
                     _ = services.AddSingleton<Settings>();
                     _ = services.AddOptions<LiteDbOptions>()
@@ -59,12 +59,16 @@ namespace WinFIMLog
                     _ = services.AddSingleton<IBuffer<FileSystemChange>, FileSystemChangeBuffer>();
                     _ = services.AddSingleton<IBuffer<RegistryChange>, RegistryChangeBuffer>();
                     _ = services.AddSingleton<HealthMetrics>();
+                    _ = services.AddSingleton<SnapshotHealthState>();
                     _ = services.AddSingleton<IHealthReporter, HealthReporter>();
                     _ = services.AddSingleton<WindowsEventLogSink>();
                     _ = services.AddSingleton<IEventRecordWriter>(provider => provider.GetRequiredService<WindowsEventLogSink>());
-                    _ = services.AddSingleton<BurstAggregatingEventSink>();
-                    _ = services.AddSingleton<ILocalEventSink>(provider => provider.GetRequiredService<BurstAggregatingEventSink>());
-                    _ = services.AddHostedService(provider => provider.GetRequiredService<BurstAggregatingEventSink>());
+                    _ = services.AddSingleton<EventOutboxRepository>();
+                    _ = services.AddSingleton<DurableEventOutboxSink>();
+                    _ = services.AddSingleton<ILocalEventSink>(provider => provider.GetRequiredService<DurableEventOutboxSink>());
+                    // Registered first so the durable publisher stops after every producer.
+                    _ = services.AddHostedService<EventOutboxPublisher>();
+                    _ = services.AddHostedService<StorageMaintenanceService>();
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
                     _ = services.AddSingleton<BaselineRepository>();
                     // Reject invalid settings before any source or snapshot hosted service starts.
@@ -74,6 +78,8 @@ namespace WinFIMLog
                     _ = services.AddSingleton<SnapshotService>();
                     _ = services.AddSingleton<ISnapshotCoordinator>(provider => provider.GetRequiredService<SnapshotService>());
                     _ = services.AddHostedService(provider => provider.GetRequiredService<SnapshotService>());
+                    _ = services.AddHostedService<BaselineFindingPublisher>();
+                    _ = services.AddHostedService<SnapshotHealthMonitor>();
                     // Hosted services are stopped in reverse registration order. Start the
                     // consumer first so monitors are stopped before the consumer drains buffers.
                     _ = services.AddHostedService<BufferConsumer>();

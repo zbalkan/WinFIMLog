@@ -46,8 +46,10 @@ best-effort attribution. The following limitations remain explicit.
 
 * Local Event Log hand-off is the current delivery boundary. Downstream SIEM
   receipt is not acknowledged by WinFIMLog.
-* In-memory live observations can be lost on forced termination. Known queue or
-  source loss is reported; an ungraceful process kill cannot emit its own gap.
-* Local time-based retention is deliberately disabled until raw evidence and
-  latest-state projection ownership are separated. Operators own Event Log and
-  SIEM retention according to ADR-0003.
+* Accepted live observations and their stable envelopes share a durable outbox
+  transaction. Event Log retry is at-least-once, so consumers deduplicate by
+  `RecordId`. A process kill can still lose notifications not yet admitted.
+* Delivered outbox envelopes and complete baseline generations use bounded,
+  configurable retention. Pending outbox evidence is never time-expired. A
+  prolonged sink outage can therefore consume local disk; pending count and age
+  are health signals and operators must alert before capacity is exhausted.

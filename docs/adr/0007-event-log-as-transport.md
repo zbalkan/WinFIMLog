@@ -1,13 +1,14 @@
 # ADR-0007 — Event Log as transport
 
-* Status: Accepted
+* Status: Superseded in part by ADR-0008
 * Date: 2026-08-16
 
 ## Decision
 
 Delivery responsibility ends when a versioned record is successfully written to a local
 WinFIMLog channel. Downstream acknowledgement is not part of the guarantee, so no
-publisher outbox is required. WEF owns forwarding durability and collectors must alert
+publisher outbox was originally required. ADR-0008 now adds a local outbox while WEF
+owns forwarding durability and collectors must alert
 on missing health records. Findings use a JSON envelope with named fields; schema major
 versions are accepted explicitly rather than inferred from rendered text.
 
@@ -22,4 +23,5 @@ but a collector-offline wrap can lose events after the local delivery boundary.
 
 Deployment must run `scripts/install-event-channels.ps1` after service creation and before
 start. Removal runs `scripts/uninstall-event-channels.ps1`. Sites requiring confirmed
-receipt need a future durable, idempotent publisher and a new ADR.
+downstream receipt still need a future collector-acknowledged publisher and a new ADR;
+ADR-0008 guarantees only durable local retry to the Event Log boundary.

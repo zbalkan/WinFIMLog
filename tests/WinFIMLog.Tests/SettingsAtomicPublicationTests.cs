@@ -31,6 +31,8 @@ public sealed class SettingsAtomicPublicationTests
         Assert.IsEmpty(mixed);
     }
 
+    internal static EffectiveSettings GenerationForTest(string hash, string path) => Generation(hash, path);
+
     private static EffectiveSettings Generation(string hash, string path)
     {
         var escaped = Regex.Escape(path);

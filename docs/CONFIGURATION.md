@@ -4,10 +4,13 @@
 
 `Attribution:Sacl:Enabled` (Boolean, default `false`) opts in to Security-audit attribution. `FileScopes` and `RegistryScopes` are arrays of literal, deployment-owned SACL locations. An enabled tier requires at least one location, rejects wildcards, and permits no more than 64 combined locations. These application settings do not install SACLs or change audit policy; see [Attribution](ATTRIBUTION.md).
 
-`Events:Aggregation:Enabled` (Boolean, default `true`) enables finding burst
-aggregation. `Threshold` (default `100`) is the number of matching findings
-written individually per window, and `WindowSeconds` (default `10`) defines the
-window. Additional matching findings are represented by summary event 7796.
+Local finding aggregation was removed by ADR-0008. Findings enter the durable
+outbox individually; aggregation is a downstream SIEM responsibility.
+
+`Retention:DeliveredOutboxDays` (integer, default `7`) controls retention of
+successfully delivered outbox envelopes. Pending envelopes are never removed by
+retention. `Retention:BaselineGenerations` (integer, default `2`) controls the
+number of complete membership generations retained per source.
 
 WinFIMLog reads machine policy from `HKLM\SOFTWARE\WinFIMLog` preference. Policy is never written by the service. Defaults are created only in the new preference key. Both active locations are mandatory monitored scope and cannot be excluded.
 
@@ -19,7 +22,7 @@ WinFIMLog reads machine policy from `HKLM\SOFTWARE\WinFIMLog` preference. Policy
 | `MonitoredKeys` | `REG_MULTI_SZ` | security-sensitive keys | Full hive names, without wildcards. Both configuration keys are added unconditionally. |
 | `ExcludedKeys` | `REG_MULTI_SZ` | empty | Full hive names, without wildcards; cannot cover either configuration key. |
 | `EnableRegistryMonitoring` | `REG_DWORD` | `1` | `1` enables ETW registry monitoring. |
-| `EnableLocalDatabase` | `REG_DWORD` | `1` | `1` persists observations locally. |
+| `EnableLocalDatabase` | `REG_DWORD` | `1` | `1` maintains latest-state projections. The delivery outbox and Tier 0 baselines remain mandatory. |
 | `HashLimitMB` | `REG_DWORD` | `1024` | Maximum file size considered for hashing. |
 | `HeartbeatInterval` | `REG_DWORD` | `60` | Seconds; `0` disables heartbeat. |
 | `CaptureQueueCapacity` | `REG_DWORD` | `8192` | Must exceed zero. |

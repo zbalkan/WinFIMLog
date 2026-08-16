@@ -7,3 +7,4 @@
 * [ADR-0005 — Tier model](0005-tier-model.md)
 * [ADR-0006 — Attribute separation](0006-attribute-separation.md)
 * [ADR-0007 — Event Log as transport](0007-event-log-as-transport.md)
+* [ADR-0008 — Durable local Event Log outbox](0008-durable-local-outbox.md)

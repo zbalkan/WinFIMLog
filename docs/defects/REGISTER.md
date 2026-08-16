@@ -38,14 +38,14 @@ the register.
 | AR-02 | P0 | Shutdown can strand admitted raw or enriched filesystem events | Maintainers | Resolved | M1 channel-completion test |
 | AR-03 | P0 | Watcher lifecycle mutates shared state without one owner | Maintainers | Resolved | M1 serialized watcher lifecycle |
 | AR-04 | P0 | Runtime reload exposes mixed mutable configuration generations | Maintainers | Resolved | M1 immutable `EffectiveSettings` publication |
-| AR-05 | P1 | Live evidence lacks a durable per-record Event Log outbox | Maintainers | Open | M2 |
-| AR-06 | P1 | In-memory aggregation acknowledges evidence before durable delivery | Maintainers | Open | M2 |
-| AR-07 | P1 | Snapshot failure has no retry or overdue-baseline objective | Maintainers | Open | M2 |
-| AR-08 | P1 | Scanning, recovery and baseline publishing share one serial lane | Maintainers | Open | M3 |
-| AR-09 | P1 | Snapshot recovery requests are unbounded and ignore affected scope | Maintainers | Open | M3 |
-| AR-10 | P1 | Bulk baseline writes contend with live persistence | Maintainers | Open | M3 |
-| AR-11 | P1 | Local baseline and observation storage has no bounded lifecycle | Maintainers | Open | M4 |
+| AR-05 | P1 | Live evidence lacks a durable per-record Event Log outbox | Maintainers | Resolved | ADR-0008 and outbox fault tests |
+| AR-06 | P1 | In-memory aggregation acknowledges evidence before durable delivery | Maintainers | Resolved | Local aggregation removed |
+| AR-07 | P1 | Snapshot failure has no retry or overdue-baseline objective | Maintainers | Resolved | Retry and snapshot health monitor |
+| AR-08 | P1 | Scanning, recovery and baseline publishing share one serial lane | Maintainers | Resolved | Independent source/publisher workers |
+| AR-09 | P1 | Snapshot recovery requests are unbounded and ignore affected scope | Maintainers | Resolved | Bounded coalescing tests |
+| AR-10 | P1 | Bulk baseline writes contend with live persistence | Maintainers | Resolved | Chunked staging and serialized transactions |
+| AR-11 | P1 | Local baseline and observation storage has no bounded lifecycle | Maintainers | Resolved | Projection/outbox/baseline retention tests |
 | AR-12 | P2 | Cursorless traversal is not a point-in-time filesystem snapshot | Maintainers | Open | M5 |
 | AR-13 | P2 | Loaded-hive HKCU scope is not host-wide per-user completeness | Maintainers | Open | M5 |
 | AR-14 | P2 | Superseded valid baselines are conflated with failed baselines | Maintainers | Open | M4 |
-| AR-15 | P2 | Burst summaries discard entity and attribution distribution | Maintainers | Open | M2 |
+| AR-15 | P2 | Burst summaries discard entity and attribution distribution | Maintainers | Resolved | Aggregation moved downstream |

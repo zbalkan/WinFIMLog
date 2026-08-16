@@ -15,7 +15,6 @@ namespace WinFIMLog.Snapshots
         public BaselineMetadata Begin(BaselineSource source, string scopeHash, string sourceIdentity,
             int schemaVersion = 1, string algorithmVersion = "sha256-v1", string? startCursor = null)
         {
-            InvalidateInapplicable(source, scopeHash, sourceIdentity, schemaVersion, algorithmVersion);
             var baseline = new BaselineMetadata
             {
                 Source = source,
@@ -27,7 +26,11 @@ namespace WinFIMLog.Snapshots
                 Status = BaselineStatus.Building,
                 StartCursor = startCursor
             };
-            context.Baselines.Insert(baseline);
+            if (!context.ExecuteTransaction(() =>
+            {
+                InvalidateInapplicable(source, scopeHash, sourceIdentity, schemaVersion, algorithmVersion);
+                context.Baselines.Insert(baseline);
+            })) throw new InvalidOperationException("Could not commit the baseline start transaction.");
             return baseline;
         }
 
@@ -51,7 +54,8 @@ namespace WinFIMLog.Snapshots
         {
             result.DeliveryAttempts++;
             if (delivered) result.DeliveredAt = DateTimeOffset.UtcNow;
-            context.ReconciliationResults.Update(result);
+            if (!context.ExecuteTransaction(() => context.ReconciliationResults.Update(result)))
+                throw new InvalidOperationException("Could not commit reconciliation delivery state.");
         }
 
         public IReadOnlyList<ReconciliationResult> ReconcileAndComplete(BaselineMetadata baseline, IEnumerable<BaselineMember> members,
@@ -68,15 +72,25 @@ namespace WinFIMLog.Snapshots
                 baseline.SchemaVersion, baseline.AlgorithmVersion);
             var results = Diff(baseline.Id, previous, materialised);
             baseline.Status = BaselineStatus.Reconciling;
-            context.Baselines.Update(baseline);
+            if (!context.ExecuteTransaction(() => context.Baselines.Update(baseline)))
+                throw new InvalidOperationException("Could not commit baseline reconciliation state.");
+
+            // Stage members in bounded transactions so a large scan cannot monopolise
+            // the single embedded writer. Only the final promotion makes them authoritative.
+            foreach (var chunk in materialised.Chunk(500))
+            {
+                if (!context.ExecuteTransaction(() =>
+                {
+                    foreach (var member in chunk)
+                    {
+                        member.BaselineId = baseline.Id;
+                        context.BaselineMembers.Insert(member);
+                    }
+                })) throw new InvalidOperationException("A baseline staging transaction did not commit.");
+            }
 
             if (!context.ExecuteTransaction(() =>
             {
-                foreach (var member in materialised)
-                {
-                    member.BaselineId = baseline.Id;
-                    context.BaselineMembers.Insert(member);
-                }
                 foreach (var result in results) context.ReconciliationResults.Insert(result);
                 baseline.ItemCount = materialised.Count;
                 baseline.EndCursor = endCursor;
@@ -85,6 +99,28 @@ namespace WinFIMLog.Snapshots
                 context.Baselines.Update(baseline);
             })) throw new InvalidOperationException("The baseline completion transaction did not commit.");
             return results;
+        }
+
+        /// <summary>Retains two complete generations and removes abandoned staging data.</summary>
+        public void CompactAfterCompletion(BaselineMetadata completed, int generationsToKeep = 2)
+        {
+            var keep = context.Baselines.Query()
+                .Where(x => x.Source == completed.Source && x.Status == BaselineStatus.Complete)
+                .OrderByDescending(x => x.CompletedAt).Limit(Math.Max(1, generationsToKeep))
+                .ToList().Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var baseline in context.Baselines.Find(x => x.Source == completed.Source).ToList())
+            {
+                if (keep.Contains(baseline.Id)) continue;
+                if (!context.ExecuteTransaction(() =>
+                    context.BaselineMembers.DeleteMany(x => x.BaselineId == baseline.Id)))
+                    throw new InvalidOperationException("Could not compact baseline members.");
+                if (context.ReconciliationResults.Exists(x => x.BaselineId == baseline.Id && x.DeliveredAt == null)) continue;
+                if (!context.ExecuteTransaction(() =>
+                {
+                    context.ReconciliationResults.DeleteMany(x => x.BaselineId == baseline.Id);
+                    context.Baselines.Delete(baseline.Id);
+                })) throw new InvalidOperationException("Could not compact baseline metadata.");
+            }
         }
 
         /// <summary>Completes a cursorless scan using the second observation for every identity.</summary>
@@ -103,7 +139,8 @@ namespace WinFIMLog.Snapshots
         {
             baseline.Status = BaselineStatus.Invalid;
             baseline.InvalidReason = reason;
-            context.Baselines.Update(baseline);
+            if (!context.ExecuteTransaction(() => context.Baselines.Update(baseline)))
+                throw new InvalidOperationException("Could not commit invalid baseline state.");
         }
 
         private List<ReconciliationResult> Diff(string baselineId, BaselineMetadata? previous, List<BaselineMember> current)

@@ -21,7 +21,8 @@ namespace WinFIMLog
         public string DatabasePath => $"{Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)}\\FIM\\fim.db";
 
         /// <summary>
-        ///     Switch to enable/disable local database. When true, you cannot display previous hashes.
+        ///     Switch to enable/disable latest-state live projections. Tier 0 and the durable
+        ///     delivery outbox always require the local database.
         ///     Default: true.
         /// </summary>
         public bool EnableLocalDatabase { get => ReadState().EnableLocalDatabase; private set => WriteState().EnableLocalDatabase = value; }

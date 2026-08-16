@@ -1,37 +1,48 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using WinFIMLog.IO;
-using WinFIMLog.Events;
-using System.Collections.Generic;
+using Microsoft.Extensions.Options;
+using WinFIMLog.Data;
 using WinFIMLog.Health;
 
 namespace WinFIMLog.Snapshots
 {
-    /// <summary>Serialises periodic and recovery-triggered Tier 0 scans.</summary>
+    /// <summary>Coordinates independent, bounded Tier 0 source schedulers.</summary>
     public sealed class SnapshotService : BackgroundService, ISnapshotCoordinator
     {
         private readonly BaselineRepository repository;
         private readonly Settings settings;
         private readonly ILogger<SnapshotService> logger;
-        private readonly ILocalEventSink eventSink;
         private readonly IHealthReporter health;
-        private readonly Channel<SnapshotRequest> requests = Channel.CreateUnbounded<SnapshotRequest>(
-            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        private readonly SnapshotHealthState state;
+        private readonly RetentionOptions retention;
+        private readonly Channel<SnapshotRequest> fileSystemRequests = BoundedRequests();
+        private readonly Channel<SnapshotRequest> registryRequests = BoundedRequests();
 
-        public SnapshotService(BaselineRepository repository, Settings settings, ILogger<SnapshotService> logger,
-            ILocalEventSink eventSink, IHealthReporter health)
-        { this.repository = repository; this.settings = settings; this.logger = logger; this.eventSink = eventSink; this.health = health; }
+        internal int PendingFileSystemRequests => fileSystemRequests.Reader.Count;
+        internal int PendingRegistryRequests => registryRequests.Reader.Count;
+
+        public SnapshotService(BaselineRepository repository, Settings settings,
+            ILogger<SnapshotService> logger, IHealthReporter health, SnapshotHealthState state,
+            IOptions<RetentionOptions> retention)
+        {
+            this.repository = repository;
+            this.settings = settings;
+            this.logger = logger;
+            this.health = health;
+            this.state = state;
+            this.retention = retention.Value;
+        }
 
         public void RequestFileSystemSnapshot(string reason, string? affectedScope = null) =>
-            requests.Writer.TryWrite(new SnapshotRequest(BaselineSource.FileSystem, reason, affectedScope));
+            fileSystemRequests.Writer.TryWrite(new SnapshotRequest(reason, affectedScope));
 
         public void RequestRegistrySnapshot(string reason, string? affectedScope = null) =>
-            requests.Writer.TryWrite(new SnapshotRequest(BaselineSource.Registry, reason, affectedScope));
+            registryRequests.Writer.TryWrite(new SnapshotRequest(reason, affectedScope));
 
         public void RequestScopeSnapshot(string reason)
         {
@@ -39,55 +50,62 @@ namespace WinFIMLog.Snapshots
             if (settings.EnableRegistryMonitoring) RequestRegistrySnapshot(reason);
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.WhenAll(
+            RunSourceLoop(BaselineSource.FileSystem, fileSystemRequests.Reader, stoppingToken),
+            RunSourceLoop(BaselineSource.Registry, registryRequests.Reader, stoppingToken));
+
+        private async Task RunSourceLoop(BaselineSource source, ChannelReader<SnapshotRequest> requests,
+            CancellationToken cancellationToken)
         {
-            var fileSystemDue = DateTimeOffset.MinValue;
-            var registryDue = DateTimeOffset.MinValue;
-            while (!stoppingToken.IsCancellationRequested)
+            var due = DateTimeOffset.MinValue;
+            var failures = 0;
+            while (!cancellationToken.IsCancellationRequested)
             {
-                PublishPendingFindings();
+                var configuration = settings.Capture();
+                if (source == BaselineSource.Registry && !configuration.EnableRegistryMonitoring)
+                {
+                    await WaitForRequestOrDelay(requests, TimeSpan.FromSeconds(5), cancellationToken);
+                    continue;
+                }
+
                 var now = DateTimeOffset.UtcNow;
-                if (now >= fileSystemDue)
+                if (now < due)
                 {
-                    await RunFileSystemSnapshot(stoppingToken);
-                    fileSystemDue = DateTimeOffset.UtcNow.AddSeconds(settings.FileSystemSnapshotInterval);
-                }
-                if (settings.EnableRegistryMonitoring && now >= registryDue)
-                {
-                    await RunRegistrySnapshot(stoppingToken);
-                    registryDue = DateTimeOffset.UtcNow.AddSeconds(settings.RegistrySnapshotInterval);
+                    var request = await WaitForRequestOrDelay(requests, due - now, cancellationToken);
+                    if (request is null) continue;
+                    logger.LogWarning(
+                        "Tier 0 {Source} full snapshot requested: {Reason}; affected scope {AffectedScope} promoted to full configured scope",
+                        source, request.Reason, request.AffectedScope ?? "all configured scope");
+                    DrainRequests(requests);
                 }
 
-                var nextDue = settings.EnableRegistryMonitoring && registryDue < fileSystemDue ? registryDue : fileSystemDue;
-                var remaining = nextDue - DateTimeOffset.UtcNow;
-                if (remaining > TimeSpan.FromSeconds(5)) remaining = TimeSpan.FromSeconds(5);
-                var delay = Task.Delay(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero, stoppingToken);
-                var available = requests.Reader.WaitToReadAsync(stoppingToken).AsTask();
-                if (await Task.WhenAny(delay, available) == delay) continue;
-
-                var runFileSystem = false;
-                var runRegistry = false;
-                while (requests.Reader.TryRead(out var request))
+                state.Started(source);
+                var succeeded = source == BaselineSource.FileSystem
+                    ? await RunFileSystemSnapshot(cancellationToken)
+                    : await RunRegistrySnapshot(cancellationToken);
+                if (succeeded)
                 {
-                    logger.LogWarning("Tier 0 {Source} snapshot requested: {Reason}; affected scope {AffectedScope}",
-                        request.Source, request.Reason, request.AffectedScope ?? "all configured scope");
-                    runFileSystem |= request.Source == BaselineSource.FileSystem;
-                    runRegistry |= request.Source == BaselineSource.Registry;
+                    state.Succeeded(source);
+                    if (failures > 0)
+                        health.SourceRecovered($"{source}Snapshot", configuration.ScopeHash,
+                            $"CompletedAfter{failures}Failures");
+                    failures = 0;
+                    var interval = source == BaselineSource.FileSystem
+                        ? configuration.FileSystemSnapshotInterval : configuration.RegistrySnapshotInterval;
+                    due = DateTimeOffset.UtcNow.AddSeconds(interval);
                 }
-                if (runFileSystem)
+                else
                 {
-                    await RunFileSystemSnapshot(stoppingToken);
-                    fileSystemDue = DateTimeOffset.UtcNow.AddSeconds(settings.FileSystemSnapshotInterval);
-                }
-                if (runRegistry && settings.EnableRegistryMonitoring)
-                {
-                    await RunRegistrySnapshot(stoppingToken);
-                    registryDue = DateTimeOffset.UtcNow.AddSeconds(settings.RegistrySnapshotInterval);
+                    failures++;
+                    state.Failed(source, failures);
+                    health.CoverageGap($"{source}Snapshot", configuration.ScopeHash,
+                        $"ScanFailed;RetryAttempt={failures}", 0);
+                    due = DateTimeOffset.UtcNow.Add(RetryDelay(failures));
                 }
             }
         }
 
-        internal async Task RunRegistrySnapshot(CancellationToken cancellationToken)
+        internal async Task<bool> RunRegistrySnapshot(CancellationToken cancellationToken)
         {
             var configuration = settings.Capture();
             var baseline = repository.Begin(BaselineSource.Registry, configuration.ScopeHash,
@@ -96,16 +114,19 @@ namespace WinFIMLog.Snapshots
             {
                 var members = await Task.Run(() => new RegistrySnapshotSource(configuration.IsMonitoredKey)
                     .Capture(configuration.MonitoredKeys), cancellationToken);
-                var results = repository.ReconcileAndComplete(baseline, members);
-                EmitFindings(baseline, results);
-                logger.LogInformation("Completed registry baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}", baseline.Id, baseline.ItemCount, baseline.ScopeHash);
+                _ = repository.ReconcileAndComplete(baseline, members);
+                logger.LogInformation("Completed registry baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}",
+                    baseline.Id, baseline.ItemCount, baseline.ScopeHash);
+                repository.CompactAfterCompletion(baseline, retention.BaselineGenerations);
+                return true;
             }
-            catch (OperationCanceledException) { repository.MarkInvalid(baseline, "Service stopped during scan"); throw; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            { repository.MarkInvalid(baseline, "Service stopped during scan"); throw; }
             catch (Exception exception)
-            { repository.MarkInvalid(baseline, exception.GetType().Name); logger.LogError(exception, "Registry baseline {BaselineId} failed", baseline.Id); }
+            { repository.MarkInvalid(baseline, exception.GetType().Name); logger.LogError(exception, "Registry baseline {BaselineId} failed", baseline.Id); return false; }
         }
 
-        internal async Task RunFileSystemSnapshot(CancellationToken cancellationToken)
+        internal async Task<bool> RunFileSystemSnapshot(CancellationToken cancellationToken)
         {
             var configuration = settings.Capture();
             var baseline = repository.Begin(BaselineSource.FileSystem, configuration.ScopeHash,
@@ -117,66 +138,42 @@ namespace WinFIMLog.Snapshots
                 baseline.Status = BaselineStatus.Reconciling;
                 var second = await Task.Run(() => source.Capture(configuration.MonitoredPaths), cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                var results = repository.ReconcileAndCompleteAfterSecondPass(baseline, Array.Empty<BaselineMember>(), second);
-                EmitFindings(baseline, results);
+                _ = repository.ReconcileAndCompleteAfterSecondPass(baseline, Array.Empty<BaselineMember>(), second);
                 logger.LogInformation("Completed filesystem baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}",
                     baseline.Id, baseline.ItemCount, baseline.ScopeHash);
+                repository.CompactAfterCompletion(baseline, retention.BaselineGenerations);
+                return true;
             }
-            catch (OperationCanceledException) { repository.MarkInvalid(baseline, "Service stopped during scan"); throw; }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            { repository.MarkInvalid(baseline, "Service stopped during scan"); throw; }
             catch (Exception exception)
-            { repository.MarkInvalid(baseline, exception.GetType().Name); logger.LogError(exception, "Filesystem baseline {BaselineId} failed", baseline.Id); }
+            { repository.MarkInvalid(baseline, exception.GetType().Name); logger.LogError(exception, "Filesystem baseline {BaselineId} failed", baseline.Id); return false; }
         }
 
-        private void EmitFindings(BaselineMetadata baseline, System.Collections.Generic.IEnumerable<ReconciliationResult> results)
-        {
-            foreach (var result in results)
-                TryPublishFinding(baseline, result);
-        }
-
-        private void PublishPendingFindings()
-        {
-            foreach (var result in repository.PendingResults())
+        private static Channel<SnapshotRequest> BoundedRequests() => Channel.CreateBounded<SnapshotRequest>(
+            new BoundedChannelOptions(1)
             {
-                var baseline = repository.Find(result.BaselineId);
-                if (baseline is not null) TryPublishFinding(baseline, result);
-            }
-        }
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.DropWrite
+            });
 
-        private void TryPublishFinding(BaselineMetadata baseline, ReconciliationResult result)
+        private static async Task<SnapshotRequest?> WaitForRequestOrDelay(ChannelReader<SnapshotRequest> reader,
+            TimeSpan delay, CancellationToken cancellationToken)
         {
-            try
-            {
-                WriteFindingWithRetry(EventContract.Create(7795, "BaselineFinding", result.Id,
-                    baseline.ScopeHash, new Dictionary<string, object?> {
-                        ["baselineId"] = baseline.Id, ["source"] = baseline.Source.ToString(),
-                        ["change"] = result.Change.ToString(), ["identity"] = result.Identity,
-                        ["oldPath"] = result.OldPath, ["newPath"] = result.NewPath,
-                        ["detectedAt"] = result.DetectedAt }, EventChannel.Baseline));
-                repository.RecordDeliveryAttempt(result, true);
-            }
-            catch (Exception exception)
-            {
-                repository.RecordDeliveryAttempt(result, false);
-                logger.LogError(exception, "Baseline finding {FindingId} remains in the durable local outbox", result.Id);
-            }
+            if (delay > TimeSpan.FromSeconds(5)) delay = TimeSpan.FromSeconds(5);
+            var timer = Task.Delay(delay > TimeSpan.Zero ? delay : TimeSpan.Zero, cancellationToken);
+            var available = reader.WaitToReadAsync(cancellationToken).AsTask();
+            if (await Task.WhenAny(timer, available) == timer) return null;
+            return reader.TryRead(out var request) ? request : null;
         }
 
-        private void WriteFindingWithRetry(EventContract record)
-        {
-            Exception? last = null;
-            for (var attempt = 1; attempt <= 3; attempt++)
-            {
-                try { eventSink.Write(record); return; }
-                catch (Exception exception)
-                {
-                    last = exception;
-                    health.SinkFailure("EventLog", exception.GetType().Name, attempt);
-                    if (attempt < 3) Thread.Sleep(TimeSpan.FromMilliseconds(100 * (1 << (attempt - 1))));
-                }
-            }
-            throw new InvalidOperationException("Event Log baseline finding write failed after retries.", last);
-        }
+        private static void DrainRequests(ChannelReader<SnapshotRequest> reader)
+        { while (reader.TryRead(out _)) { } }
 
-        private sealed record SnapshotRequest(BaselineSource Source, string Reason, string? AffectedScope);
+        internal static TimeSpan RetryDelay(int failures) =>
+            TimeSpan.FromSeconds(Math.Min(300, 1 << Math.Min(Math.Max(1, failures) - 1, 8)));
+
+        private sealed record SnapshotRequest(string Reason, string? AffectedScope);
     }
 }

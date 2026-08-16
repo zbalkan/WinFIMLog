@@ -22,6 +22,11 @@ reconciliation results are committed in the same LiteDB transaction as the
 metadata transition to `Complete`; consequently an interrupted commit cannot
 publish a partial complete baseline.
 
+Baseline members are staged in bounded transactions so bulk scans yield the
+embedded writer to live admission; only the final metadata promotion is the
+authority boundary. Complete generations are retained according to
+`Retention:BaselineGenerations`.
+
 The obsolete `FileDiscoveryCompleted` registry value is neither read nor used
 as a snapshot gate. A missing/deleted database therefore causes an immediate
 startup baseline.
@@ -43,3 +48,8 @@ Legacy `fileSystemChanges` and `registryChanges` remain historical observations.
 They are not silently promoted to a complete baseline. The first Phase 4 scan
 builds the new baseline collections; the old discovery flag remains only so an
 older binary can be rolled back safely.
+
+Current live collections are latest-state projections keyed logically by entity.
+Every individual finding is retained independently in `eventOutbox` until local
+Event Log delivery. Projection mutation and outbox admission share a transaction;
+delivered envelopes use configured time retention while pending envelopes do not.

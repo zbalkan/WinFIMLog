@@ -3,6 +3,7 @@ using WinFIMLog.FIM;
 using LiteDB;
 using Microsoft.Extensions.Options;
 using WinFIMLog.Snapshots;
+using WinFIMLog.Events;
 
 namespace WinFIMLog.Data
 {
@@ -15,6 +16,7 @@ namespace WinFIMLog.Data
         public ILiteCollection<BaselineMetadata> Baselines { get; }
         public ILiteCollection<BaselineMember> BaselineMembers { get; }
         public ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
+        public ILiteCollection<EventOutboxRecord> EventOutbox { get; }
 
         /// <summary>
         ///     The default size is 80MB
@@ -24,6 +26,7 @@ namespace WinFIMLog.Data
         private const long MB = 1024 * 1024;
 
         private readonly LiteDatabase _database;
+        private readonly object writeLock = new();
 
         private bool disposedValue;
 
@@ -57,11 +60,17 @@ namespace WinFIMLog.Data
             ReconciliationResults = _database.GetCollection<ReconciliationResult>("reconciliationResults");
             ReconciliationResults.EnsureIndex(x => x.BaselineId);
             ReconciliationResults.EnsureIndex(x => x.DeliveredAt);
+            EventOutbox = _database.GetCollection<EventOutboxRecord>("eventOutbox");
+            EventOutbox.EnsureIndex(x => x.DeliveredAt);
+            EventOutbox.EnsureIndex(x => x.NextAttemptAt);
         }
 
         #region Dispose
 
-        public bool ExecuteTransaction(Action action) => _database.BeginTrans() && Execute(action);
+        public bool ExecuteTransaction(Action action)
+        {
+            lock (writeLock) return _database.BeginTrans() && Execute(action);
+        }
 
         private bool Execute(Action action)
         {

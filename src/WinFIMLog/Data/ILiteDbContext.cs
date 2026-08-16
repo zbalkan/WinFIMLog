@@ -10,6 +10,7 @@ using System;
 using WinFIMLog.FIM;
 using LiteDB;
 using WinFIMLog.Snapshots;
+using WinFIMLog.Events;
 
 namespace WinFIMLog.Data
 {
@@ -24,6 +25,8 @@ namespace WinFIMLog.Data
         ILiteCollection<BaselineMember> BaselineMembers { get; }
 
         ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
+
+        ILiteCollection<EventOutboxRecord> EventOutbox { get; }
 
         bool ExecuteTransaction(Action action);
     }

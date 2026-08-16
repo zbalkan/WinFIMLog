@@ -31,17 +31,17 @@ must preserve four end-to-end invariants:
 | AR-02 | P0 | Shutdown can strand raw or enriched filesystem events | M1 | Complete |
 | AR-03 | P0 | Watcher lifecycle has multiple unsynchronised owners | M1 | Complete |
 | AR-04 | P0 | Mutable settings publish mixed configuration generations | M1 | Complete |
-| AR-05 | P1 | Live persistence and Event Log delivery have no durable per-record hand-off | M2 | Open |
-| AR-06 | P1 | In-memory burst aggregation can acknowledge evidence before Event Log delivery | M2 | Open |
-| AR-07 | P1 | Snapshot failure advances the normal interval without a recovery objective | M2 | Open |
-| AR-08 | P1 | Scans, recovery requests and baseline outbox publishing share one serial lane | M3 | Open |
-| AR-09 | P1 | Snapshot requests are unbounded and affected scope is not actionable | M3 | Open |
-| AR-10 | P1 | Full baseline writes contend with latency-sensitive live persistence | M3 | Open |
-| AR-11 | P1 | Baseline and observation storage have no bounded lifecycle | M4 | Open |
+| AR-05 | P1 | Live persistence and Event Log delivery have no durable per-record hand-off | M2 | Complete |
+| AR-06 | P1 | In-memory burst aggregation can acknowledge evidence before Event Log delivery | M2 | Complete |
+| AR-07 | P1 | Snapshot failure advances the normal interval without a recovery objective | M2 | Complete |
+| AR-08 | P1 | Scans, recovery requests and baseline outbox publishing share one serial lane | M3 | Complete |
+| AR-09 | P1 | Snapshot requests are unbounded and affected scope is not actionable | M3 | Complete |
+| AR-10 | P1 | Full baseline writes contend with latency-sensitive live persistence | M3 | Complete |
+| AR-11 | P1 | Baseline and observation storage have no bounded lifecycle | M4 | Complete |
 | AR-12 | P2 | Cursorless filesystem traversal is not a point-in-time snapshot | M5 | Open |
 | AR-13 | P2 | Loaded-hive-only HKCU coverage is not host-wide per-user completeness | M5 | Open |
 | AR-14 | P2 | Superseded valid baselines are conflated with failed baselines | M4 | Open |
-| AR-15 | P2 | Burst grouping loses entity and attribution distribution | M2 | Open |
+| AR-15 | P2 | Burst grouping loses entity and attribution distribution | M2 | Complete |
 
 P0 means the current behavior contradicts the stated scope or reliability
 contract and blocks a trustworthy release. P1 is required for resilient
@@ -140,6 +140,11 @@ must await each boundary and report any item that cannot reach a terminal state.
 
 ## M2 — Establish a real delivery boundary
 
+**Status: Complete (2026-08-16).** All structured records now enter a durable
+per-record outbox, projection/outbox admission is transactional, local burst
+aggregation has been removed, and snapshot failures use bounded exponential
+retry with heartbeat and overdue health state.
+
 ### M2.1 Use one durable outbox for all evidence (AR-05)
 
 Persist each live observation and its stable event envelope atomically with a
@@ -179,6 +184,11 @@ attempt count and age.
 
 ## M3 — Isolate scheduling, recovery and storage workloads
 
+**Status: Complete (2026-08-16).** Filesystem and registry schedulers run
+independently, recovery requests coalesce in one-slot per-source channels,
+baseline finding publication is independent, and baseline members stage in
+bounded transactions behind the shared serialized writer boundary.
+
 ### M3.1 Split the snapshot service (AR-08, AR-09)
 
 Separate periodic scheduling, reconciliation coordination, source-specific scan
@@ -206,6 +216,11 @@ metadata. Reserve write capacity and latency budgets for the live outbox.
 * Fault-injection results record scan, delivery and live-write latency together.
 
 ## M4 — Make persistence sustainable and lineage honest
+
+**P1 storage-lifecycle scope complete (2026-08-16).** AR-11 is complete: live
+collections are latest-state projections, delivered outbox rows have explicit
+retention, pending evidence is retained, and complete baseline generations are
+bounded. M4.2/AR-14 remains P2 work.
 
 ### M4.1 Separate storage ownership and retention (AR-11)
 

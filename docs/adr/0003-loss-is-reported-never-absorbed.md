@@ -30,7 +30,6 @@ records and is therefore a coverage gap bounded by the next snapshot.
 ## Evidence ownership and retention (D3)
 
 The SIEM owns long-term audit history after successful Event Log hand-off. Local
-LiteDB owns the latest-state projection and retains it until superseded. Raw
-evidence is not compacted before hand-off. Automated local retention is deferred
-until raw evidence and projection collections are distinct; therefore Phase 2
-has no time-based evidence deletion.
+LiteDB owns the latest-state projection and a separate durable outbox. Raw
+evidence is not compacted before hand-off. ADR-0008 permits time retention only
+for delivered outbox envelopes; pending evidence is retained until delivery.

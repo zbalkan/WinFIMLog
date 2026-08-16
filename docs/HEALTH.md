@@ -5,7 +5,7 @@ from a blind source.
 
 | ID | Name | Required fields | Emission |
 |---|---|---|---|
-| 7790 | Heartbeat | time, scope hash, queue depth, oldest age, accepted, processed, dropped, enrichment failures | `HeartbeatInterval` (60 seconds by default) |
+| 7790 | Heartbeat | time, scope hash, queue depth/age/counters, snapshot state/last success/duration/failures, outbox pending count/age, database bytes/free space | `HeartbeatInterval` (60 seconds by default) |
 | 7791 | Coverage gap | source, scope, scope hash, reason, lost count | Immediately on known loss |
 | 7792 | Source recovered | source, scope, scope hash, action | After source recreation |
 | 7793 | Sink failure | sink, scope hash, reason, attempt | Each terminal/retry threshold |
@@ -14,7 +14,9 @@ from a blind source.
 
 Alert when two expected heartbeat intervals pass, queue age exceeds one interval,
 `Dropped` or enrichment failures increase, or a gap is not followed by recovery
-and reconciliation. A heartbeat with zero findings means healthy quiet; a missing
+and reconciliation. Alert when the outbox oldest age grows or a snapshot exceeds
+its configured interval; these conditions also produce explicit source health
+state. A heartbeat with zero findings means healthy quiet; a missing
 heartbeat or unresolved 7791 means coverage is unknown.
 
 The native watcher buffer is 64 KiB, the Windows maximum. This was selected to

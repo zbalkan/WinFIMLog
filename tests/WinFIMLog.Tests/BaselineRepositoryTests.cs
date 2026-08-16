@@ -94,6 +94,22 @@ public sealed class BaselineRepositoryTests
         Assert.AreEqual(BaselineStatus.Building, context.Baselines.FindById(new BsonValue(baseline.Id)).Status);
     }
 
+    [TestMethod]
+    public void Compaction_bounds_complete_baseline_generations()
+    {
+        for (var generation = 0; generation < 5; generation++)
+        {
+            var baseline = repository.Begin(BaselineSource.FileSystem, "scope", "volume");
+            repository.ReconcileAndComplete(baseline, [Member("A", $"hash-{generation}")]);
+            foreach (var result in repository.PendingResults()) repository.RecordDeliveryAttempt(result, true);
+            repository.CompactAfterCompletion(baseline, generationsToKeep: 2);
+        }
+
+        Assert.AreEqual(2, context.Baselines.Count());
+        Assert.AreEqual(2, context.BaselineMembers.Count());
+        Assert.IsTrue(context.Baselines.FindAll().All(x => x.Status == BaselineStatus.Complete));
+    }
+
     private static BaselineMember Member(string identity, string hash) => new()
     {
         Identity = identity,

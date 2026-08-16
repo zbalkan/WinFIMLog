@@ -39,7 +39,8 @@ Event
 ```
 
 Parser fixtures are exercised by `EventContractTests`: filesystem, registry, baseline,
-gap, health, configuration, and aggregation discriminators must all parse without regex.
+gap, health, configuration, and legacy aggregation discriminators must all parse without regex.
+New service versions forward individual findings; aggregation belongs downstream.
 
 ## Operational checks
 

@@ -18,6 +18,7 @@ using WinFIMLog.Health;
 using WinFIMLog.IO;
 using WinFIMLog.Events;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace WinFIMLog
 {
@@ -35,7 +36,7 @@ namespace WinFIMLog
 
         private readonly Settings _settings;
         private readonly IHealthReporter _health;
-        private readonly ILocalEventSink _eventSink;
+        private readonly EventOutboxRepository _outbox;
 
         public BufferConsumer(ILogger<JobOrchestrator> logger,
                       IBuffer<FileSystemChange> fsStore,
@@ -43,7 +44,7 @@ namespace WinFIMLog
                       ILiteDbContext ctx,
                       Settings settings,
                       IHealthReporter health,
-                      ILocalEventSink eventSink)
+                      EventOutboxRepository outbox)
         {
             _logger = logger;
             _fsStore = fsStore;
@@ -51,7 +52,7 @@ namespace WinFIMLog
             _ctx = ctx;
             _settings = settings;
             _health = health;
-            _eventSink = eventSink;
+            _outbox = outbox;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -98,7 +99,7 @@ namespace WinFIMLog
         }
 
         // Cannot run in parallel as the local database does not support concurrent writes.
-        private bool ProcessChanges() => ProcessFileSystemChanges() | ProcessRegistryChanges();
+        internal bool ProcessChanges() => ProcessFileSystemChanges() | ProcessRegistryChanges();
 
         private bool ProcessFileSystemChanges()
         {
@@ -110,12 +111,7 @@ namespace WinFIMLog
 
                 try
                 {
-                    if (_settings.EnableLocalDatabase)
-                    {
-                        Retry(() => _ctx.FileSystemChanges.Upsert(fsChanges), "LiteDB");
-                        Debug.WriteLine($"Successfully persisted {fsCount} items.");
-                    }
-
+                    var records = new List<(EventContract Record, bool Error)>();
                     foreach (var change in fsChanges)
                     {
                         if (change.ChangeCategory != ChangeCategory.Discovery)
@@ -134,9 +130,24 @@ namespace WinFIMLog
                                     ["processSequenceNumber"] = change.ProcessSequenceNumber,
                                     ["processId"] = change.ProcessID, ["processName"] = change.ProcessName,
                                     ["userSid"] = change.UserSID, ["username"] = change.Username });
-                            Retry(() => _eventSink.Write(record), "EventLog");
+                            records.Add((record, false));
                         }
                     }
+                    Retry(() => _outbox.EnqueueBatch(records, () =>
+                    {
+                        if (_settings.EnableLocalDatabase)
+                        {
+                            foreach (var change in fsChanges.GroupBy(x => x.Entity, StringComparer.OrdinalIgnoreCase)
+                                .Select(group => group.OrderByDescending(x => x.DateTime).First()))
+                            {
+                                foreach (var previous in _ctx.FileSystemChanges.FindAll()
+                                    .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase)).ToList())
+                                    _ctx.FileSystemChanges.Delete(previous.Id);
+                                _ctx.FileSystemChanges.Insert(change);
+                            }
+                        }
+                    }), "LiteDBOutbox");
+                    Debug.WriteLine($"Successfully persisted and enqueued {fsCount} items.");
                 }
                 catch
                 {
@@ -178,12 +189,7 @@ namespace WinFIMLog
                 var regChanges = _regStore.Take(regCount);
                 try
                 {
-                    if (_settings.EnableLocalDatabase)
-                    {
-                        Retry(() => _ctx.RegistryChanges.Upsert(regChanges), "LiteDB");
-                        Debug.WriteLine($"Successfully persisted {regCount} items.");
-                    }
-
+                    var records = new List<(EventContract Record, bool Error)>();
                     foreach (var change in regChanges)
                     {
                         var id = change.ChangeCategory switch
@@ -198,8 +204,23 @@ namespace WinFIMLog
                                 ["attributionSourceTimestamp"] = change.AttributionSourceTimestamp, ["attributionMissingReason"] = change.AttributionMissingReason,
                                 ["processId"] = change.ProcessID, ["processName"] = change.ProcessName,
                                 ["userSid"] = change.UserSID, ["username"] = change.Username });
-                        Retry(() => _eventSink.Write(record), "EventLog");
+                        records.Add((record, false));
                     }
+                    Retry(() => _outbox.EnqueueBatch(records, () =>
+                    {
+                        if (_settings.EnableLocalDatabase)
+                        {
+                            foreach (var change in regChanges.GroupBy(x => x.Entity, StringComparer.OrdinalIgnoreCase)
+                                .Select(group => group.OrderByDescending(x => x.DateTime).First()))
+                            {
+                                foreach (var previous in _ctx.RegistryChanges.FindAll()
+                                    .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase)).ToList())
+                                    _ctx.RegistryChanges.Delete(previous.Id);
+                                _ctx.RegistryChanges.Insert(change);
+                            }
+                        }
+                    }), "LiteDBOutbox");
+                    Debug.WriteLine($"Successfully persisted and enqueued {regCount} items.");
                 }
                 catch
                 {

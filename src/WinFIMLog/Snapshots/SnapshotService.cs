@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.IO;
+using WinFIMLog.Events;
+using System.Collections.Generic;
 using WinFIMLog.Health;
 
 namespace WinFIMLog.Snapshots
@@ -141,7 +143,12 @@ namespace WinFIMLog.Snapshots
         {
             try
             {
-                WriteFindingWithRetry($"BaselineId={baseline.Id} Source={baseline.Source} ScopeHash={baseline.ScopeHash} Change={result.Change} Identity={result.Identity} OldPath={result.OldPath} NewPath={result.NewPath} DetectedAt={result.DetectedAt:O}");
+                WriteFindingWithRetry(EventContract.Create(7795, "BaselineFinding", result.Id,
+                    baseline.ScopeHash, new Dictionary<string, object?> {
+                        ["baselineId"] = baseline.Id, ["source"] = baseline.Source.ToString(),
+                        ["change"] = result.Change.ToString(), ["identity"] = result.Identity,
+                        ["oldPath"] = result.OldPath, ["newPath"] = result.NewPath,
+                        ["detectedAt"] = result.DetectedAt }, EventChannel.Baseline));
                 repository.RecordDeliveryAttempt(result, true);
             }
             catch (Exception exception)
@@ -151,12 +158,12 @@ namespace WinFIMLog.Snapshots
             }
         }
 
-        private void WriteFindingWithRetry(string message)
+        private void WriteFindingWithRetry(EventContract record)
         {
             Exception? last = null;
             for (var attempt = 1; attempt <= 3; attempt++)
             {
-                try { eventSink.Write(7795, message); return; }
+                try { eventSink.Write(record); return; }
                 catch (Exception exception)
                 {
                     last = exception;

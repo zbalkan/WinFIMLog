@@ -1,6 +1,25 @@
-# Event ID allocation
+# Versioned event contract
 
-The **WinFIMLog** Application Event Log source uses the following stable Phase 1 allocation.
+Phase 5 records are UTF-8 JSON objects in one of the `WinFIMLog-Operational`,
+`WinFIMLog-Baseline`, or opt-in `WinFIMLog-Diagnostic` Windows Event Logs. The
+rendered Event Viewer message is **not** the interface. Every envelope contains:
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `schemaVersion` | integer | yes | Contract major version; currently `1` |
+| `eventId` | integer | yes | Stable allocation below |
+| `recordType` | string | yes | Discriminator for the fields object |
+| `occurredAt` | RFC 3339 timestamp | yes | UTC emission time |
+| `recordId` | string | yes | Stable finding/observation identifier |
+| `scopeHash` | string | yes | Canonical effective scope identity |
+| `fields` | object | yes | Record-specific named fields; null means unavailable |
+| `channel` | string enum | yes | `Operational`, `Baseline`, or `Diagnostic` |
+
+Consumers **must** accept schema version 1, ignore unknown fields within version 1,
+and reject an unknown major version explicitly. Field names and meanings are additive
+within a major version; existing fields will not change type or meaning.
+
+The WinFIMLog channels use the following stable ID allocation.
 
 | ID | Level | Meaning |
 |---:|---|---|
@@ -18,11 +37,19 @@ The **WinFIMLog** Application Event Log source uses the following stable Phase 1
 | 7793 | Error | Database or Event Log sink failure |
 | 7794 | Warning | Effective configuration changed (previous/new scope hashes) |
 | 7795 | Warning | Tier 0 baseline reconciliation finding |
+| 7796 | Information | Burst aggregation summary |
 
-A finding binds `changeType` to `FileSystem` or `Registry` and `category` to `Created`, `Changed`, or `Deleted`. The pair determines the ID. Rendered message text is not an authoritative interface.
+Filesystem fields are `category`, `path`, `oldPath`, `newPath`, `currentHash`,
+`previousHash`, `objectType`, `attributionStatus`, `processId`, `processName`,
+`userSid`, and `username`. Registry fields are `category`, `key`, `hive`,
+`valueName`, `valueData` and the same attribution fields. Baseline fields are
+`baselineId`, `source`, `change`, `identity`, `oldPath`, `newPath`, and
+`detectedAt`. Health, gap and configuration records additionally use the fields
+defined in [HEALTH.md](HEALTH.md). Aggregation records contain `sourceEventId`,
+`groupKey`, `count`, `windowStartedAt`, `windowEndedAt`, and `sampleRecordId`.
 
-Baseline finding 7795 contains `BaselineId`, `Source`, `ScopeHash`, `Change`,
-`Identity`, `OldPath`, `NewPath`, and `DetectedAt`. With path identity, a rename
+Baseline finding 7795 contains `baselineId`, `source`, `scopeHash`, `change`,
+`identity`, `oldPath`, `newPath`, and `detectedAt`. With path identity, a rename
 is represented by deterministic deleted and created results rather than an
 unsupported claim of stable rename continuity.
 

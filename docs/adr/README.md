@@ -6,3 +6,4 @@
 * [ADR-0004 — Policies key versus preferences key](0004-policies-key-versus-preferences-key.md)
 * [ADR-0005 — Tier model](0005-tier-model.md)
 * [ADR-0006 — Attribute separation](0006-attribute-separation.md)
+* [ADR-0007 — Event Log as transport](0007-event-log-as-transport.md)

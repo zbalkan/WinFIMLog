@@ -71,6 +71,7 @@ namespace WinFIMLog
 
             RunSc("description", ServiceName, Description);
             RunSc("failure", ServiceName, "reset=", "86400", "actions=", "restart/60000/restart/60000/restart/60000");
+            RunPowerShell(Path.Combine(installDirectory, "install-event-channels.ps1"));
 
             if (startService)
             {
@@ -88,6 +89,8 @@ namespace WinFIMLog
             if (ServiceExists())
             {
                 RunSc("stop", ServiceName);
+                string removalScript = Path.Combine(installDirectory, "uninstall-event-channels.ps1");
+                if (File.Exists(removalScript)) RunPowerShell(removalScript);
                 RunSc("delete", ServiceName);
             }
 
@@ -131,6 +134,14 @@ namespace WinFIMLog
             {
                 throw new InvalidOperationException($"sc.exe {string.Join(' ', arguments)} failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
             }
+        }
+
+        private static void RunPowerShell(string script)
+        {
+            ProcessResult result = RunProcess("powershell.exe", "-NoProfile", "-NonInteractive",
+                "-ExecutionPolicy", "Bypass", "-File", script);
+            if (result.ExitCode != 0)
+                throw new InvalidOperationException($"Event channel configuration failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
         }
 
         private static ProcessResult RunProcess(string fileName, params string[] arguments)

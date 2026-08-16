@@ -55,4 +55,9 @@
     <ItemGroup>
         <ProjectReference Include="..\NtfsReader\NtfsReader.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="..\..\scripts\install-event-channels.ps1" Link="install-event-channels.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+        <Content Include="..\..\scripts\uninstall-event-channels.ps1" Link="uninstall-event-channels.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
 </Project>

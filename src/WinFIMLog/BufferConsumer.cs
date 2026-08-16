@@ -16,6 +16,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.Health;
 using WinFIMLog.IO;
+using WinFIMLog.Events;
+using System.Collections.Generic;
 
 namespace WinFIMLog
 {
@@ -121,8 +123,15 @@ namespace WinFIMLog
                             var id = change.ChangeCategory switch
                             { ChangeCategory.Created => (ushort)7776, ChangeCategory.Changed => (ushort)7777,
                               ChangeCategory.Deleted => (ushort)7778, _ => (ushort)7780 };
-                            Retry(() => _eventSink.Write(id,
-                                $"ChangeType=FileSystem Category={change.ChangeCategory} Path={change.Entity} OldPath={change.OldPath} NewPath={change.NewPath} CurrentHash={change.CurrentHash} PreviousHash={change.PreviousHash} ScopeHash={change.ScopeHash}"), "EventLog");
+                            var record = EventContract.Create(id, "FileSystemFinding", change.Id,
+                                change.ScopeHash, new Dictionary<string, object?> {
+                                    ["category"] = change.ChangeCategory.ToString(), ["path"] = change.Entity,
+                                    ["oldPath"] = change.OldPath, ["newPath"] = change.NewPath,
+                                    ["currentHash"] = change.CurrentHash, ["previousHash"] = change.PreviousHash,
+                                    ["objectType"] = change.ObjectType.ToString(), ["attributionStatus"] = change.AttributionStatus.ToString(),
+                                    ["processId"] = change.ProcessID, ["processName"] = change.ProcessName,
+                                    ["userSid"] = change.UserSID, ["username"] = change.Username });
+                            Retry(() => _eventSink.Write(record), "EventLog");
                         }
                     }
                 }
@@ -177,8 +186,14 @@ namespace WinFIMLog
                         var id = change.ChangeCategory switch
                         { ChangeCategory.Created => (ushort)7786, ChangeCategory.Changed => (ushort)7787,
                           ChangeCategory.Deleted => (ushort)7788, _ => (ushort)7780 };
-                        Retry(() => _eventSink.Write(id,
-                            $"ChangeType=Registry Category={change.ChangeCategory} Entity={change.Entity} ScopeHash={change.ScopeHash} Evidence={change}"), "EventLog");
+                        var record = EventContract.Create(id, "RegistryFinding", change.Id,
+                            change.ScopeHash, new Dictionary<string, object?> {
+                                ["category"] = change.ChangeCategory.ToString(), ["key"] = change.Entity,
+                                ["hive"] = change.Hive, ["valueName"] = change.ValueName,
+                                ["valueData"] = change.ValueData, ["attributionStatus"] = change.AttributionStatus.ToString(),
+                                ["processId"] = change.ProcessID, ["processName"] = change.ProcessName,
+                                ["userSid"] = change.UserSID, ["username"] = change.Username });
+                        Retry(() => _eventSink.Write(record), "EventLog");
                     }
                 }
                 catch

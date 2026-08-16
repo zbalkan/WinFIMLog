@@ -47,16 +47,34 @@ namespace WinFIMLog
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Initiated Persistence Worker");
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                // Cannot run in parallel as local database does not support concurrent writes.
-                var processedChanges = ProcessFileSystemChanges() | ProcessRegistryChanges();
-                if (!processedChanges)
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(100), stoppingToken);
+                    if (!ProcessChanges())
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(100), stoppingToken);
+                    }
                 }
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Normal service shutdown.
+            }
+            finally
+            {
+                // The orchestrator is stopped first, so no new monitor events can arrive while
+                // the remaining changes are persisted and logged.
+                while (ProcessChanges())
+                {
+                }
+
+                _logger.LogInformation("Persistence worker stopped after draining its buffers");
+            }
         }
+
+        // Cannot run in parallel as the local database does not support concurrent writes.
+        private bool ProcessChanges() => ProcessFileSystemChanges() | ProcessRegistryChanges();
 
         private bool ProcessFileSystemChanges()
         {

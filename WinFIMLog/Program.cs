@@ -47,8 +47,10 @@ namespace WinFIMLog
                     _ = services.AddSingleton<BackgroundWorkerQueue>();
                     _ = services.AddSingleton<IBuffer<FileSystemChange>, FileSystemChangeBuffer>();
                     _ = services.AddSingleton<IBuffer<RegistryChange>, RegistryChangeBuffer>();
-                    _ = services.AddHostedService<JobOrchestrator>();
+                    // Hosted services are stopped in reverse registration order. Start the
+                    // consumer first so monitors are stopped before the consumer drains buffers.
                     _ = services.AddHostedService<BufferConsumer>();
+                    _ = services.AddHostedService<JobOrchestrator>();
                 })
                 .UseWindowsService();
     }

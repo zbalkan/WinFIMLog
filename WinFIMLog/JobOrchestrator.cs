@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using WinFIMLog.Data;
 using WinFIMLog.FIM;
 using WinFIMLog.Jobs;
-using WinFIMLog.Utils;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -54,8 +53,6 @@ namespace WinFIMLog
         // Reference: https://blog.stephencleary.com/2020/05/backgroundservice-gotcha-startup.html
         private async Task ExecutableTask(CancellationToken stoppingToken)
         {
-            _ = NativeMethods.SetConsoleCtrlHandler(Handler, true);
-
             try
             {
                 if (_settings.EnableLocalDatabase && !_settings.IsFileDiscoveryCompleted)
@@ -87,25 +84,6 @@ namespace WinFIMLog
             finally
             {
                 Cleanup();
-            }
-        }
-
-        private bool Handler(CtrlType signal)
-        {
-            switch (signal)
-            {
-                case CtrlType.CtrlBreakEvent:
-                case CtrlType.CtrlCEvent:
-                case CtrlType.CtrlLogoffEvent:
-                case CtrlType.CtrlShutdownEvent:
-                case CtrlType.CtrlCloseEvent:
-                    _logger.LogInformation("Worker stopped at: {time}", DateTimeOffset.Now);
-                    Cleanup();
-                    Environment.Exit(0);
-                    return false;
-
-                default:
-                    return false;
             }
         }
 

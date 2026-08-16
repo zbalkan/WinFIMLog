@@ -6,9 +6,6 @@ namespace WinFIMLog.Utils
 {
     internal static class NativeMethods
     {
-        // https://docs.microsoft.com/en-us/windows/console/handlerroutine?WT.mc_id=DT-MVP-5003978
-        internal delegate bool SetConsoleCtrlEventHandler(CtrlType sig);
-
         private enum KEY_INFORMATION_CLASS
         {
             KeyBasicInformation,            // A KEY_BASIC_INFORMATION structure is supplied.
@@ -36,10 +33,6 @@ namespace WinFIMLog.Utils
             int desiredAccess, // desired access to process
             ref IntPtr tokenHandle // handle to open access token
         );
-
-        // https://docs.microsoft.com/en-us/windows/console/setconsolectrlhandler?WT.mc_id=DT-MVP-5003978
-        [DllImport("Kernel32")]
-        internal static extern bool SetConsoleCtrlHandler(SetConsoleCtrlEventHandler handler, bool add);
 
         [StructLayout(LayoutKind.Sequential)]
         public struct KEY_NAME_INFORMATION

@@ -18,7 +18,11 @@ namespace WinFIMLog.Jobs
     /// </summary>
     internal sealed class FileSystemEventAttributionMonitor : IDisposable
     {
-        private const string SessionNamePrefix = "WinFIMLog-FileIO-";
+        // ETW sessions are machine-wide and survive an unclean process exit. Keep this name
+        // stable so TraceEvent's create semantics replace an orphan instead of allocating a new
+        // kernel logger on every service restart.
+        internal static readonly string SessionName = "WinFIMLog-FileIO";
+        private const string LegacySessionNamePrefix = "WinFIMLog-FileIO-";
         private static readonly TimeSpan AttributionLifetime = TimeSpan.FromSeconds(10);
 
         private readonly ConcurrentDictionary<string, Attribution> _attributions =
@@ -26,7 +30,6 @@ namespace WinFIMLog.Jobs
         private readonly ILogger _logger;
         private readonly int _serviceProcessId = Environment.ProcessId;
         private readonly Settings _settings;
-        private readonly string _sessionName;
         private readonly ManualResetEventSlim _started = new(false);
         private readonly ProcessInstanceStore _processes = new();
         private TraceEventSession? _session;
@@ -36,7 +39,6 @@ namespace WinFIMLog.Jobs
         {
             _logger = logger;
             _settings = settings;
-            _sessionName = SessionNamePrefix + _serviceProcessId;
         }
 
         internal void Start()
@@ -69,7 +71,8 @@ namespace WinFIMLog.Jobs
         {
             try
             {
-                using var session = new TraceEventSession(_sessionName, null);
+                RemoveLegacySessions();
+                using var session = new TraceEventSession(SessionName, null);
                 _session = session;
                 _started.Set();
                 session.StopOnDispose = true;
@@ -94,6 +97,38 @@ namespace WinFIMLog.Jobs
                 _started.Set();
                 _session = null;
             }
+        }
+
+        private void RemoveLegacySessions()
+        {
+            // Versions which included the process ID in the session name could strand one
+            // kernel logger per crash. Reclaim only that application-owned legacy namespace.
+            foreach (var activeSessionName in TraceEventSession.GetActiveSessionNames())
+            {
+                if (!IsLegacySessionName(activeSessionName)) continue;
+
+                try
+                {
+                    using var legacySession = TraceEventSession.GetActiveSession(activeSessionName);
+                    legacySession?.Stop();
+                    _logger.LogInformation("Removed orphaned file attribution ETW session {SessionName}.",
+                        activeSessionName);
+                }
+                catch (Exception ex)
+                {
+                    // Failure to remove one logger should not prevent the stable session from
+                    // replacing its own orphan or obscure the actual startup failure.
+                    _logger.LogWarning(ex, "Could not remove legacy file attribution ETW session {SessionName}.",
+                        activeSessionName);
+                }
+            }
+        }
+
+        internal static bool IsLegacySessionName(string sessionName)
+        {
+            if (!sessionName.StartsWith(LegacySessionNamePrefix, StringComparison.Ordinal)) return false;
+            return int.TryParse(sessionName.AsSpan(LegacySessionNamePrefix.Length), out var processId) &&
+                   processId > 0;
         }
 
         private void Record(TraceEvent data)

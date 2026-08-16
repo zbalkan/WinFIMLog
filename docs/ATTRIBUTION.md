@@ -21,6 +21,8 @@ The source timestamp is the ETW timestamp. Confidence is `High` only for a seque
 
 Ordinary kernel process attribution is **not impersonation-safe**. It identifies the process, not necessarily the effective token on the thread which performed an operation. Consumers must not reinterpret a process account as a native subject.
 
+The filesystem attribution tier owns one machine-wide ETW session named `WinFIMLog-FileIO`. The stable name lets startup replace a session left behind by an unclean service exit instead of consuming another kernel logger. On upgrade, startup also removes orphaned sessions created by older releases under the `WinFIMLog-FileIO-<pid>` naming scheme. Administrator rights are still required to enable the kernel provider.
+
 ## Optional SACL/Security tier
 
 SACL attribution is disabled by default. Configure a small list of literal `Attribution:Sacl:FileScopes` and/or `RegistryScopes`; wildcards are rejected and the combined list is capped at 64. Deployment owners, rather than WinFIMLog, own applying and restoring SACLs. Broad auditing is expressly unsupported.

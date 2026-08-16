@@ -2,6 +2,7 @@ using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Attribution;
 using WinFIMLog.FIM;
+using WinFIMLog.Jobs;
 
 namespace WinFIMLog.Tests;
 
@@ -54,5 +55,15 @@ public sealed class OptionalAttributionTests
     {
         Assert.IsTrue(Enum.IsDefined(AttributionStatus.RundownMissing));
         Assert.IsTrue(Enum.IsDefined(AttributionStatus.ImpersonationAmbiguous));
+    }
+
+    [TestMethod]
+    public void File_attribution_uses_one_stable_etw_session_and_recognizes_legacy_names()
+    {
+        Assert.AreEqual("WinFIMLog-FileIO", FileSystemEventAttributionMonitor.SessionName);
+        Assert.IsTrue(FileSystemEventAttributionMonitor.IsLegacySessionName("WinFIMLog-FileIO-1234"));
+        Assert.IsFalse(FileSystemEventAttributionMonitor.IsLegacySessionName("WinFIMLog-FileIO"));
+        Assert.IsFalse(FileSystemEventAttributionMonitor.IsLegacySessionName("WinFIMLog-FileIO-other"));
+        Assert.IsFalse(FileSystemEventAttributionMonitor.IsLegacySessionName("Unrelated-1234"));
     }
 }

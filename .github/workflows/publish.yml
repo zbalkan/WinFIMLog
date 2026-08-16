@@ -18,9 +18,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.0.x
-
-      - uses: microsoft/setup-msbuild@v3
+          dotnet-version: 10.0.x
 
       - id: version
         name: Read package version from Directory.Build.props
@@ -58,10 +56,10 @@ jobs:
           git push origin $env:RELEASE_TAG
 
       - name: Restore dependencies
-        run: msbuild WinFIMLog.sln /t:Restore /p:Configuration=Release
+        run: dotnet restore WinFIMLog.slnx
 
       - name: Build solution
-        run: msbuild WinFIMLog.sln /p:Configuration=Release /p:RestorePackages=false
+        run: dotnet build WinFIMLog.slnx --configuration Release --no-restore
 
       - name: Publish single-file service binary
         env:
@@ -70,12 +68,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          msbuild WinFIMLog/WinFIMLog.csproj `
-            /t:Publish `
-            /p:Configuration=Release `
-            /p:RuntimeIdentifier=win-x64 `
-            /p:SelfContained=true `
-            /p:PublishDir="$env:PUBLISH_OUTPUT\" `
+          dotnet publish src/WinFIMLog/WinFIMLog.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained true `
+            --output $env:PUBLISH_OUTPUT `
             /p:PublishSingleFile=true `
             /p:PublishReadyToRun=true `
             /p:EnableCompressionInSingleFile=true `

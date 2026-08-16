@@ -232,7 +232,7 @@ WinFIMLog now follows a Sysmon-like self-installer pattern: publish the service,
 Publish the self-contained Windows build first:
 
 ```powershell
-dotnet publish .\WinFIMLog\WinFIMLog.csproj `
+dotnet publish .\src\WinFIMLog\WinFIMLog.csproj `
   --configuration Release `
   --runtime win-x64 `
   --self-contained true `
@@ -277,6 +277,14 @@ Add `--remove-files` to remove the installed application directory as well. If y
 ## Development
 
 You need .NET 10 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish WinFIMLog release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
+
+Restore, build, and test the repository through the solution from its root:
+
+```powershell
+dotnet restore .\WinFIMLog.slnx
+dotnet build .\WinFIMLog.slnx --configuration Release --no-restore
+dotnet test .\WinFIMLog.slnx --configuration Release --no-build
+```
 
 Operational contracts are documented in [ADR-0012](docs/adr/0012-event-contract.md),
 [ADR-0013](docs/adr/0013-health-and-coverage-contract.md),

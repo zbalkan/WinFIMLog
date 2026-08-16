@@ -16,6 +16,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.Win32;
+using WinFIMLog.Utils;
 
 namespace WinFIMLog.IO.Security
 {
@@ -209,13 +210,25 @@ namespace WinFIMLog.IO.Security
         private static string AccountNameOrSid(IdentityReference identity)
         {
             ArgumentNullException.ThrowIfNull(identity);
-            return AccountNameOrSid(identity.Value, () => identity.Translate(typeof(NTAccount)));
+            return AccountNameOrSid(
+                identity.Value,
+                () => identity.Translate(typeof(NTAccount)),
+                LocalSidAccountResolver.Resolve);
         }
 
-        internal static string AccountNameOrSid(string identityValue, Func<IdentityReference> translate)
+        internal static string AccountNameOrSid(
+            string identityValue,
+            Func<IdentityReference> translate,
+            Func<string, string?>? localLookup = null)
         {
             ArgumentException.ThrowIfNullOrEmpty(identityValue);
             ArgumentNullException.ThrowIfNull(translate);
+
+            var localAccount = localLookup?.Invoke(identityValue);
+            if (!string.IsNullOrWhiteSpace(localAccount))
+            {
+                return localAccount;
+            }
 
             try
             {

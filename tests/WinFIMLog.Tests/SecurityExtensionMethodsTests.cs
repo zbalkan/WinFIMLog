@@ -13,6 +13,25 @@ namespace WinFIMLog.Tests
     public sealed class SecurityExtensionMethodsTests
     {
         [TestMethod]
+        public void AccountNameOrSidPrefersLocalLogonSessionWithoutOnlineTranslation()
+        {
+            const string sid = "S-1-5-21-1000-2000-3000-3999";
+            var translationAttempted = false;
+
+            var result = ExtensionMethods.AccountNameOrSid(
+                sid,
+                () =>
+                {
+                    translationAttempted = true;
+                    throw new InvalidOperationException();
+                },
+                requestedSid => requestedSid == sid ? @"CONTOSO\Alice" : null);
+
+            Assert.AreEqual(@"CONTOSO\Alice", result);
+            Assert.IsFalse(translationAttempted);
+        }
+
+        [TestMethod]
         public void AccountNameOrSidReturnsSidWhenDomainResolutionFails()
         {
             const string sid = "S-1-5-21-1000-2000-3000-4000";

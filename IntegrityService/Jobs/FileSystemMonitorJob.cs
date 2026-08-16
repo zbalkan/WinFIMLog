@@ -89,10 +89,19 @@ namespace IntegrityService.Jobs
             }
         }
 
-        private bool IsDuplicate(string fullPath)
+        private static string GetFingerprint(FileSystemChange change) =>
+            $"{change.ChangeCategory}\0{change.ObjectType}\0{change.CurrentHash}\0{change.ACLs}";
+
+        private static bool IsDuplicate(FileSystemChange change, string fingerprint) =>
+            Cached<string>.TryGet(change.FullPath, out var cached) && cached == fingerprint;
+
+        private static bool ShouldAdd(FileSystemChange change, FileSystemChange? previous)
         {
-            var lastWriteTime = File.GetLastWriteTime(fullPath);
-            return Cached<DateTime>.TryGet(fullPath, out var cached) && cached == lastWriteTime;
+            return change.ChangeCategory is ChangeCategory.Created or ChangeCategory.Deleted ||
+                   previous == null ||
+                   change.ObjectType != previous.ObjectType ||
+                   !string.Equals(change.CurrentHash, previous.CurrentHash, StringComparison.OrdinalIgnoreCase) ||
+                   !string.Equals(change.ACLs, previous.ACLs, StringComparison.Ordinal);
         }
 
         private void OnChanged(object sender, FileSystemEventArgs e) => ProcessEvent(e.FullPath, ChangeCategory.Changed);
@@ -105,22 +114,27 @@ namespace IntegrityService.Jobs
 
         private void ProcessEvent(string path, ChangeCategory category)
         {
-            if (Settings.Instance.IsMonitoredPath(path) && !IsDuplicate(path))
+            if (!Settings.Instance.IsMonitoredPath(path))
             {
-                var change = FileSystemChange.FromPath(path, category);
+                return;
+            }
 
-                if (change != null)
+            var change = FileSystemChange.FromPath(path, category);
+
+            if (change != null)
+            {
+                FileSystemChange? previous = null;
+                if (Settings.Instance.EnableLocalDatabase)
                 {
-                    if (Settings.Instance.EnableLocalDatabase && change.ObjectType == FileSystem.ObjectType.File)
-                    {
-                        change.PreviousHash = FileSystemChange.RetrievePreviousHash(path, _ctx);
-                    }
+                    previous = FileSystemChange.RetrievePreviousChange(path, _ctx);
+                    change.PreviousHash = previous?.CurrentHash ?? string.Empty;
+                }
 
-                    if (change.CurrentHash.Equals(change.PreviousHash, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _messageStore.Add(change);
-                    }
-                    Cached<DateTime>.Save(path, change.DateTime, TimeSpan.FromSeconds(5));
+                var fingerprint = GetFingerprint(change);
+                if (ShouldAdd(change, previous) && !IsDuplicate(change, fingerprint))
+                {
+                    _messageStore.Add(change);
+                    Cached<string>.Save(path, fingerprint, TimeSpan.FromSeconds(5));
                 }
             }
         }
@@ -140,7 +154,7 @@ namespace IntegrityService.Jobs
             {
                 if (disposing)
                 {
-                    // Dispose managed resources
+                    Stop();
                 }
 
                 _disposedValue = true;

@@ -14,8 +14,6 @@ namespace IntegrityService.IO
     public static partial class FileSystem
     {
 
-        private static readonly SHA256 sha = SHA256.Create();
-
         /// <summary>
         ///     Calculate <see cref="SHA256" /> digest of a file
         /// </summary>
@@ -33,9 +31,10 @@ namespace IntegrityService.IO
             {
                 try
                 {
-                    var fileStream = new FileStream(path, FileMode.Open,
-                FileAccess.Read);
+                    using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                        FileShare.ReadWrite | FileShare.Delete);
                     using var bufferedStream = new BufferedStream(fileStream, 1024 * 32);
+                    using var sha = SHA256.Create();
                     digest = BitConverter
                         .ToString(sha.ComputeHash(bufferedStream))
                         .Replace("-", string.Empty);
@@ -50,7 +49,7 @@ namespace IntegrityService.IO
                     // File is locked by another process
                     Debug.WriteLine(ex);
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     // Any other exception
                     // Here for creating breakpoints for separate cases.

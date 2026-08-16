@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using IntegrityService.Data;
 using IntegrityService.IO.Security;
 using NUlid;
@@ -20,13 +19,14 @@ namespace IntegrityService.FIM
         public ObjectType ObjectType { get; set; }
 
         public static string RetrievePreviousHash(string path, ILiteDbContext ctx)
+            => RetrievePreviousChange(path, ctx)?.CurrentHash ?? string.Empty;
+
+        public static FileSystemChange? RetrievePreviousChange(string path, ILiteDbContext ctx)
         {
-            var previousChange = ctx.FileSystemChanges.Query()
-                                       .Where(x => x.FullPath.Equals(path, StringComparison.Ordinal))
-                                       .ToList()
-                                       .OrderByDescending(c => c.DateTime)
-                                       .FirstOrDefault();
-            return previousChange?.CurrentHash ?? string.Empty;
+            return ctx.FileSystemChanges.Query()
+                      .Where(x => x.Entity == path)
+                      .OrderByDescending(c => c.DateTime)
+                      .FirstOrDefault();
         }
 
         /// <summary> Generates new file system change record from parameters </summary>
@@ -65,15 +65,34 @@ namespace IntegrityService.FIM
                 SourceComputer = Environment.MachineName,
                 CurrentHash = hash,
                 PreviousHash = string.Empty,
-                ACLs = path.GetACL()
+                ACLs = GetACL(path, category)
             };
+        }
+
+        private static string GetACL(string path, ChangeCategory category)
+        {
+            if (category == ChangeCategory.Deleted)
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                return path.GetACL();
+            }
+            catch (Exception ex)
+            {
+                // ACL collection must not prevent the filesystem event from being recorded.
+                Debug.WriteLine(ex);
+                return string.Empty;
+            }
         }
 
         private static bool IsUnderSizeLimit(string path)
         {
             try
             {
-                return new FileInfo(path).Length < Settings.Instance.HashLimitMB;
+                return new FileInfo(path).Length < Settings.Instance.HashLimitMB * 1024L * 1024L;
             }
             catch (FileNotFoundException)
             {
@@ -89,6 +108,18 @@ namespace IntegrityService.FIM
             }
         }
 
+        private static bool IsSymbolicLink(string path, FileAttributes attributes)
+        {
+            if (!attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                return false;
+            }
+
+            return attributes.HasFlag(FileAttributes.Directory)
+                ? new DirectoryInfo(path).LinkTarget != null
+                : new FileInfo(path).LinkTarget != null;
+        }
+
         private static ObjectType GetObjectType(string path)
         {
             var objectType = ObjectType.Unknown;
@@ -97,19 +128,17 @@ namespace IntegrityService.FIM
                 if (Path.Exists(path))
                 {
                     var attr = File.GetAttributes(path);
+                    if (IsSymbolicLink(path, attr))
+                    {
+                        return ObjectType.SymbolicLink;
+                    }
+
                     if (attr.HasFlag(FileAttributes.Directory))
                     {
-                        objectType = ObjectType.Directory;
+                        return ObjectType.Directory;
                     }
 
-                    // We know it is a file, but is it a regular file?
-                    var file = new FileInfo(path);
-                    if (file.LinkTarget != null)
-                    {
-                        objectType = ObjectType.SymbolicLink;
-                    }
-
-                    objectType = ObjectType.File;
+                    return ObjectType.File;
                 }
             }
             catch (Exception)

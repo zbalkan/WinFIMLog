@@ -60,7 +60,9 @@ namespace IntegrityService.Jobs
             var filesCount = files.Count.ToString("N0");
             var filteredAfterLastScanCount = filtered.Count.ToString("N0");
             var diff = (files.Count - filtered.Count).ToString("N0");
-            var percentage = ((double)(files.Count - filtered.Count) * 100 / files.Count).ToString("N2");
+            var percentage = files.Count == 0
+                ? 0d.ToString("N2")
+                : ((double)(files.Count - filtered.Count) * 100 / files.Count).ToString("N2");
 
             Debug.WriteLine("Number of all files on the device: {0}\n" +
                 "Number of files to be monitored: {1}\n" +
@@ -84,7 +86,7 @@ namespace IntegrityService.Jobs
                     change.PreviousHash = FileSystemChange.RetrievePreviousHash(path, _ctx);
                 }
 
-                if (change.CurrentHash.Equals(change.PreviousHash, System.StringComparison.InvariantCultureIgnoreCase))
+                if (!change.CurrentHash.Equals(change.PreviousHash, System.StringComparison.InvariantCultureIgnoreCase))
                 {
                     _messageStore.Add(change);
                 }

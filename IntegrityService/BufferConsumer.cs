@@ -41,22 +41,21 @@ namespace IntegrityService
             _ctx = ctx;
         }
 
-        protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-            Task.Run(async () =>
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            _logger.LogInformation("Initiated Persistence Worker");
+            while (!stoppingToken.IsCancellationRequested)
             {
-                _logger.LogInformation("Initiated Persistence Worker");
-                if (Settings.Instance.EnableLocalDatabase)
-                {// This loop must continue until service is stopped.
-                    while (!stoppingToken.IsCancellationRequested)
-                    {
-                        // Cannot run in parallel as local database does not support concurrent writes
-                        ProcessFileSystemChanges();
-                        ProcessRegistryChanges();
-                    }
+                // Cannot run in parallel as local database does not support concurrent writes.
+                var processedChanges = ProcessFileSystemChanges() | ProcessRegistryChanges();
+                if (!processedChanges)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(100), stoppingToken);
                 }
-            });
+            }
+        }
 
-        private void ProcessFileSystemChanges()
+        private bool ProcessFileSystemChanges()
         {
             // read from stores as bulk and write to database.
             var fsCount = Math.Min(_fsStore.Count(), BUCKET_SIZE);
@@ -78,10 +77,14 @@ namespace IntegrityService
                             Enum.GetName(change.ChangeCategory), Enum.GetName(ConfigChangeType.FileSystem), change.Entity, change.CurrentHash, change.PreviousHash);
                     }
                 }
+
+                return true;
             }
+
+            return false;
         }
 
-        private void ProcessRegistryChanges()
+        private bool ProcessRegistryChanges()
         {
             var regCount = Math.Min(_regStore.Count(), BUCKET_SIZE);
             if (regCount > 0)
@@ -100,7 +103,11 @@ namespace IntegrityService
                         .LogInformation("Change Type: {changeType:l}\nCategory: {category:l}\nEvent Data:\n{ev:l}",
                         Enum.GetName(ConfigChangeType.Registry), Enum.GetName(change.ChangeCategory), change.ToString());
                 }
+
+                return true;
             }
+
+            return false;
         }
     }
 }

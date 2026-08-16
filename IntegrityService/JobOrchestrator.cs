@@ -12,8 +12,6 @@ namespace IntegrityService
 {
     public partial class JobOrchestrator : BackgroundService
     {
-        private readonly ILiteDbContext _ctx;
-
         private readonly FileSystemDiscoveryJob _fsDiscovery;
 
         private readonly FileSystemMonitorJob _fsMonitor;
@@ -31,10 +29,9 @@ namespace IntegrityService
             _fsMonitor = new FileSystemMonitorJob(_logger, fsStore, ctx);
             _regMonitor = new RegistryMonitorJob(_logger, regStore);
             _fsDiscovery = new FileSystemDiscoveryJob(_logger, fsStore, ctx);
-            _ctx = ctx;
         }
 
-        protected override Task ExecuteAsync(CancellationToken stoppingToken) => _ = Task.Run(async () => await ExecutableTask(stoppingToken));
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
 
         private void Cleanup()
         {
@@ -55,25 +52,37 @@ namespace IntegrityService
         {
             _ = NativeMethods.SetConsoleCtrlHandler(Handler, true);
 
-            if (Settings.Instance.EnableLocalDatabase && !Settings.Instance.IsFileDiscoveryCompleted)
+            try
             {
-                StartFilesystemDiscoveryAsync(stoppingToken);
-            }
-            _fsMonitor.Start();
+                if (Settings.Instance.EnableLocalDatabase && !Settings.Instance.IsFileDiscoveryCompleted)
+                {
+                    _ = StartFilesystemDiscoveryAsync(stoppingToken);
+                }
+                _fsMonitor.Start();
 
-            if (Settings.Instance.EnableRegistryMonitoring)
-            {
-                _regMonitor.Start();
-            }
+                if (Settings.Instance.EnableRegistryMonitoring)
+                {
+                    _regMonitor.Start();
+                }
 
-            // This loop must continue until service is stopped.
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                if (Settings.Instance.HeartbeatInterval >= 0)
+                if (Settings.Instance.HeartbeatInterval <= 0)
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+                }
+
+                while (!stoppingToken.IsCancellationRequested)
                 {
                     _logger.LogInformation("HEARTBEAT: Worker running at: {time}", DateTimeOffset.Now);
+                    await Task.Delay(TimeSpan.FromSeconds(Settings.Instance.HeartbeatInterval), stoppingToken);
                 }
-                await Task.Delay(Settings.Instance.HeartbeatInterval * 1000, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Normal service shutdown.
+            }
+            finally
+            {
+                Cleanup();
             }
         }
 
@@ -96,20 +105,24 @@ namespace IntegrityService
             }
         }
 
-        private Task StartFilesystemDiscoveryAsync(CancellationToken stoppingToken) => Task.Run(() =>
-                       {
-                           _logger.LogInformation(
-                               "File discovery not completed. Initiating file system discovery. It will take time.");
-                           _fsDiscovery.Start();
-                           Settings.Instance.IsFileDiscoveryCompleted = true;
-                           _logger.LogInformation("File system discovery completed.");
-                       },
-                       stoppingToken).ContinueWith(t =>
-                       {
-                           if (t.IsFaulted)
-                           {
-                               _logger.LogError(t.Exception, "Error during file system discovery.");
-                           }
-                       }, TaskContinuationOptions.OnlyOnFaulted);
+        private async Task StartFilesystemDiscoveryAsync(CancellationToken stoppingToken)
+        {
+            try
+            {
+                _logger.LogInformation(
+                    "File discovery not completed. Initiating file system discovery. It will take time.");
+                await Task.Run(_fsDiscovery.Start, stoppingToken);
+                Settings.Instance.IsFileDiscoveryCompleted = true;
+                _logger.LogInformation("File system discovery completed.");
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Normal service shutdown.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during file system discovery.");
+            }
+        }
     }
 }

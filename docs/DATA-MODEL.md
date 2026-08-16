@@ -29,9 +29,12 @@ startup baseline.
 ## Evidence
 
 Filesystem membership separates node type, SHA-256 content, hash state, ACL
-evidence/state, named streams, and nullable link count. Directories and reparse
+evidence/state, named streams, nullable link count, and explicit system, sparse,
+temporary and offline attributes. Directories and reparse
 points are evidence nodes; reparse points are not traversed. Registry membership
-supports typed raw value data and unavailable states. See ADR-0006 for attribute
+supports typed raw value data and unavailable states. Configured HKCU roots are
+expanded across every currently loaded SID hive; explicit HKU roots remain
+literal. See ADR-0006 for attribute
 semantics.
 
 ## Migration

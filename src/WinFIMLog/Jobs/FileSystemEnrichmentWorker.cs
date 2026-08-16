@@ -60,6 +60,8 @@ namespace WinFIMLog.Jobs
         {
             var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, _settings.HashLimitMB, _settings.ScopeHash);
             if (change == null) return;
+            change.OldPath = raw.OldPath;
+            change.NewPath = raw.NewPath;
 
             // Correlation waiting, hashing, ACL access and database reads all happen here, never
             // on the native watcher callback thread.

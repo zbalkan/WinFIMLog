@@ -1,11 +1,11 @@
 ﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace WinFIMLog.Jobs
 {
     internal interface IMonitor : IDisposable
     {
-        void Start();
-
-        void Stop();
+        Task RunAsync(CancellationToken cancellationToken);
     }
 }

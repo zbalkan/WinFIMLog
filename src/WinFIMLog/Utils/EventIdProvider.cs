@@ -25,6 +25,7 @@ namespace WinFIMLog.Utils
         /// </returns>
         public ushort ComputeEventId(LogEvent logEvent)
         {
+            if (TryGetExplicitEventId(logEvent, out var explicitEventId)) return explicitEventId;
             ushort eventId = 7780;
             switch (logEvent)
             {
@@ -92,6 +93,22 @@ namespace WinFIMLog.Utils
             }
 
             return eventId;
+        }
+
+        private static bool TryGetExplicitEventId(LogEvent logEvent, out ushort eventId)
+        {
+            eventId = 0;
+            if (!logEvent.Properties.TryGetValue("EventId", out var value)) return false;
+            if (value is ScalarValue { Value: int id } && id is > 0 and <= ushort.MaxValue)
+            { eventId = (ushort)id; return true; }
+            if (value is StructureValue structure)
+            {
+                foreach (var property in structure.Properties)
+                    if (property.Name == "Id" && property.Value is ScalarValue { Value: int structuredId } &&
+                        structuredId is > 0 and <= ushort.MaxValue)
+                    { eventId = (ushort)structuredId; return true; }
+            }
+            return false;
         }
 
         private static bool Equals(LogEventPropertyValue a, string b) =>

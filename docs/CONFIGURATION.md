@@ -1,6 +1,6 @@
 # Configuration
 
-WinFIMLog reads machine policy from `HKLM\SOFTWARE\Policies\WinFIMLog`, then falls back **per value** to preferences at `HKLM\SOFTWARE\WinFIMLog`. Policy never gets written by the service. Defaults are created only in preferences. Both locations are mandatory monitored scope and cannot be excluded.
+WinFIMLog reads machine policy from `HKLM\SOFTWARE\WinFIMLog` preference. Policy is never written by the service. Defaults are created only in the new preference key. Both active locations are mandatory monitored scope and cannot be excluded.
 
 | Value | Type | Default | Validation and effect |
 |---|---|---|---|
@@ -17,6 +17,6 @@ WinFIMLog reads machine policy from `HKLM\SOFTWARE\Policies\WinFIMLog`, then fal
 | `WatcherBufferSizeKB` | `REG_DWORD` | `64` | 8–64 KiB. |
 | `ScopeReresolutionInterval` | `REG_DWORD` | `300` | At least 10 seconds; controls policy refresh and wildcard re-resolution. |
 | `FileSystemSnapshotInterval` | `REG_DWORD` | `21600` | At least 60 seconds; Tier 0 filesystem scan interval and principal component of the detection SLA. |
-| `RegistrySnapshotInterval` | `REG_DWORD` | `21600` | At least 60 seconds; reserved independent registry cadence (registry scans currently follow each filesystem scan). |
+| `RegistrySnapshotInterval` | `REG_DWORD` | `21600` | At least 60 seconds; independent Tier 0 registry scan interval. |
 
 `ScopeHash` is lower-case SHA-256 over canonical effective scope. Ordering, case and duplicate entries do not affect it. A changed hash is included in configuration event 7794 and subsequent findings and heartbeats. Invalid initial configuration prevents startup; invalid runtime configuration is rejected, leaves the last valid scope active, and emits a configuration coverage-gap diagnostic.

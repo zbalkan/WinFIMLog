@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using WinFIMLog.FIM;
 using WinFIMLog.Health;
+using WinFIMLog.Snapshots;
 using Microsoft.Extensions.Logging;
 
 namespace WinFIMLog.Jobs
@@ -13,7 +16,7 @@ namespace WinFIMLog.Jobs
         private readonly ILogger _logger;
         private readonly FileSystemCaptureQueue _capture;
         private readonly IHealthReporter _health;
-        private readonly Action<string> _reconcile;
+        private readonly ISnapshotCoordinator _snapshots;
 
         private readonly List<FileSystemWatcher> _watchers;
 
@@ -21,29 +24,40 @@ namespace WinFIMLog.Jobs
 
         private bool _disposedValue;
 
-        public FileSystemMonitorJob(ILogger logger, FileSystemCaptureQueue capture, IHealthReporter health, Settings settings, Action<string> reconcile)
+        public FileSystemMonitorJob(ILogger logger, FileSystemCaptureQueue capture, IHealthReporter health, Settings settings, ISnapshotCoordinator snapshots)
         {
             _logger = logger;
             _watchers = [];
             _capture = capture;
             _health = health;
             _settings = settings;
-            _reconcile = reconcile;
+            _snapshots = snapshots;
         }
 
-        // This should run async
-        public void Start()
+        public async Task RunAsync(CancellationToken cancellationToken)
         {
             InvokeWatchers();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Normal source shutdown.
+            }
+            finally
+            {
+                Stop();
+            }
         }
 
-        public void Stop()
+        private void Stop()
         {
             foreach (var watcher in _watchers)
             {
                 watcher.EnableRaisingEvents = false;
                 watcher.Changed -= OnChanged;
-                watcher.Renamed -= OnChanged;
+                watcher.Renamed -= OnRenamed;
                 watcher.Created -= OnCreated;
                 watcher.Deleted -= OnDeleted;
                 watcher.Error -= OnError;
@@ -102,7 +116,7 @@ namespace WinFIMLog.Jobs
                 };
 
                 watcher.Changed += OnChanged;
-                watcher.Renamed += OnChanged;
+                watcher.Renamed += OnRenamed;
                 watcher.Created += OnCreated;
                 watcher.Deleted += OnDeleted;
 
@@ -113,6 +127,13 @@ namespace WinFIMLog.Jobs
         }
 
         private void OnChanged(object sender, FileSystemEventArgs e) => ProcessEvent(e.FullPath, ChangeCategory.Changed);
+
+        private void OnRenamed(object sender, RenamedEventArgs e)
+        {
+            if (!_settings.IsMonitoredPath(e.FullPath) && !_settings.IsMonitoredPath(e.OldFullPath)) return;
+            _capture.TryAdmit(new RawFileSystemNotification(senderPath(e.FullPath) ?? senderPath(e.OldFullPath) ?? string.Empty,
+                e.FullPath, ChangeCategory.Changed, DateTimeOffset.UtcNow, e.OldFullPath, e.FullPath));
+        }
 
         private void OnCreated(object sender, FileSystemEventArgs e) => ProcessEvent(e.FullPath, ChangeCategory.Created);
 
@@ -129,7 +150,7 @@ namespace WinFIMLog.Jobs
             try
             {
                 _watchers.Add(CreateWatcher(scope));
-                _reconcile(scope);
+                _snapshots.RequestFileSystemSnapshot("Watcher source failure", scope);
                 _health.SourceRecovered("FileSystemWatcher", scope, "WatcherRecreated;ReconciliationStarted");
             }
             catch (Exception exception)

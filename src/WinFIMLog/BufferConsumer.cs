@@ -15,6 +15,7 @@ using WinFIMLog.FIM;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.Health;
+using WinFIMLog.IO;
 
 namespace WinFIMLog
 {
@@ -32,13 +33,15 @@ namespace WinFIMLog
 
         private readonly Settings _settings;
         private readonly IHealthReporter _health;
+        private readonly ILocalEventSink _eventSink;
 
         public BufferConsumer(ILogger<JobOrchestrator> logger,
                       IBuffer<FileSystemChange> fsStore,
                       IBuffer<RegistryChange> regStore,
                       ILiteDbContext ctx,
                       Settings settings,
-                      IHealthReporter health)
+                      IHealthReporter health,
+                      ILocalEventSink eventSink)
         {
             _logger = logger;
             _fsStore = fsStore;
@@ -46,6 +49,7 @@ namespace WinFIMLog
             _ctx = ctx;
             _settings = settings;
             _health = health;
+            _eventSink = eventSink;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -55,9 +59,17 @@ namespace WinFIMLog
             {
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    if (!ProcessChanges())
+                    try
                     {
-                        await Task.Delay(TimeSpan.FromMilliseconds(100), stoppingToken);
+                        if (!ProcessChanges())
+                            await Task.Delay(TimeSpan.FromMilliseconds(100), stoppingToken);
+                    }
+                    catch (Exception exception)
+                    {
+                        // ProcessChanges has already returned the batch to its buffer. Keep the
+                        // hosted worker alive so a transient disk/database outage can recover.
+                        _health.SinkFailure("PersistenceWorker", exception.GetType().Name, 4);
+                        await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
                     }
                 }
             }
@@ -69,8 +81,14 @@ namespace WinFIMLog
             {
                 // The orchestrator is stopped first, so no new monitor events can arrive while
                 // the remaining changes are persisted and logged.
-                while (ProcessChanges())
+                try
                 {
+                    while (ProcessChanges()) { }
+                }
+                catch (Exception exception)
+                {
+                    _health.CoverageGap("PersistenceWorker", _settings.ScopeHash,
+                        $"ShutdownDrainFailed:{exception.GetType().Name}");
                 }
 
                 _logger.LogInformation("Persistence worker stopped after draining its buffers");
@@ -100,8 +118,11 @@ namespace WinFIMLog
                     {
                         if (change.ChangeCategory != ChangeCategory.Discovery)
                         {
-                            _logger.LogInformation("Change Type: {changeType:l}\nCategory: {category:l}\nPath: {path:l}\nCurrent Hash: {currentHash:l}\nPreviousHash: {previousHash:l}",
-                                Enum.GetName(ConfigChangeType.FileSystem), Enum.GetName(change.ChangeCategory), change.Entity, change.CurrentHash, change.PreviousHash);
+                            var id = change.ChangeCategory switch
+                            { ChangeCategory.Created => (ushort)7776, ChangeCategory.Changed => (ushort)7777,
+                              ChangeCategory.Deleted => (ushort)7778, _ => (ushort)7780 };
+                            Retry(() => _eventSink.Write(id,
+                                $"ChangeType=FileSystem Category={change.ChangeCategory} Path={change.Entity} OldPath={change.OldPath} NewPath={change.NewPath} CurrentHash={change.CurrentHash} PreviousHash={change.PreviousHash} ScopeHash={change.ScopeHash}"), "EventLog");
                         }
                     }
                 }
@@ -135,6 +156,8 @@ namespace WinFIMLog
             throw new InvalidOperationException($"{sink} write failed after retries; batch was not acknowledged.", last);
         }
 
+        private void Retry(Action write, string sink) => Retry(() => { write(); return 1; }, sink);
+
         private bool ProcessRegistryChanges()
         {
             var regCount = Math.Min(_regStore.Count(), BUCKET_SIZE);
@@ -151,8 +174,11 @@ namespace WinFIMLog
 
                     foreach (var change in regChanges)
                     {
-                        _logger.LogInformation("Change Type: {changeType:l}\nCategory: {category:l}\nEvent Data:\n{ev:l}",
-                            Enum.GetName(ConfigChangeType.Registry), Enum.GetName(change.ChangeCategory), change.ToString());
+                        var id = change.ChangeCategory switch
+                        { ChangeCategory.Created => (ushort)7786, ChangeCategory.Changed => (ushort)7787,
+                          ChangeCategory.Deleted => (ushort)7788, _ => (ushort)7780 };
+                        Retry(() => _eventSink.Write(id,
+                            $"ChangeType=Registry Category={change.ChangeCategory} Entity={change.Entity} ScopeHash={change.ScopeHash} Evidence={change}"), "EventLog");
                     }
                 }
                 catch

@@ -1,0 +1,44 @@
+name: Minimum Windows host release gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operational:
+    # Operations supplies a persistent Windows Server 2019 runner with this label.
+    runs-on: [self-hosted, windows, winfimlog-minimum-host]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet test WinFIMLog.slnx --configuration Release
+      - name: Publish and install
+        shell: pwsh
+        run: |
+          dotnet publish src/WinFIMLog/WinFIMLog.csproj -c Release -r win-x64 --self-contained true -o publish /p:PublishSingleFile=true /p:PublishReadyToRun=true /p:PublishTrimmed=false /p:PublishAot=false
+          ./publish/WinFIMLog.exe install --start
+      - name: Phase 1 event contract
+        shell: pwsh
+        run: ./scripts/phase1-smoke-test.ps1
+      - name: Phase 1 startup rejection
+        shell: pwsh
+        run: ./scripts/phase1-invalid-configuration-test.ps1
+      - name: Phase 2 fault and recovery checks
+        shell: pwsh
+        run: ./scripts/phase2-fault-injection.ps1
+      - name: Phase 4 offline and database-loss checks
+        shell: pwsh
+        run: ./scripts/phase4-snapshot-smoke-test.ps1
+      - name: Export evidence
+        if: always()
+        shell: pwsh
+        run: wevtutil epl Application "$env:RUNNER_TEMP\WinFIMLog-Application.evtx" /ow:true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: minimum-host-event-evidence
+          path: ${{ runner.temp }}\WinFIMLog-Application.evtx

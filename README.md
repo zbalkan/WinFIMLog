@@ -10,28 +10,48 @@ The recurring snapshot schema, lifecycle, identity limitations and migration are
 specified in [the data model](docs/DATA-MODEL.md). Architecture decisions are
 indexed in [the ADR index](docs/adr/README.md).
 
+The current delivery status against roadmap Phases 1–4 is recorded in the
+[Phase 1–4 completion review](docs/PHASE-1-4-REVIEW.md). The review identifies
+the implementation and evidence still required before any of those phases can
+be closed.
+
 ## Usage
 
 1. Publish the service and install it with `WinFIMLog.exe install`.
-2. The default values will be written to Registry.
+2. Default preferences are written to `HKLM\SOFTWARE\WinFIMLog`; machine policy at
+   `HKLM\SOFTWARE\Policies\WinFIMLog` takes precedence value by value.
 3. The filesystem monitoring will always be started.
-4. If the database is not disabled, and there is not a completed filesystem discovery, a filesystem discovery will be started.
+4. Tier 0 filesystem and registry snapshots run at startup and recur at their
+   independently configured intervals. The legacy discovery flag is not a
+   completeness gate.
 5. Use the ADMX file for domain installations to manage the configuration.
-6. The service does not provide enough information about a security incident, but constitutes a supportive information to collaborate. It is advised to use `Sysmon` and collaborate events together. Related Sysmon event IDs are 2, 9, 11, 12, 13, 14, 15, 23 and 26.
+6. WinFIMLog evidence supports, but does not replace, incident investigation.
+   Correlate it with sources such as Sysmon events 2, 9, 11, 12, 13, 14, 15,
+   23 and 26.
 
 ## Internals
 
-It is designed to be a Windows Service. In first use, it will start a scan based on the settings from Windows Registry, under `HKLM\SOFTWARE\WinFIMLog`.
+WinFIMLog supplies a hard-coded default scope when no effective preference or
+policy value exists. Configuration precedence, defaults and validation rules are
+listed in [the configuration reference](docs/CONFIGURATION.md).
 
-If there is no path to monitor defined in the Registry, service will not do any action (no default value hard-coded).
+Recurring versioned snapshots are the Tier 0 completeness mechanism. Filesystem
+snapshots include files, directories, reparse-point nodes, ACL evidence and ADS
+names; reparse points are not traversed. Registry snapshots enumerate configured
+keys and typed values. A cursorless filesystem scan uses a second pass before it
+is committed atomically as complete. Persistent differences found by comparison
+are emitted as baseline finding event 7795.
 
-In the first use, it will run a full discovery, search for all the files, calculate SHA256 checksum and save it in a local database as the baseline. File search process reads the data from NTFS MFT (Master File Table) so it will take up to 10 seconds. But file search will generally catch at least 500.000 files and folders on a fresh Windows 10 installation and take about 30 to 90 minutes for calculating hashes, obtaining and parsing ACLs and writing to database depending on the number of files and the system specifications. This search can be disabled via Group Policy or Registry. If you disabled the local database, just skip to the next paragraph.
+Notifications reduce latency but do not prove completeness. Filesystem
+attribution is best-effort ETW path/time correlation. Registry attribution is a
+post-event PID lookup and can be unavailable after process exit or access
+denial. Known watcher overflow and registry ETW loss emit a coverage gap and
+request a Tier 0 reconciliation snapshot. See [attribution](docs/ATTRIBUTION.md),
+[health](docs/HEALTH.md), and [current limitations](docs/LIMITATIONS.md).
 
-The service will subscribe to file system events and when any changes occur, it will create an event log and update the database. You can see the SHA256 hashes for the current and (if exist) previous versions.
-
-Windows has a lot of quirks when it comes to low level callbacks, especially for NTFS. Many of the use cases are handled but it needs to be fine-tuned for edge cases.
-
-The registry monitoring uses ETW traces. It is detected under heavy loads, there may be misses. Espceially if there are frequent changes on the same keys, the changes may be lost at some point. It happens when the ETW trace production is higher than the trace consumption speed. 
+The repository is AGPL-3.0 licensed and contains the separately licensed
+LGPL-2.1 `NtfsReader` component; its licence is retained in
+[`src/NtfsReader/License.txt`](src/NtfsReader/License.txt).
 
 For ease of use, an ADMX file is created. So, the monitored paths, excluded paths (such as log folders), and excluded file extensions (such as log, evtx, etl) can be set via Group Policy. Suggested values for Group Policies can be found below.
 

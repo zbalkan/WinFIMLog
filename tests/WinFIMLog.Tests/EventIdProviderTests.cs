@@ -33,4 +33,33 @@ public sealed class EventIdProviderTests
 
         Assert.AreEqual(expected, new EventIdProvider().ComputeEventId(logEvent));
     }
+
+    [TestMethod]
+    public void Discovery_and_unclassified_information_use_the_default_id()
+    {
+        var properties = new[]
+        {
+            new LogEventProperty("changeType", new ScalarValue("FileSystem")),
+            new LogEventProperty("category", new ScalarValue("Discovery"))
+        };
+        var logEvent = new LogEvent(DateTimeOffset.UtcNow, LogEventLevel.Information, null,
+            new MessageTemplate("", []), properties);
+        Assert.AreEqual((ushort)7780, new EventIdProvider().ComputeEventId(logEvent));
+    }
+
+    [TestMethod]
+    public void Explicit_health_event_id_takes_precedence_over_error_fallback()
+    {
+        var logEvent = new LogEvent(DateTimeOffset.UtcNow, LogEventLevel.Error, null,
+            new MessageTemplate("", []), [new LogEventProperty("EventId", new ScalarValue(7791))]);
+        Assert.AreEqual((ushort)7791, new EventIdProvider().ComputeEventId(logEvent));
+    }
+
+    [TestMethod]
+    public void Unclassified_error_uses_service_error_id()
+    {
+        var logEvent = new LogEvent(DateTimeOffset.UtcNow, LogEventLevel.Error, null,
+            new MessageTemplate("", []), []);
+        Assert.AreEqual((ushort)7770, new EventIdProvider().ComputeEventId(logEvent));
+    }
 }

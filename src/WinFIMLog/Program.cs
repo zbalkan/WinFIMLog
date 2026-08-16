@@ -53,12 +53,16 @@ namespace WinFIMLog
                     _ = services.AddSingleton<IBuffer<RegistryChange>, RegistryChangeBuffer>();
                     _ = services.AddSingleton<HealthMetrics>();
                     _ = services.AddSingleton<IHealthReporter, HealthReporter>();
+                    _ = services.AddSingleton<ILocalEventSink, WindowsEventLogSink>();
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
                     _ = services.AddSingleton<BaselineRepository>();
-                    _ = services.AddHostedService<SnapshotService>();
+                    // Reject invalid settings before any source or snapshot hosted service starts.
+                    _ = services.AddHostedService<SettingsStartupValidator>();
+                    _ = services.AddSingleton<SnapshotService>();
+                    _ = services.AddSingleton<ISnapshotCoordinator>(provider => provider.GetRequiredService<SnapshotService>());
+                    _ = services.AddHostedService(provider => provider.GetRequiredService<SnapshotService>());
                     // Hosted services are stopped in reverse registration order. Start the
                     // consumer first so monitors are stopped before the consumer drains buffers.
-                    _ = services.AddHostedService<SettingsStartupValidator>();
                     _ = services.AddHostedService<FileSystemEnrichmentWorker>();
                     _ = services.AddHostedService<BufferConsumer>();
                     _ = services.AddHostedService<JobOrchestrator>();

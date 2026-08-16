@@ -17,8 +17,14 @@ The **WinFIMLog** Application Event Log source uses the following stable Phase 1
 | 7792 | Information | Monitoring source recovered |
 | 7793 | Error | Database or Event Log sink failure |
 | 7794 | Warning | Effective configuration changed (previous/new scope hashes) |
+| 7795 | Warning | Tier 0 baseline reconciliation finding |
 
 A finding binds `changeType` to `FileSystem` or `Registry` and `category` to `Created`, `Changed`, or `Deleted`. The pair determines the ID. Rendered message text is not an authoritative interface.
+
+Baseline finding 7795 contains `BaselineId`, `Source`, `ScopeHash`, `Change`,
+`Identity`, `OldPath`, `NewPath`, and `DetectedAt`. With path identity, a rename
+is represented by deterministic deleted and created results rather than an
+unsupported claim of stable rename continuity.
 
 ## Release-gate smoke check
 

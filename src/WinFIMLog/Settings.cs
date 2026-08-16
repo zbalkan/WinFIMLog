@@ -81,28 +81,6 @@ namespace WinFIMLog
         public string ScopeHash { get; private set; } = string.Empty;
 
         /// <summary>
-        ///     A flag that returns true if file discovery task is completed.
-        /// </summary>
-        public bool IsFileDiscoveryCompleted
-        {
-            get
-            {
-                return Registry.ReadDwordValue("FileDiscoveryCompleted") == 1;
-            }
-            set
-            {
-                if (value)
-                {
-                    Registry.WriteDwordValue("FileDiscoveryCompleted", 1);
-                }
-                else
-                {
-                    Registry.WriteDwordValue("FileDiscoveryCompleted", 0);
-                }
-            }
-        }
-
-        /// <summary>
         ///     Registry keys to monitor.
         ///     Default: Empty list.
         /// </summary>
@@ -223,11 +201,60 @@ namespace WinFIMLog
         {
             lock (reloadLock)
             {
+                var state = CaptureState();
                 var previous = ScopeHash;
-                ReadOrCreateRegistrySettings();
-                return (previous, ScopeHash, !string.Equals(previous, ScopeHash, StringComparison.Ordinal));
+                try
+                {
+                    ReadOrCreateRegistrySettings();
+                    return (previous, ScopeHash, !string.Equals(previous, ScopeHash, StringComparison.Ordinal));
+                }
+                catch
+                {
+                    RestoreState(state);
+                    throw;
+                }
             }
         }
+
+        private SettingsState CaptureState() => new(EnableLocalDatabase, EnableRegistryMonitoring,
+            ExcludedExtensions, ExcludedKeys, ExcludedPaths, HashLimitMB, HeartbeatInterval,
+            CaptureQueueCapacity, WatcherBufferSizeKB, ScopeReresolutionInterval,
+            FileSystemSnapshotInterval, RegistrySnapshotInterval, ScopeHash, MonitoredKeys,
+            MonitoredPaths, excludedExtensionsPattern, excludedKeysPattern, excludedPathsPattern,
+            monitoredKeysPattern, monitoredPathsPattern, registryScopeMatcher);
+
+        private void RestoreState(SettingsState state)
+        {
+            EnableLocalDatabase = state.EnableLocalDatabase;
+            EnableRegistryMonitoring = state.EnableRegistryMonitoring;
+            ExcludedExtensions = state.ExcludedExtensions;
+            ExcludedKeys = state.ExcludedKeys;
+            ExcludedPaths = state.ExcludedPaths;
+            HashLimitMB = state.HashLimitMB;
+            HeartbeatInterval = state.HeartbeatInterval;
+            CaptureQueueCapacity = state.CaptureQueueCapacity;
+            WatcherBufferSizeKB = state.WatcherBufferSizeKB;
+            ScopeReresolutionInterval = state.ScopeReresolutionInterval;
+            FileSystemSnapshotInterval = state.FileSystemSnapshotInterval;
+            RegistrySnapshotInterval = state.RegistrySnapshotInterval;
+            ScopeHash = state.ScopeHash;
+            MonitoredKeys = state.MonitoredKeys;
+            MonitoredPaths = state.MonitoredPaths;
+            excludedExtensionsPattern = state.ExcludedExtensionsPattern;
+            excludedKeysPattern = state.ExcludedKeysPattern;
+            excludedPathsPattern = state.ExcludedPathsPattern;
+            monitoredKeysPattern = state.MonitoredKeysPattern;
+            monitoredPathsPattern = state.MonitoredPathsPattern;
+            registryScopeMatcher = state.RegistryScopeMatcher;
+        }
+
+        private sealed record SettingsState(bool EnableLocalDatabase, bool EnableRegistryMonitoring,
+            string[] ExcludedExtensions, string[] ExcludedKeys, string[] ExcludedPaths,
+            int HashLimitMB, int HeartbeatInterval, int CaptureQueueCapacity, int WatcherBufferSizeKB,
+            int ScopeReresolutionInterval, int FileSystemSnapshotInterval, int RegistrySnapshotInterval,
+            string ScopeHash, string[] MonitoredKeys, string[] MonitoredPaths,
+            Regex? ExcludedExtensionsPattern, Regex? ExcludedKeysPattern, Regex? ExcludedPathsPattern,
+            Regex MonitoredKeysPattern, Regex MonitoredPathsPattern, RegistryScopeMatcher RegistryScopeMatcher);
 
         private ParallelQuery<string> FilterMonitoredPaths(IEnumerable<string> paths) => from path in paths.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
                                                                                          where monitoredPathsPattern!.IsMatch(path)
@@ -575,12 +602,6 @@ namespace WinFIMLog
                 enableLocalDatabase = 1;
             }
             EnableLocalDatabase = enableLocalDatabase == 1;
-
-            var fileDiscoveryCompleted = Registry.ReadDwordValue("FileDiscoveryCompleted");
-            if (fileDiscoveryCompleted == -1)
-            {
-                IsFileDiscoveryCompleted = false;
-            }
 
             var hashLimitMb = Registry.ReadDwordValue("HashLimitMB");
             if (hashLimitMb == -1)

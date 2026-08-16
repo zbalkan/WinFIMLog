@@ -37,7 +37,12 @@ namespace WinFIMLog.Snapshots
                 Identity = Normalise(path), Path = Path.GetFullPath(path),
                 NodeType = reparse ? SnapshotNodeType.ReparsePoint : directory ? SnapshotNodeType.Directory : SnapshotNodeType.File,
                 HashState = directory || reparse ? HashEvidenceState.NotApplicable : HashEvidenceState.Failed,
-                StreamNames = directory || reparse ? Array.Empty<string>() : EnumerateStreamNames(path)
+                StreamNames = directory || reparse ? Array.Empty<string>() : EnumerateStreamNames(path),
+                IsSystem = attributes.HasFlag(FileAttributes.System),
+                IsSparse = attributes.HasFlag(FileAttributes.SparseFile),
+                IsTemporary = attributes.HasFlag(FileAttributes.Temporary),
+                IsOffline = attributes.HasFlag(FileAttributes.Offline),
+                LinkCount = !directory && !reparse ? FileLinkCount.TryGet(path) : null
             };
             CaptureAcl(path, member);
             if (!directory && !reparse) CaptureHash(path, member);

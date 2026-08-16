@@ -41,11 +41,16 @@ namespace WinFIMLog.Snapshots
         public EvidenceAvailability AclState { get; set; }
         public string[] StreamNames { get; set; } = Array.Empty<string>();
         public int? LinkCount { get; set; }
+        public bool IsSystem { get; set; }
+        public bool IsSparse { get; set; }
+        public bool IsTemporary { get; set; }
+        public bool IsOffline { get; set; }
         public string? RegistryValueKind { get; set; }
         public byte[]? RegistryValueData { get; set; }
 
         public string Fingerprint => string.Join("|", NodeType, ContentHash, HashState,
             AclState, AclEvidence, string.Join("\u001f", StreamNames), LinkCount,
+            IsSystem, IsSparse, IsTemporary, IsOffline,
             RegistryValueKind, RegistryValueData is null ? "" : Convert.ToBase64String(RegistryValueData));
     }
 
@@ -59,5 +64,7 @@ namespace WinFIMLog.Snapshots
         public string? OldPath { get; set; }
         public string? NewPath { get; set; }
         public DateTimeOffset DetectedAt { get; set; }
+        public DateTimeOffset? DeliveredAt { get; set; }
+        public int DeliveryAttempts { get; set; }
     }
 }

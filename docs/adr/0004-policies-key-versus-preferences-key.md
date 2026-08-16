@@ -5,7 +5,7 @@
 
 ## Decision
 
-Machine policy at `HKLM\SOFTWARE\Policies\WinFIMLog` is authoritative on a value-by-value basis. When a policy value exists it replaces the same preference at `HKLM\SOFTWARE\WinFIMLog`; deleting it immediately exposes the preference (or the built-in default). The preference key remains available during migration. Both keys are always monitored and neither may be excluded.
+Machine policy at `HKLM\SOFTWARE\WinFIMLog`; deleting it immediately exposes the preference (or the built-in default). The preference key remains available during migration. Both keys are always monitored and neither may be excluded.
 
 A canonical SHA-256 `ScopeHash` covers sorted, case-normalised, de-duplicated effective paths, exclusions, extensions and registry keys. It changes only with effective scope. The service periodically re-reads configuration, resolves wildcard paths, adjusts watchers, and emits old/new hashes.
 

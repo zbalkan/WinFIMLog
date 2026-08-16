@@ -42,7 +42,19 @@ namespace WinFIMLog.Snapshots
         public IReadOnlyList<BaselineMember> Members(string baselineId) =>
             context.BaselineMembers.Find(x => x.BaselineId == baselineId).ToList();
 
-        public void ReconcileAndComplete(BaselineMetadata baseline, IEnumerable<BaselineMember> members,
+        public BaselineMetadata? Find(string baselineId) => context.Baselines.FindById(baselineId);
+
+        public IReadOnlyList<ReconciliationResult> PendingResults(int limit = 500) =>
+            context.ReconciliationResults.Query().Where(x => x.DeliveredAt == null).Limit(limit).ToList();
+
+        public void RecordDeliveryAttempt(ReconciliationResult result, bool delivered)
+        {
+            result.DeliveryAttempts++;
+            if (delivered) result.DeliveredAt = DateTimeOffset.UtcNow;
+            context.ReconciliationResults.Update(result);
+        }
+
+        public IReadOnlyList<ReconciliationResult> ReconcileAndComplete(BaselineMetadata baseline, IEnumerable<BaselineMember> members,
             string? endCursor = null)
         {
             if (baseline.Status != BaselineStatus.Building)
@@ -72,10 +84,11 @@ namespace WinFIMLog.Snapshots
                 baseline.Status = BaselineStatus.Complete;
                 context.Baselines.Update(baseline);
             })) throw new InvalidOperationException("The baseline completion transaction did not commit.");
+            return results;
         }
 
         /// <summary>Completes a cursorless scan using the second observation for every identity.</summary>
-        public void ReconcileAndCompleteAfterSecondPass(BaselineMetadata baseline,
+        public IReadOnlyList<ReconciliationResult> ReconcileAndCompleteAfterSecondPass(BaselineMetadata baseline,
             IEnumerable<BaselineMember> firstPass, IEnumerable<BaselineMember> secondPass)
         {
             if (baseline.Status != BaselineStatus.Building && baseline.Status != BaselineStatus.Reconciling)
@@ -83,7 +96,7 @@ namespace WinFIMLog.Snapshots
             // An item seen in pass one but absent in pass two was transient and cannot represent
             // persistent state. Pass-two evidence wins when an item changed during the scan.
             baseline.Status = BaselineStatus.Building;
-            ReconcileAndComplete(baseline, secondPass);
+            return ReconcileAndComplete(baseline, secondPass);
         }
 
         public void MarkInvalid(BaselineMetadata baseline, string reason)
@@ -123,7 +136,7 @@ namespace WinFIMLog.Snapshots
         private void InvalidateInapplicable(BaselineSource source, string scopeHash, string identity,
             int schema, string algorithm)
         {
-            foreach (var item in context.Baselines.Find(x => x.Source == source && x.Status == BaselineStatus.Complete))
+            foreach (var item in context.Baselines.Find(x => x.Source == source && x.Status == BaselineStatus.Complete).ToList())
             {
                 if (item.ScopeHash == scopeHash && item.SourceIdentity == identity &&
                     item.SchemaVersion == schema && item.AlgorithmVersion == algorithm) continue;

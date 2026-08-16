@@ -61,6 +61,23 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
 
+      - name: Validate policy XML
+        shell: pwsh
+        run: |
+          [xml](Get-Content -Raw ADMX/FIM.ADMX) | Out-Null
+          [xml](Get-Content -Raw ADMX/en-US/FIM.ADML) | Out-Null
+
+      - name: Publish supported mode
+        run: >-
+          dotnet publish src/WinFIMLog/WinFIMLog.csproj --configuration Release
+          --runtime win-x64 --self-contained true /p:PublishSingleFile=true
+          /p:PublishReadyToRun=true /p:PublishTrimmed=false /p:PublishAot=false
+          --output artifacts/win-x64
+
+      - name: Verify executable
+        shell: pwsh
+        run: if (-not (Test-Path artifacts/win-x64/WinFIMLog.exe)) { throw 'Published executable is missing.' }
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7

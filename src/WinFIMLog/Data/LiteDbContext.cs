@@ -56,6 +56,7 @@ namespace WinFIMLog.Data
             BaselineMembers.EnsureIndex(x => x.Identity);
             ReconciliationResults = _database.GetCollection<ReconciliationResult>("reconciliationResults");
             ReconciliationResults.EnsureIndex(x => x.BaselineId);
+            ReconciliationResults.EnsureIndex(x => x.DeliveredAt);
         }
 
         #region Dispose

@@ -5,6 +5,7 @@ using WinFIMLog.IO.Security;
 using WinFIMLog.Utils;
 using Microsoft.Win32;
 using NUlid;
+using WinFIMLog.Configuration;
 
 namespace WinFIMLog.IO
 {
@@ -24,27 +25,31 @@ namespace WinFIMLog.IO
         /// </exception>
         /// <exception cref="System.IO.IOException" accessor="get">
         /// </exception>
-        public static RegistryKey Root => Microsoft.Win32.Registry
-            .LocalMachine
-            .OpenSubKey("Software", true)!
-            .OpenSubKey(FimKeyName, true)! ?? Microsoft.Win32.Registry.LocalMachine.OpenSubKey("Software", true)!.CreateSubKey(FimKeyName, true);
+        public static RegistryKey Root => Microsoft.Win32.Registry.LocalMachine.CreateSubKey(PreferenceKeyName, true);
 
         public static string RootName => Root.Name.Substring(Root.Name.IndexOf('\\') + 1);
 
-        private const string FimKeyName = "WinFIMLog";
+        private const string PreferenceKeyName = @"SOFTWARE\WinFIMLog";
         private const string PolicyKeyName = @"SOFTWARE\Policies\WinFIMLog";
+        private const string LegacyPreferenceKeyName = @"SOFTWARE\WinFIMLog";
 
         private static object? ReadEffectiveValue(string value)
         {
             using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, false);
-            return policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) ?? Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+            using var legacy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(LegacyPreferenceKeyName, false);
+            return ConfigurationPrecedence.Resolve(
+                policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
+                Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
+                legacy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames));
         }
 
         public static bool EffectiveValueExists(string value)
         {
             using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, false);
+            using var legacy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(LegacyPreferenceKeyName, false);
             return policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null ||
-                   Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null;
+                   Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null ||
+                   legacy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null;
         }
 
         /// <summary> Translates the Registry value data in Dword to Int32 </summary> <param

@@ -18,6 +18,10 @@ namespace WinFIMLog.FIM
 
         public ObjectType ObjectType { get; set; }
 
+        public string? OldPath { get; set; }
+
+        public string? NewPath { get; set; }
+
         public static string RetrievePreviousHash(string path, ILiteDbContext ctx)
             => RetrievePreviousChange(path, ctx)?.CurrentHash ?? string.Empty;
 

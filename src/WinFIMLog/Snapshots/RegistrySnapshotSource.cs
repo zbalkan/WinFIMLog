@@ -14,8 +14,26 @@ namespace WinFIMLog.Snapshots
         {
             if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
             var members = new List<BaselineMember>();
-            foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase)) CaptureRoot(root, members);
+            foreach (var root in ExpandCurrentUserRoots(roots).Distinct(StringComparer.OrdinalIgnoreCase)) CaptureRoot(root, members);
             return members;
+        }
+
+        internal static IEnumerable<string> ExpandCurrentUserRoots(IEnumerable<string> roots)
+        {
+            foreach (var root in roots)
+            {
+                const string prefix = "HKEY_CURRENT_USER";
+                if (!root.Equals(prefix, StringComparison.OrdinalIgnoreCase) &&
+                    !root.StartsWith(prefix + "\\", StringComparison.OrdinalIgnoreCase))
+                { yield return root; continue; }
+
+                if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
+                var suffix = root.Length == prefix.Length ? string.Empty : root[prefix.Length..];
+                foreach (var sid in Registry.Users.GetSubKeyNames()
+                    .Where(name => name.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase) &&
+                                   !name.EndsWith("_Classes", StringComparison.OrdinalIgnoreCase)))
+                    yield return "HKEY_USERS\\" + sid + suffix;
+            }
         }
 
         private static void CaptureRoot(string fullName, List<BaselineMember> output)

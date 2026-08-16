@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using FastCache;
 using WinFIMLog.FIM;
 using WinFIMLog.Utils;
@@ -14,6 +15,7 @@ using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ObjectPool;
 using NtKeywords = Microsoft.Diagnostics.Tracing.Parsers.KernelTraceEventParser.Keywords;
+using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Jobs
 {
@@ -33,8 +35,6 @@ namespace WinFIMLog.Jobs
 
         private const NtKeywords TraceFlags = NtKeywords.Registry;
 
-        private readonly CancellationTokenSource _cancellationTokenSource;
-
         private readonly ILogger _logger;
 
         private readonly IBuffer<RegistryChange> _messageStore;
@@ -42,6 +42,7 @@ namespace WinFIMLog.Jobs
         private readonly int _pid;
 
         private readonly Settings _settings;
+        private readonly ISnapshotCoordinator _snapshots;
 
         private readonly ObjectPool<StringBuilder> _sbPool = new DefaultObjectPoolProvider().CreateStringBuilderPool();
 
@@ -52,13 +53,13 @@ namespace WinFIMLog.Jobs
 
         private bool _disposedValue;
 
-        public RegistryMonitorJob(ILogger logger, IBuffer<RegistryChange> regStore, Settings settings)
+        public RegistryMonitorJob(ILogger logger, IBuffer<RegistryChange> regStore, Settings settings, ISnapshotCoordinator snapshots)
         {
             _logger = logger;
             _pid = Environment.ProcessId;
-            _cancellationTokenSource = new CancellationTokenSource();
             _messageStore = regStore;
             _settings = settings;
+            _snapshots = snapshots;
         }
 
         /// <summary>
@@ -68,16 +69,9 @@ namespace WinFIMLog.Jobs
         /// </exception>
         /// <exception cref="TargetException">
         /// </exception>
-        public void Start()
+        public async Task RunAsync(CancellationToken cancellationToken)
         {
-            // No baseline database for registry keys
             CleanupExistingSession();
-
-            if (_cancellationTokenSource.IsCancellationRequested)
-            {
-                return;
-            }
-
             using var session = CreateSession();
             lock (_sessionLock)
             {
@@ -86,10 +80,10 @@ namespace WinFIMLog.Jobs
 
             try
             {
-                using var cancellationRegistration = _cancellationTokenSource.Token.Register(() => session.Stop());
+                using var cancellationRegistration = cancellationToken.Register(() => session.Stop());
                 _logger.LogInformation("Started ETW session '{SessionName}' for Registry changes.", ETWSessionName);
                 using var lossPoll = new Timer(_ => ReportEventLoss(session), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-                session.Source.Process();
+                await Task.Run(session.Source.Process, CancellationToken.None);
                 ReportEventLoss(session);
             }
             finally
@@ -159,7 +153,10 @@ namespace WinFIMLog.Jobs
             var total = session.Source.EventsLost;
             var previous = Interlocked.Exchange(ref _reportedEventsLost, total);
             if (total > previous)
+            {
                 _logger.LogError(7791, "COVERAGE GAP Source=RegistryETW Scope=ConfiguredRegistryKeys Reason=EventsLost LostCount={LostCount}", total - previous);
+                _snapshots.RequestRegistrySnapshot("Registry ETW events lost", "ConfiguredRegistryKeys");
+            }
         }
 
         /// <summary>
@@ -167,19 +164,6 @@ namespace WinFIMLog.Jobs
         /// </summary>
         /// <exception cref="AggregateException">
         /// </exception>
-        public void Stop()
-        {
-            _cancellationTokenSource.Cancel();
-
-            TraceEventSession? session;
-            lock (_sessionLock)
-            {
-                session = _session;
-            }
-
-            session?.Stop();
-        }
-
         private void CleanupExistingSession()
         {
             try
@@ -320,8 +304,9 @@ namespace WinFIMLog.Jobs
             {
                 if (disposing)
                 {
-                    Stop();
-                    _cancellationTokenSource.Dispose();
+                    TraceEventSession? session;
+                    lock (_sessionLock) session = _session;
+                    session?.Stop();
                 }
 
                 _disposedValue = true;

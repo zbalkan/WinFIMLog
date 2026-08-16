@@ -20,17 +20,9 @@ namespace WinFIMLog.FIM
 
         public string? ValueName { get; set; }
 
-        public string? Username { get; set; }
-
-        public string? UserSID { get; set; }
-
         public string EventName { get; set; }
 
         private readonly RegistryKey? _key;
-
-        public int ProcessID { get; set; }
-
-        public string ProcessName { get; set; }
 
         public RegistryChange(RegistryTraceData data, string fullName)
         {
@@ -83,23 +75,18 @@ namespace WinFIMLog.FIM
                 }
             }
 
-            var process = Process.GetProcessById(ProcessID);
-            if (process != null)
+            try
             {
+                using var process = Process.GetProcessById(data.ProcessID);
                 ProcessName = process.ProcessName;
-                try
-                {
-                    var userInfo = process.Owner();
-                    Username = userInfo.Name;
-                    UserSID = userInfo.User?.Value ?? string.Empty;
-                }
-                catch
-                {
-                    // ignore
-                }
+                var userInfo = SidUserInfoCache.Get(process);
+                Username = userInfo.Username;
+                UserSID = userInfo.SID;
             }
-            else
+            catch (Exception)
             {
+                // Registry events must still be recorded if the process exits before lookup
+                // or its access token cannot be queried.
                 ProcessName = data.ProcessName;
             }
 

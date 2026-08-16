@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using FastCache;
 using WinFIMLog.Data;
 using WinFIMLog.FIM;
@@ -23,6 +24,8 @@ namespace WinFIMLog.Jobs
 
         private readonly ILogger _logger;
 
+        private readonly FileSystemEventAttributionMonitor _attributionMonitor;
+
         private readonly IBuffer<FileSystemChange> _messageStore;
 
         private readonly List<FileSystemWatcher> _watchers;
@@ -34,6 +37,7 @@ namespace WinFIMLog.Jobs
         public FileSystemMonitorJob(ILogger logger, IBuffer<FileSystemChange> fsStore, ILiteDbContext ctx, Settings settings)
         {
             _logger = logger;
+            _attributionMonitor = new FileSystemEventAttributionMonitor(logger, settings);
             _watchers = [];
             _messageStore = fsStore;
             _ctx = ctx;
@@ -41,12 +45,14 @@ namespace WinFIMLog.Jobs
         }
 
         // This should run async
-        public void Start() => InvokeWatchers();
+        public void Start()
+        {
+            _attributionMonitor.Start();
+            InvokeWatchers();
+        }
 
         public void Stop()
         {
-            if (_watchers.Count == 0) return;
-
             foreach (var watcher in _watchers)
             {
                 watcher.EnableRaisingEvents = false;
@@ -58,6 +64,7 @@ namespace WinFIMLog.Jobs
                 watcher.Dispose();
             }
             _watchers.Clear();
+            _attributionMonitor.Dispose();
         }
 
         private void InvokeWatchers()
@@ -126,6 +133,7 @@ namespace WinFIMLog.Jobs
 
             if (change != null)
             {
+                ApplyAttribution(change);
                 FileSystemChange? previous = null;
                 if (_settings.EnableLocalDatabase)
                 {
@@ -139,6 +147,25 @@ namespace WinFIMLog.Jobs
                     _messageStore.Add(change);
                     Cached<string>.Save(path, fingerprint, TimeSpan.FromSeconds(5));
                 }
+            }
+        }
+
+        private void ApplyAttribution(FileSystemChange change)
+        {
+            // ETW and FileSystemWatcher are delivered independently. Briefly allow the kernel
+            // event to arrive when the watcher notification wins the race.
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                if (_attributionMonitor.TryGet(change.FullPath, out var attribution))
+                {
+                    change.ProcessID = attribution.ProcessID;
+                    change.ProcessName = attribution.ProcessName;
+                    change.Username = attribution.Username;
+                    change.UserSID = attribution.UserSID;
+                    return;
+                }
+
+                Thread.Sleep(10);
             }
         }
 

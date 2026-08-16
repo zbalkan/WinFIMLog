@@ -24,6 +24,14 @@ namespace WinFIMLog.FIM
 
         string Id { get; set; }
 
+        int? ProcessID { get; set; }
+
+        string? ProcessName { get; set; }
+
         string SourceComputer { get; set; }
+
+        string? Username { get; set; }
+
+        string? UserSID { get; set; }
     }
 }

@@ -48,6 +48,7 @@ namespace WinFIMLog.Jobs
         private readonly object _sessionLock = new();
 
         private TraceEventSession? _session;
+        private long _reportedEventsLost;
 
         private bool _disposedValue;
 
@@ -87,15 +88,9 @@ namespace WinFIMLog.Jobs
             {
                 using var cancellationRegistration = _cancellationTokenSource.Token.Register(() => session.Stop());
                 _logger.LogInformation("Started ETW session '{SessionName}' for Registry changes.", ETWSessionName);
+                using var lossPoll = new Timer(_ => ReportEventLoss(session), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
                 session.Source.Process();
-
-                if (session.Source.EventsLost > 0)
-                {
-                    _logger.LogWarning(
-                        "ETW session '{SessionName}' lost {EventsLost} events. Consider reducing the monitored registry scope.",
-                        ETWSessionName,
-                        session.Source.EventsLost);
-                }
+                ReportEventLoss(session);
             }
             finally
             {
@@ -126,6 +121,7 @@ namespace WinFIMLog.Jobs
 
                 session.Source.Kernel.RegistryKCBRundownEnd += UpdateCache;
                 session.Source.Kernel.RegistryKCBCreate += UpdateCache;
+                session.Source.Kernel.RegistryKCBDelete += DeleteCache;
                 session.Source.Kernel.RegistryCreate += ProcessEvent;
                 session.Source.Kernel.RegistryDelete += ProcessEvent;
                 session.Source.Kernel.RegistrySetValue += ProcessEvent;
@@ -145,11 +141,26 @@ namespace WinFIMLog.Jobs
             var field = typeof(TraceEventSession).GetField(
                 TraceEventBufferQuantumFieldName,
                 BindingFlags.Instance | BindingFlags.NonPublic);
-            field?.SetValue(session, SessionBufferQuantumKilobytes);
+            if (field == null)
+                throw new MissingFieldException(typeof(TraceEventSession).FullName, TraceEventBufferQuantumFieldName);
+            field.SetValue(session, SessionBufferQuantumKilobytes);
         }
 
         private static void UpdateCache(RegistryTraceData data) =>
             Cached<string>.Save(data.KeyHandle, data.KeyName, TimeSpan.FromHours(1));
+
+        private static void DeleteCache(RegistryTraceData data) =>
+            // FastCache has no removal API. Replacing the binding with an immediately expiring
+            // value prevents a reused KCB handle being resolved to its deleted path.
+            Cached<string>.Save(data.KeyHandle, string.Empty, TimeSpan.FromTicks(1));
+
+        private void ReportEventLoss(TraceEventSession session)
+        {
+            var total = session.Source.EventsLost;
+            var previous = Interlocked.Exchange(ref _reportedEventsLost, total);
+            if (total > previous)
+                _logger.LogError(7791, "COVERAGE GAP Source=RegistryETW Scope=ConfiguredRegistryKeys Reason=EventsLost LostCount={LostCount}", total - previous);
+        }
 
         /// <summary>
         ///     Stop monitoring selected Registry keys
@@ -253,7 +264,9 @@ namespace WinFIMLog.Jobs
                 var kernelParser = new KernelTraceEventParser(traceSessionSource, options);
 
                 var kernelField = typeof(ETWTraceEventSource).GetField("_Kernel", BindingFlags.Instance | BindingFlags.NonPublic);
-                kernelField?.SetValue(traceSessionSource, kernelParser);
+                if (kernelField == null)
+                    throw new MissingFieldException(typeof(ETWTraceEventSource).FullName, "_Kernel");
+                kernelField.SetValue(traceSessionSource, kernelParser);
             }
             catch (Exception ex)
             {

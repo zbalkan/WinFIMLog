@@ -11,9 +11,12 @@
         <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
         <PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <PublishAot>true</PublishAot>
-        <PublishTrimmed>True</PublishTrimmed>
-        <EnableTrimAnalyzer>True</EnableTrimAnalyzer>
+        <!-- TraceEvent relies on runtime metadata. The supported release mode is framework-
+             dependent, non-trimmed ReadyToRun; unsupported transformations must not silently
+             remove its private parser contract. -->
+        <PublishAot>false</PublishAot>
+        <PublishTrimmed>false</PublishTrimmed>
+        <PublishReadyToRun>true</PublishReadyToRun>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

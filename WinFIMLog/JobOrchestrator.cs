@@ -6,6 +6,7 @@ using WinFIMLog.FIM;
 using WinFIMLog.Jobs;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using WinFIMLog.Health;
 
 namespace WinFIMLog
 {
@@ -20,18 +21,32 @@ namespace WinFIMLog
         private readonly RegistryMonitorJob _regMonitor;
 
         private readonly Settings _settings;
+        private readonly HealthMetrics _metrics;
 
         public JobOrchestrator(ILogger<JobOrchestrator> logger,
+                      FileSystemCaptureQueue capture,
                       IBuffer<FileSystemChange> fsStore,
                       IBuffer<RegistryChange> regStore,
                       ILiteDbContext ctx,
-                      Settings settings)
+                      Settings settings,
+                      IHealthReporter health,
+                      HealthMetrics metrics)
         {
             _logger = logger;
             _settings = settings;
-            _fsMonitor = new FileSystemMonitorJob(_logger, fsStore, ctx, settings);
+            _metrics = metrics;
             _regMonitor = new RegistryMonitorJob(_logger, regStore, settings);
+            // Discovery writes enriched records directly; live notifications use the capture queue.
             _fsDiscovery = new FileSystemDiscoveryJob(_logger, fsStore, ctx, settings);
+            _fsMonitor = new FileSystemMonitorJob(_logger, capture, health, settings, ReconcileScope);
+        }
+
+        private void ReconcileScope(string scope)
+        {
+            // The current discovery reader accepts the configured scope as a whole. The affected
+            // root remains explicit in health evidence; Phase 4 supplies a truly scoped snapshot.
+            _logger.LogWarning("Starting reconciliation after source loss for scope {Scope}", scope);
+            _ = Task.Run(_fsDiscovery.Start);
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
@@ -93,7 +108,10 @@ namespace WinFIMLog
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogInformation("HEARTBEAT: Worker running at: {time}", DateTimeOffset.Now);
+                    _logger.LogInformation((int)HealthEventId.Heartbeat,
+                        "HEARTBEAT Time={Time} QueueDepth={QueueDepth} OldestItemAgeMs={OldestItemAgeMs} Accepted={Accepted} Processed={Processed} Dropped={Dropped} EnrichmentFailures={EnrichmentFailures}",
+                        DateTimeOffset.Now, _metrics.QueueDepth, _metrics.OldestItemAge.TotalMilliseconds,
+                        _metrics.Accepted, _metrics.Processed, _metrics.Dropped, _metrics.EnrichmentFailures);
                     await Task.Delay(TimeSpan.FromSeconds(_settings.HeartbeatInterval), stoppingToken);
                 }
             }

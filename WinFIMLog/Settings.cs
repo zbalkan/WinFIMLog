@@ -62,6 +62,12 @@ namespace WinFIMLog
         /// </summary>
         public int HeartbeatInterval { get; private set; }
 
+        /// <summary>Maximum raw filesystem notifications held in memory.</summary>
+        public int CaptureQueueCapacity { get; private set; } = 8192;
+
+        /// <summary>FileSystemWatcher native buffer size in KiB (8-64).</summary>
+        public int WatcherBufferSizeKB { get; private set; } = 64;
+
         /// <summary>
         ///     A flag that returns true if file discovery task is completed.
         /// </summary>
@@ -501,6 +507,24 @@ namespace WinFIMLog
             }
 
             HeartbeatInterval = heartbeat;
+
+            var captureQueueCapacity = Registry.ReadDwordValue("CaptureQueueCapacity");
+            if (captureQueueCapacity == -1)
+            {
+                captureQueueCapacity = 8192;
+                Registry.WriteDwordValue("CaptureQueueCapacity", captureQueueCapacity);
+            }
+            if (captureQueueCapacity < 1) throw new InvalidOperationException("CaptureQueueCapacity must be greater than zero.");
+            CaptureQueueCapacity = captureQueueCapacity;
+
+            var watcherBufferSizeKb = Registry.ReadDwordValue("WatcherBufferSizeKB");
+            if (watcherBufferSizeKb == -1)
+            {
+                watcherBufferSizeKb = 64;
+                Registry.WriteDwordValue("WatcherBufferSizeKB", watcherBufferSizeKb);
+            }
+            if (watcherBufferSizeKb is < 8 or > 64) throw new InvalidOperationException("WatcherBufferSizeKB must be between 8 and 64.");
+            WatcherBufferSizeKB = watcherBufferSizeKb;
 
             var enableLocalDatabase = Registry.ReadDwordValue("EnableLocalDatabase");
             if (enableLocalDatabase == -1)

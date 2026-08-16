@@ -12,6 +12,10 @@ The **WinFIMLog** Application Event Log source uses the following stable Phase 1
 | 7786 | Information | Registry key or value created |
 | 7787 | Information | Registry key or value changed |
 | 7788 | Information | Registry key or value deleted |
+| 7790 | Information | Health heartbeat and queue counters |
+| 7791 | Error | Scoped coverage gap |
+| 7792 | Information | Monitoring source recovered |
+| 7793 | Error | Database or Event Log sink failure |
 
 A finding binds `changeType` to `FileSystem` or `Registry` and `category` to `Created`, `Changed`, or `Deleted`. The pair determines the ID. Rendered message text is not an authoritative interface.
 

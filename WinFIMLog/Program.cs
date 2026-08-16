@@ -3,6 +3,8 @@ using WinFIMLog.FIM;
 using WinFIMLog.IO;
 using WinFIMLog.Utils;
 using WinFIMLog.Configuration;
+using WinFIMLog.Health;
+using WinFIMLog.Jobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -48,9 +50,13 @@ namespace WinFIMLog
                     _ = services.AddSingleton<BackgroundWorkerQueue>();
                     _ = services.AddSingleton<IBuffer<FileSystemChange>, FileSystemChangeBuffer>();
                     _ = services.AddSingleton<IBuffer<RegistryChange>, RegistryChangeBuffer>();
+                    _ = services.AddSingleton<HealthMetrics>();
+                    _ = services.AddSingleton<IHealthReporter, HealthReporter>();
+                    _ = services.AddSingleton<FileSystemCaptureQueue>();
                     // Hosted services are stopped in reverse registration order. Start the
                     // consumer first so monitors are stopped before the consumer drains buffers.
                     _ = services.AddHostedService<SettingsStartupValidator>();
+                    _ = services.AddHostedService<FileSystemEnrichmentWorker>();
                     _ = services.AddHostedService<BufferConsumer>();
                     _ = services.AddHostedService<JobOrchestrator>();
                 })

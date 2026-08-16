@@ -257,6 +257,10 @@ Add `--remove-files` to remove the installed application directory as well. If y
 
 You need .NET 8 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish WinFIMLog release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
 
+Operational contracts are documented in [events](docs/EVENTS.md),
+[health and coverage](docs/HEALTH.md), [performance qualification](docs/PERFORMANCE.md),
+and the [architecture decisions](docs/adr/README.md).
+
 ## Special thanks to:
 
 ### Icons8

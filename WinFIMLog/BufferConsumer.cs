@@ -14,6 +14,7 @@ using WinFIMLog.Data;
 using WinFIMLog.FIM;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using WinFIMLog.Health;
 
 namespace WinFIMLog
 {
@@ -30,18 +31,21 @@ namespace WinFIMLog
         private readonly IBuffer<RegistryChange> _regStore;
 
         private readonly Settings _settings;
+        private readonly IHealthReporter _health;
 
         public BufferConsumer(ILogger<JobOrchestrator> logger,
                       IBuffer<FileSystemChange> fsStore,
                       IBuffer<RegistryChange> regStore,
                       ILiteDbContext ctx,
-                      Settings settings)
+                      Settings settings,
+                      IHealthReporter health)
         {
             _logger = logger;
             _fsStore = fsStore;
             _regStore = regStore;
             _ctx = ctx;
             _settings = settings;
+            _health = health;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -84,19 +88,29 @@ namespace WinFIMLog
             {
                 var fsChanges = _fsStore.Take(fsCount);
 
-                if (_settings.EnableLocalDatabase)
+                try
                 {
-                    _ = _ctx.FileSystemChanges.Upsert(fsChanges);
-                    Debug.WriteLine($"Successfully persisted {fsCount} items.");
-                }
-
-                foreach (var change in fsChanges)
-                {
-                    if (change.ChangeCategory != ChangeCategory.Discovery)
+                    if (_settings.EnableLocalDatabase)
                     {
-                        _logger.LogInformation("Change Type: {changeType:l}\nCategory: {category:l}\nPath: {path:l}\nCurrent Hash: {currentHash:l}\nPreviousHash: {previousHash:l}",
-                            Enum.GetName(ConfigChangeType.FileSystem), Enum.GetName(change.ChangeCategory), change.Entity, change.CurrentHash, change.PreviousHash);
+                        Retry(() => _ctx.FileSystemChanges.Upsert(fsChanges), "LiteDB");
+                        Debug.WriteLine($"Successfully persisted {fsCount} items.");
                     }
+
+                    foreach (var change in fsChanges)
+                    {
+                        if (change.ChangeCategory != ChangeCategory.Discovery)
+                        {
+                            _logger.LogInformation("Change Type: {changeType:l}\nCategory: {category:l}\nPath: {path:l}\nCurrent Hash: {currentHash:l}\nPreviousHash: {previousHash:l}",
+                                Enum.GetName(ConfigChangeType.FileSystem), Enum.GetName(change.ChangeCategory), change.Entity, change.CurrentHash, change.PreviousHash);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Taking a batch is not an acknowledgement: return it on terminal sink
+                    // failure so later iterations can retry rather than silently losing it.
+                    _fsStore.AddRange(fsChanges).GetAwaiter().GetResult();
+                    throw;
                 }
 
                 return true;
@@ -105,24 +119,46 @@ namespace WinFIMLog
             return false;
         }
 
+        private void Retry(Func<int> write, string sink)
+        {
+            Exception? last = null;
+            for (var attempt = 1; attempt <= 3; attempt++)
+            {
+                try { _ = write(); return; }
+                catch (Exception exception)
+                {
+                    last = exception;
+                    _health.SinkFailure(sink, exception.GetType().Name, attempt);
+                    if (attempt < 3) Thread.Sleep(TimeSpan.FromMilliseconds(100 * (1 << (attempt - 1))));
+                }
+            }
+            throw new InvalidOperationException($"{sink} write failed after retries; batch was not acknowledged.", last);
+        }
+
         private bool ProcessRegistryChanges()
         {
             var regCount = Math.Min(_regStore.Count(), BUCKET_SIZE);
             if (regCount > 0)
             {
                 var regChanges = _regStore.Take(regCount);
-
-                if (_settings.EnableLocalDatabase)
+                try
                 {
-                    _ = _ctx.RegistryChanges.Upsert(regChanges);
-                    Debug.WriteLine($"Successfully persisted {regCount} items.");
+                    if (_settings.EnableLocalDatabase)
+                    {
+                        Retry(() => _ctx.RegistryChanges.Upsert(regChanges), "LiteDB");
+                        Debug.WriteLine($"Successfully persisted {regCount} items.");
+                    }
+
+                    foreach (var change in regChanges)
+                    {
+                        _logger.LogInformation("Change Type: {changeType:l}\nCategory: {category:l}\nEvent Data:\n{ev:l}",
+                            Enum.GetName(ConfigChangeType.Registry), Enum.GetName(change.ChangeCategory), change.ToString());
+                    }
                 }
-
-                foreach (var change in regChanges)
+                catch
                 {
-                    _logger
-                        .LogInformation("Change Type: {changeType:l}\nCategory: {category:l}\nEvent Data:\n{ev:l}",
-                        Enum.GetName(ConfigChangeType.Registry), Enum.GetName(change.ChangeCategory), change.ToString());
+                    _regStore.AddRange(regChanges).GetAwaiter().GetResult();
+                    throw;
                 }
 
                 return true;

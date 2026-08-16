@@ -74,7 +74,7 @@ When disabled or not configured, Registry monitoring will not run. Service will 
 
 Monitored Keys:
 Registry keys to monitor. Please type each key in one line without quotation marks, for instance:
-HKEY_LOCAL_MACHINE\SOFTWARE\FIM
+HKEY_LOCAL_MACHINE\SOFTWARE\WinFIMLog
 HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
 HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce
 HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
@@ -92,6 +92,7 @@ Registry keys to exclude from file system monitoring. Please type each key in on
                 <multiTextBox refId="presExcludedExtensions">Excluded extensions:</multiTextBox>
                 <checkBox refId="presEnableLocalDatabase" defaultChecked="false">Enable local database:</checkBox>
                 <decimalTextBox refId="presHashLimitMB" defaultValue="1024" spin="true" spinStep="256">Hashing limit:</decimalTextBox>
+                <decimalTextBox refId="presScopeReresolutionInterval" defaultValue="300" spin="true">Wildcard re-resolution interval (seconds):</decimalTextBox>
             </presentation>
             <presentation id="presRegistry">
                 <multiTextBox refId="presMonitoredKeys">Monitored keys:</multiTextBox>

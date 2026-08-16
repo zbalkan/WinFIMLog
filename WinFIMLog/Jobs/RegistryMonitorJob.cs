@@ -284,6 +284,7 @@ namespace WinFIMLog.Jobs
                 {
                     Debug.WriteLine($"Processing event: {ev.EventName} for {keyName}");
                     var change = new RegistryChange(ev, keyName);
+                    change.ScopeHash = _settings.ScopeHash;
 
                     _messageStore.Add(change);
                 }

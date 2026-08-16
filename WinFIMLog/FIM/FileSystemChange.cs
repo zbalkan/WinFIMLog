@@ -70,6 +70,13 @@ namespace WinFIMLog.FIM
             };
         }
 
+        public static FileSystemChange? FromPath(string path, ChangeCategory category, int hashLimitMb, string scopeHash)
+        {
+            var change = FromPath(path, category, hashLimitMb);
+            if (change != null) change.ScopeHash = scopeHash;
+            return change;
+        }
+
         private static string GetACL(string path, ChangeCategory category)
         {
             if (category == ChangeCategory.Deleted)

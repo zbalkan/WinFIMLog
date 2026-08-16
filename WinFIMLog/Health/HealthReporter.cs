@@ -12,5 +12,9 @@ namespace WinFIMLog.Health
 
         public void SinkFailure(string sink, string reason, int attempt) =>
             logger.LogError((int)HealthEventId.SinkFailure, "SINK FAILURE Sink={Sink} Reason={Reason} Attempt={Attempt}", sink, reason, attempt);
+
+        public void ConfigurationChanged(string previousScopeHash, string newScopeHash) =>
+            logger.LogWarning((int)HealthEventId.ConfigurationChanged,
+                "CONFIGURATION CHANGED PreviousScopeHash={PreviousScopeHash} NewScopeHash={NewScopeHash}", previousScopeHash, newScopeHash);
     }
 }

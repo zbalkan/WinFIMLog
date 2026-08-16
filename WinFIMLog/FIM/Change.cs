@@ -24,6 +24,9 @@ namespace WinFIMLog.FIM
 
         public string SourceComputer { get; set; }
 
+        /// <summary>Canonical identity of the effective monitoring scope.</summary>
+        public string ScopeHash { get; set; } = string.Empty;
+
         public string? Username { get; set; }
 
         public string? UserSID { get; set; }

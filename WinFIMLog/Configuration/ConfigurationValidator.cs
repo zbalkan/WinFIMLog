@@ -21,6 +21,7 @@ namespace WinFIMLog.Configuration
             ValidateValues("ExcludedPaths", excludedPaths, ValidatePath, allowEmpty: true);
             ValidateValues("MonitoredKeys", monitoredKeys, ValidateKey, allowEmpty: false);
             ValidateValues("ExcludedKeys", excludedKeys, ValidateKey, allowEmpty: true);
+            ScopeIdentity.RejectProtectedExclusions(excludedKeys);
         }
 
         public static void ValidatePath(string value)

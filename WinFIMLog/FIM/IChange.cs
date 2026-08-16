@@ -32,6 +32,8 @@ namespace WinFIMLog.FIM
 
         string SourceComputer { get; set; }
 
+        string ScopeHash { get; set; }
+
         string? Username { get; set; }
 
         string? UserSID { get; set; }

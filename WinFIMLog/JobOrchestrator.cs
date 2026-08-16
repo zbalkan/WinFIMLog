@@ -7,6 +7,7 @@ using WinFIMLog.Jobs;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.Health;
+using WinFIMLog.Configuration;
 
 namespace WinFIMLog
 {
@@ -22,6 +23,7 @@ namespace WinFIMLog
 
         private readonly Settings _settings;
         private readonly HealthMetrics _metrics;
+        private readonly IHealthReporter _health;
 
         public JobOrchestrator(ILogger<JobOrchestrator> logger,
                       FileSystemCaptureQueue capture,
@@ -35,6 +37,7 @@ namespace WinFIMLog
             _logger = logger;
             _settings = settings;
             _metrics = metrics;
+            _health = health;
             _regMonitor = new RegistryMonitorJob(_logger, regStore, settings);
             // Discovery writes enriched records directly; live notifications use the capture queue.
             _fsDiscovery = new FileSystemDiscoveryJob(_logger, fsStore, ctx, settings);
@@ -85,6 +88,7 @@ namespace WinFIMLog
         {
             Task? fileSystemDiscoveryTask = null;
             Task? registryMonitorTask = null;
+            Task? scopeRefreshTask = null;
 
             try
             {
@@ -93,6 +97,7 @@ namespace WinFIMLog
                     fileSystemDiscoveryTask = StartFilesystemDiscoveryAsync(stoppingToken);
                 }
                 _fsMonitor.Start();
+                scopeRefreshTask = RefreshScopeAsync(stoppingToken);
 
                 if (_settings.EnableRegistryMonitoring)
                 {
@@ -109,8 +114,8 @@ namespace WinFIMLog
                 while (!stoppingToken.IsCancellationRequested)
                 {
                     _logger.LogInformation((int)HealthEventId.Heartbeat,
-                        "HEARTBEAT Time={Time} QueueDepth={QueueDepth} OldestItemAgeMs={OldestItemAgeMs} Accepted={Accepted} Processed={Processed} Dropped={Dropped} EnrichmentFailures={EnrichmentFailures}",
-                        DateTimeOffset.Now, _metrics.QueueDepth, _metrics.OldestItemAge.TotalMilliseconds,
+                        "HEARTBEAT Time={Time} ScopeHash={ScopeHash} QueueDepth={QueueDepth} OldestItemAgeMs={OldestItemAgeMs} Accepted={Accepted} Processed={Processed} Dropped={Dropped} EnrichmentFailures={EnrichmentFailures}",
+                        DateTimeOffset.Now, _settings.ScopeHash, _metrics.QueueDepth, _metrics.OldestItemAge.TotalMilliseconds,
                         _metrics.Accepted, _metrics.Processed, _metrics.Dropped, _metrics.EnrichmentFailures);
                     await Task.Delay(TimeSpan.FromSeconds(_settings.HeartbeatInterval), stoppingToken);
                 }
@@ -122,6 +127,32 @@ namespace WinFIMLog
             finally
             {
                 await CleanupAsync(fileSystemDiscoveryTask, registryMonitorTask);
+                if (scopeRefreshTask != null)
+                {
+                    try { await scopeRefreshTask; }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+                }
+            }
+        }
+
+        private async Task RefreshScopeAsync(CancellationToken stoppingToken)
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(_settings.ScopeReresolutionInterval), stoppingToken);
+                try
+                {
+                    var result = _settings.Reload();
+                    if (!result.Changed) continue;
+                    _fsMonitor.Reconfigure();
+                    _health.ConfigurationChanged(result.PreviousHash, result.CurrentHash);
+                }
+                catch (ConfigurationValidationException exception)
+                {
+                    // Keep the last valid scope active. A policy error must be visible but must
+                    // never silently replace or remove existing coverage.
+                    _health.CoverageGap("Configuration", _settings.ScopeHash, $"Rejected:{exception.Message}", 0);
+                }
             }
         }
 

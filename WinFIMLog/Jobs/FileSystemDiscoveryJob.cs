@@ -83,7 +83,7 @@ namespace WinFIMLog.Jobs
 
         private void Add(string path)
         {
-            var change = FileSystemChange.FromPath(path, ChangeCategory.Discovery, _settings.HashLimitMB);
+            var change = FileSystemChange.FromPath(path, ChangeCategory.Discovery, _settings.HashLimitMB, _settings.ScopeHash);
             if (change != null)
             {
                 if (change.ObjectType == FileSystem.ObjectType.File)

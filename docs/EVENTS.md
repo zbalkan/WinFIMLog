@@ -16,6 +16,7 @@ The **WinFIMLog** Application Event Log source uses the following stable Phase 1
 | 7791 | Error | Scoped coverage gap |
 | 7792 | Information | Monitoring source recovered |
 | 7793 | Error | Database or Event Log sink failure |
+| 7794 | Warning | Effective configuration changed (previous/new scope hashes) |
 
 A finding binds `changeType` to `FileSystem` or `Registry` and `category` to `Created`, `Changed`, or `Deleted`. The pair determines the ID. Rendered message text is not an authoritative interface.
 

@@ -17,7 +17,7 @@ WinFIMLog is a Windows service for monitoring critical directories and Registry 
 
 ## Internals
 
-It is designed to be a Windows Service. In first use, it will start a scan based on the settings from Windows Registry, under `HKLM\SOFTWARE\FIM`.
+It is designed to be a Windows Service. In first use, it will start a scan based on the settings from Windows Registry, under `HKLM\SOFTWARE\WinFIMLog`.
 
 If there is no path to monitor defined in the Registry, service will not do any action (no default value hard-coded).
 
@@ -102,7 +102,7 @@ For ease of use, an ADMX file is created. So, the monitored paths, excluded path
             <td style="width: 23.1657%; height: 18px;">Monitored Keys</td>
             <td style="width: 76.8343%; height: 18px;">
                 <ul>
-                    <li>HKEY_LOCAL_MACHINE\SOFTWARE\FIM</li>
+                    <li>HKEY_LOCAL_MACHINE\SOFTWARE\WinFIMLog</li>
                     <li>HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Microsoft Defender</li>
                     <li>HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders</li>
                     <li>HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders</li>

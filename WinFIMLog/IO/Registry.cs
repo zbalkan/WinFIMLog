@@ -31,7 +31,21 @@ namespace WinFIMLog.IO
 
         public static string RootName => Root.Name.Substring(Root.Name.IndexOf('\\') + 1);
 
-        private const string FimKeyName = "FIM";
+        private const string FimKeyName = "WinFIMLog";
+        private const string PolicyKeyName = @"SOFTWARE\Policies\WinFIMLog";
+
+        private static object? ReadEffectiveValue(string value)
+        {
+            using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, false);
+            return policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) ?? Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+        }
+
+        public static bool EffectiveValueExists(string value)
+        {
+            using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, false);
+            return policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null ||
+                   Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null;
+        }
 
         /// <summary> Translates the Registry value data in Dword to Int32 </summary> <param
         /// name="value">Name of the Registry value</param> <returns><see cref="int"></returns>
@@ -45,7 +59,7 @@ namespace WinFIMLog.IO
                 throw new ArgumentException("Value cannot be null or empty.", nameof(value));
             }
 
-            var valueData = Root.GetValue(value);
+            var valueData = ReadEffectiveValue(value);
 
             if (valueData == null)
             {
@@ -72,7 +86,7 @@ namespace WinFIMLog.IO
                 throw new ArgumentException("Value cannot be null or empty.", nameof(value));
             }
 
-            var valueData = Root.GetValue(value, null);
+            var valueData = ReadEffectiveValue(value);
 
             return valueData == null || valueData is not string[] multiStringValue
                 ? []
@@ -91,7 +105,7 @@ namespace WinFIMLog.IO
                 throw new ArgumentException("Value cannot be null or empty.", nameof(value));
             }
 
-            var valueData = Root.GetValue(value, null);
+            var valueData = ReadEffectiveValue(value);
 
             if (valueData == null || valueData is not string stringValue)
             {

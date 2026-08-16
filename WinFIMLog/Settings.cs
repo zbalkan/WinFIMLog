@@ -68,6 +68,12 @@ namespace WinFIMLog
         /// <summary>FileSystemWatcher native buffer size in KiB (8-64).</summary>
         public int WatcherBufferSizeKB { get; private set; } = 64;
 
+        /// <summary>Seconds between wildcard scope re-resolution checks.</summary>
+        public int ScopeReresolutionInterval { get; private set; } = 300;
+
+        /// <summary>SHA-256 identity of the canonical effective scope.</summary>
+        public string ScopeHash { get; private set; } = string.Empty;
+
         /// <summary>
         ///     A flag that returns true if file discovery task is completed.
         /// </summary>
@@ -122,6 +128,8 @@ namespace WinFIMLog
         private Regex monitoredPathsPattern;
 
         private RegistryScopeMatcher registryScopeMatcher;
+
+        private readonly object reloadLock = new();
 
         public string? FailureReason { get; private set; }
 
@@ -201,6 +209,18 @@ namespace WinFIMLog
             }
 
             return monitored && !excludedPath && !excludedExtension;
+        }
+
+        /// <summary>Re-reads policy/preferences and atomically publishes a newly resolved scope.</summary>
+        /// <returns>The previous and current hashes and whether effective scope changed.</returns>
+        public (string PreviousHash, string CurrentHash, bool Changed) Reload()
+        {
+            lock (reloadLock)
+            {
+                var previous = ScopeHash;
+                ReadOrCreateRegistrySettings();
+                return (previous, ScopeHash, !string.Equals(previous, ScopeHash, StringComparison.Ordinal));
+            }
         }
 
         private ParallelQuery<string> FilterMonitoredPaths(IEnumerable<string> paths) => from path in paths.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
@@ -344,7 +364,7 @@ namespace WinFIMLog
             }
 
             var monitoredPaths = Registry.ReadMultiStringValue("MonitoredPaths");
-            if (monitoredPaths.Length == 0)
+            if (!Registry.EffectiveValueExists("MonitoredPaths"))
             {
                 monitoredPaths = [
                     "%SystemRoot%\\System32",
@@ -367,7 +387,7 @@ namespace WinFIMLog
             monitoredPathsPattern = GenerateMonitoredPathsPattern();
 
             var excludedPaths = Registry.ReadMultiStringValue("ExcludedPaths");
-            if (excludedPaths.Length == 0)
+            if (!Registry.EffectiveValueExists("ExcludedPaths"))
             {
                 excludedPaths = [@"%SystemRoot%\System32\winevt",
                     @"%SystemRoot%\System32\sru",
@@ -397,7 +417,7 @@ namespace WinFIMLog
             excludedPathsPattern = GenerateExcludedPathsPattern();
 
             var excludedExtensions = Registry.ReadMultiStringValue("ExcludedExtensions");
-            if (excludedExtensions.Length == 0)
+            if (!Registry.EffectiveValueExists("ExcludedExtensions"))
             {
                 excludedExtensions = [".log", ".evtx", ".etl", ".wal", ".db-wal", ".db"];
                 Registry.WriteMultiStringValue("ExcludedExtensions", excludedExtensions);
@@ -414,10 +434,10 @@ namespace WinFIMLog
             EnableRegistryMonitoring = registryMonitoring == 1;
 
             var monitoredKeys = Registry.ReadMultiStringValue("MonitoredKeys");
-            if (monitoredKeys.Length == 0)
+            if (!Registry.EffectiveValueExists("MonitoredKeys"))
             {
                 monitoredKeys = [
-                    @"HKEY_LOCAL_MACHINE\SOFTWARE\FIM",
+                    @"HKEY_LOCAL_MACHINE\SOFTWARE\WinFIMLog",
                     @"HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Microsoft Defender",
                     @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders",
                     @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
@@ -484,11 +504,13 @@ namespace WinFIMLog
 
                 Registry.WriteMultiStringValue("MonitoredKeys", monitoredKeys);
             }
-            MonitoredKeys = monitoredKeys.Order().ToArray();
+            var effectiveMonitoredKeys = monitoredKeys.ToList();
+            ScopeIdentity.EnsureConfigurationKeysMonitored(effectiveMonitoredKeys);
+            MonitoredKeys = effectiveMonitoredKeys.Order(StringComparer.OrdinalIgnoreCase).ToArray();
             monitoredKeysPattern = GenerateMonitoredKeysPattern();
 
             var excludedKeys = Registry.ReadMultiStringValue("ExcludedKeys");
-            if (excludedKeys.Length == 0)
+            if (!Registry.EffectiveValueExists("ExcludedKeys"))
             {
                 excludedKeys = [string.Empty];
                 Registry.WriteMultiStringValue("ExcludedKeys", excludedKeys);
@@ -498,6 +520,8 @@ namespace WinFIMLog
 
             ConfigurationValidator.Validate(monitoredPaths, excludedPaths, MonitoredKeys, ExcludedKeys);
             registryScopeMatcher = new RegistryScopeMatcher(MonitoredKeys, ExcludedKeys);
+
+            ScopeHash = ScopeIdentity.Compute(MonitoredPaths, ExcludedPaths, ExcludedExtensions, MonitoredKeys, ExcludedKeys);
 
             var heartbeat = Registry.ReadDwordValue("HeartbeatInterval");
             if (heartbeat == -1)
@@ -525,6 +549,15 @@ namespace WinFIMLog
             }
             if (watcherBufferSizeKb is < 8 or > 64) throw new InvalidOperationException("WatcherBufferSizeKB must be between 8 and 64.");
             WatcherBufferSizeKB = watcherBufferSizeKb;
+
+            var scopeInterval = Registry.ReadDwordValue("ScopeReresolutionInterval");
+            if (scopeInterval == -1)
+            {
+                scopeInterval = 300;
+                Registry.WriteDwordValue("ScopeReresolutionInterval", scopeInterval);
+            }
+            if (scopeInterval < 10) throw new InvalidOperationException("ScopeReresolutionInterval must be at least 10 seconds.");
+            ScopeReresolutionInterval = scopeInterval;
 
             var enableLocalDatabase = Registry.ReadDwordValue("EnableLocalDatabase");
             if (enableLocalDatabase == -1)

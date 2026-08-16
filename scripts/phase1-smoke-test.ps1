@@ -2,7 +2,7 @@
 $ErrorActionPreference = 'Stop'
 $source = 'WinFIMLog'
 $start = Get-Date
-$configured = (Get-ItemProperty 'HKLM:\SOFTWARE\FIM' -Name MonitoredPaths).MonitoredPaths |`
+$configured = (Get-ItemProperty 'HKLM:\SOFTWARE\WinFIMLog' -Name MonitoredPaths).MonitoredPaths |`
   ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) } |`
   Where-Object { $_ -notmatch '\*' -and (Test-Path $_ -PathType Container) } | Select-Object -First 1
 if (-not $configured) { throw 'No existing, non-wildcard MonitoredPaths entry is available for the smoke test.' }

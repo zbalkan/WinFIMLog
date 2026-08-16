@@ -58,7 +58,7 @@ namespace WinFIMLog.Jobs
 
         private async Task EnrichAsync(RawFileSystemNotification raw, CancellationToken cancellationToken)
         {
-            var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, _settings.HashLimitMB);
+            var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, _settings.HashLimitMB, _settings.ScopeHash);
             if (change == null) return;
 
             // Correlation waiting, hashing, ACL access and database reads all happen here, never

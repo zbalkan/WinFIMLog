@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using WinFIMLog.FIM;
 using WinFIMLog.Health;
 using Microsoft.Extensions.Logging;
@@ -49,6 +50,25 @@ namespace WinFIMLog.Jobs
                 watcher.Dispose();
             }
             _watchers.Clear();
+        }
+
+        /// <summary>Applies watcher additions and removals for the newly resolved scope.</summary>
+        public void Reconfigure()
+        {
+            var desired = new HashSet<string>(_settings.MonitoredPaths, StringComparer.OrdinalIgnoreCase);
+            foreach (var watcher in _watchers.ToArray())
+            {
+                if (desired.Contains(watcher.Path)) continue;
+                watcher.EnableRaisingEvents = false;
+                watcher.Dispose();
+                _watchers.Remove(watcher);
+                _logger.LogInformation("Removed file system watcher for directory {Directory}", watcher.Path);
+            }
+            foreach (var path in desired.Where(path => !_watchers.Exists(watcher => string.Equals(watcher.Path, path, StringComparison.OrdinalIgnoreCase))))
+            {
+                _watchers.Add(CreateWatcher(path));
+                _logger.LogInformation("Added file system watcher for directory {Directory}", path);
+            }
         }
 
         private void InvokeWatchers()

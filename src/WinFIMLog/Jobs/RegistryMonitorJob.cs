@@ -217,7 +217,7 @@ namespace WinFIMLog.Jobs
             return fullName;
         }
 
-        private bool IsMonitoredEvent(string keyName, int pid)
+        private bool IsMonitoredEvent(EffectiveSettings configuration, string keyName, int pid)
         {
             if (pid == _pid || pid == -1)
             {
@@ -229,7 +229,7 @@ namespace WinFIMLog.Jobs
                 return false;
             }
 
-            return _settings.IsMonitoredKey(keyName);
+            return configuration.IsMonitoredKey(keyName);
         }
 
         /// <summary>
@@ -263,12 +263,13 @@ namespace WinFIMLog.Jobs
             try
             {
                 var keyName = GetFullKeyName(ev.KeyHandle, ev.KeyName, ev.ValueName);
+                var configuration = _settings.Capture();
 
-                if (IsMonitoredEvent(keyName, ev.ProcessID))
+                if (IsMonitoredEvent(configuration, keyName, ev.ProcessID))
                 {
                     Debug.WriteLine($"Processing event: {ev.EventName} for {keyName}");
                     var change = new RegistryChange(ev, keyName);
-                    change.ScopeHash = _settings.ScopeHash;
+                    change.ScopeHash = configuration.ScopeHash;
 
                     _messageStore.Add(change);
                 }

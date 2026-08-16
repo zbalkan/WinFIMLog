@@ -89,11 +89,13 @@ namespace WinFIMLog.Snapshots
 
         internal async Task RunRegistrySnapshot(CancellationToken cancellationToken)
         {
-            var baseline = repository.Begin(BaselineSource.Registry, settings.ScopeHash,
-                SourceIdentityProvider.Registry(settings.MonitoredKeys), algorithmVersion: "registry-v1");
+            var configuration = settings.Capture();
+            var baseline = repository.Begin(BaselineSource.Registry, configuration.ScopeHash,
+                SourceIdentityProvider.Registry(configuration.MonitoredKeys), algorithmVersion: "registry-v1");
             try
             {
-                var members = await Task.Run(() => new RegistrySnapshotSource().Capture(settings.MonitoredKeys), cancellationToken);
+                var members = await Task.Run(() => new RegistrySnapshotSource(configuration.IsMonitoredKey)
+                    .Capture(configuration.MonitoredKeys), cancellationToken);
                 var results = repository.ReconcileAndComplete(baseline, members);
                 EmitFindings(baseline, results);
                 logger.LogInformation("Completed registry baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}", baseline.Id, baseline.ItemCount, baseline.ScopeHash);
@@ -105,14 +107,15 @@ namespace WinFIMLog.Snapshots
 
         internal async Task RunFileSystemSnapshot(CancellationToken cancellationToken)
         {
-            var baseline = repository.Begin(BaselineSource.FileSystem, settings.ScopeHash,
-                SourceIdentityProvider.FileSystem(settings.MonitoredPaths));
+            var configuration = settings.Capture();
+            var baseline = repository.Begin(BaselineSource.FileSystem, configuration.ScopeHash,
+                SourceIdentityProvider.FileSystem(configuration.MonitoredPaths));
             try
             {
-                var source = new FileSystemSnapshotSource(settings.HashLimitMB);
-                _ = await Task.Run(() => source.Capture(settings.MonitoredPaths), cancellationToken);
+                var source = new FileSystemSnapshotSource(configuration.HashLimitMB, configuration.IsMonitoredPath);
+                _ = await Task.Run(() => source.Capture(configuration.MonitoredPaths), cancellationToken);
                 baseline.Status = BaselineStatus.Reconciling;
-                var second = await Task.Run(() => source.Capture(settings.MonitoredPaths), cancellationToken);
+                var second = await Task.Run(() => source.Capture(configuration.MonitoredPaths), cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 var results = repository.ReconcileAndCompleteAfterSecondPass(baseline, Array.Empty<BaselineMember>(), second);
                 EmitFindings(baseline, results);

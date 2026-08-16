@@ -23,6 +23,7 @@ namespace WinFIMLog
         private readonly HealthMetrics _metrics;
         private readonly IHealthReporter _health;
         private readonly ISnapshotCoordinator _snapshots;
+        private readonly FileSystemCaptureQueue _capture;
 
         public JobOrchestrator(ILogger<JobOrchestrator> logger,
                       FileSystemCaptureQueue capture,
@@ -37,11 +38,20 @@ namespace WinFIMLog
             _metrics = metrics;
             _health = health;
             _snapshots = snapshots;
+            _capture = capture;
             _regMonitor = new RegistryMonitorJob(_logger, regStore, settings, snapshots);
             _fsMonitor = new FileSystemMonitorJob(_logger, capture, health, settings, snapshots);
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            // Wait for both monitor sources to stop before closing admission. The enrichment
+            // worker then drains the completed raw channel before persistence is stopped.
+            await base.StopAsync(cancellationToken);
+            _capture.CompleteWriter();
+        }
 
         private async Task CleanupAsync(Task? fileSystemMonitorTask, Task? registryMonitorTask)
         {

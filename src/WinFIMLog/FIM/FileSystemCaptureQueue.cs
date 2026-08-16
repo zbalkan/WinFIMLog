@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -45,8 +46,14 @@ namespace WinFIMLog.FIM
             return false;
         }
 
-        public async ValueTask<RawFileSystemNotification> ReadAsync(CancellationToken cancellationToken) =>
-            await _channel.Reader.ReadAsync(cancellationToken);
+        /// <summary>Stops admission after all watcher producers have stopped.</summary>
+        public void CompleteWriter() => _channel.Writer.TryComplete();
+
+        public IAsyncEnumerable<RawFileSystemNotification> ReadAllAsync() =>
+            _channel.Reader.ReadAllAsync();
+
+        public ValueTask<RawFileSystemNotification> ReadAsync(CancellationToken cancellationToken) =>
+            _channel.Reader.ReadAsync(cancellationToken);
 
         public void Complete(bool succeeded)
         {

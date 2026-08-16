@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Snapshots;
 
@@ -50,6 +51,39 @@ public sealed class FileSystemSnapshotSourceTests
         var ordinary = new BaselineMember { Identity = "a", IsSparse = false };
         var sparse = new BaselineMember { Identity = "a", IsSparse = true };
         Assert.AreNotEqual(ordinary.Fingerprint, sparse.Fingerprint);
+    }
+
+    [TestMethod]
+    public void Capture_applies_exclusions_and_prunes_excluded_directories()
+    {
+        var root = Directory.CreateTempSubdirectory("winfimlog-scope-");
+        try
+        {
+            var included = Path.Combine(root.FullName, "included.txt");
+            var excludedExtension = Path.Combine(root.FullName, "volatile.log");
+            var excludedDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, "excluded"));
+            var excludedChild = Path.Combine(excludedDirectory.FullName, "must-not-be-visited.txt");
+            File.WriteAllText(included, "included");
+            File.WriteAllText(excludedExtension, "excluded");
+            File.WriteAllText(excludedChild, "excluded subtree");
+            var evaluated = new List<string>();
+
+            bool IsIncluded(string path)
+            {
+                evaluated.Add(path);
+                return !path.EndsWith(".log", StringComparison.OrdinalIgnoreCase) &&
+                    !path.StartsWith(excludedDirectory.FullName, StringComparison.OrdinalIgnoreCase);
+            }
+
+            var members = new FileSystemSnapshotSource(1, IsIncluded).Capture([root.FullName]);
+
+            Assert.Contains(member => member.Path == included, members);
+            Assert.DoesNotContain(member => member.Path == excludedExtension, members);
+            Assert.DoesNotContain(member => member.Path == excludedDirectory.FullName, members);
+            Assert.DoesNotContain(path => path == excludedChild, evaluated,
+                "An excluded directory must prune traversal before its children are evaluated.");
+        }
+        finally { root.Delete(true); }
     }
 
     [TestMethod]

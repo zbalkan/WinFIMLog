@@ -38,16 +38,16 @@ namespace WinFIMLog.Jobs
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            // Cancellation stops producers first. Channel completion, not cancellation,
+            // is the acknowledgement that every admitted raw item has been observed.
+            await foreach (var raw in _capture.ReadAllAsync())
             {
-                var raw = await _capture.ReadAsync(stoppingToken);
                 var succeeded = false;
                 try
                 {
-                    await EnrichAsync(raw, stoppingToken);
+                    await EnrichAsync(raw, CancellationToken.None);
                     succeeded = true;
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
                 catch (Exception exception)
                 {
                     _logger.LogError(exception, "Could not enrich filesystem notification for {Path}", raw.FullPath);
@@ -58,7 +58,8 @@ namespace WinFIMLog.Jobs
 
         private async Task EnrichAsync(RawFileSystemNotification raw, CancellationToken cancellationToken)
         {
-            var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, _settings.HashLimitMB, _settings.ScopeHash);
+            var configuration = _settings.Capture();
+            var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, configuration.HashLimitMB, configuration.ScopeHash);
             if (change == null) return;
             change.OldPath = raw.OldPath;
             change.NewPath = raw.NewPath;
@@ -92,7 +93,7 @@ namespace WinFIMLog.Jobs
             }
 
             FileSystemChange? previous = null;
-            if (_settings.EnableLocalDatabase)
+            if (configuration.EnableLocalDatabase)
             {
                 previous = FileSystemChange.RetrievePreviousChange(raw.FullPath, _context);
                 change.PreviousHash = previous?.CurrentHash ?? string.Empty;

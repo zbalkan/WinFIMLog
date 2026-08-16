@@ -76,8 +76,8 @@ namespace WinFIMLog
                     _ = services.AddHostedService(provider => provider.GetRequiredService<SnapshotService>());
                     // Hosted services are stopped in reverse registration order. Start the
                     // consumer first so monitors are stopped before the consumer drains buffers.
-                    _ = services.AddHostedService<FileSystemEnrichmentWorker>();
                     _ = services.AddHostedService<BufferConsumer>();
+                    _ = services.AddHostedService<FileSystemEnrichmentWorker>();
                     _ = services.AddHostedService<JobOrchestrator>();
                 })
                 .UseWindowsService();

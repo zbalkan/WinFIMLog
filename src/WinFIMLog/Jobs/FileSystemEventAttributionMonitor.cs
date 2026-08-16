@@ -141,7 +141,8 @@ namespace WinFIMLog.Jobs
             }
 
             var path = data.PayloadByName("FileName") as string;
-            if (string.IsNullOrWhiteSpace(path) || !_settings.IsMonitoredPath(path)) return;
+            var configuration = _settings.Capture();
+            if (string.IsNullOrWhiteSpace(path) || !configuration.IsMonitoredPath(path)) return;
 
             var sequence = ReadSequence(data);
             if (sequence == null)

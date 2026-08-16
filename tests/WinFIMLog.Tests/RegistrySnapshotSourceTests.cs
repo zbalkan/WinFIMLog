@@ -33,4 +33,27 @@ public sealed class RegistrySnapshotSourceTests
         }
         finally { Registry.CurrentUser.DeleteSubKeyTree(path, false); }
     }
+
+    [TestMethod]
+    public void Capture_prunes_excluded_registry_subtrees()
+    {
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("Windows Registry required."); return; }
+        var path = $@"Software\WinFIMLogTests\{Guid.NewGuid():N}";
+        using (var root = Registry.CurrentUser.CreateSubKey(path))
+        {
+            root.SetValue("Included", 1);
+            using var excluded = root.CreateSubKey("Excluded");
+            excluded.SetValue("Hidden", 2);
+        }
+        try
+        {
+            var configuredRoot = @"HKEY_CURRENT_USER\" + path;
+            var members = new RegistrySnapshotSource(candidate =>
+                !candidate.Contains(@"\Excluded", StringComparison.OrdinalIgnoreCase)).Capture([configuredRoot]);
+
+            Assert.Contains(member => member.Path.EndsWith(path + @"\Included", StringComparison.OrdinalIgnoreCase), members);
+            Assert.DoesNotContain(member => member.Path.Contains(@"\Excluded", StringComparison.OrdinalIgnoreCase), members);
+        }
+        finally { Registry.CurrentUser.DeleteSubKeyTree(path, false); }
+    }
 }

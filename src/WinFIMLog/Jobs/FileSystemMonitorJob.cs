@@ -19,6 +19,8 @@ namespace WinFIMLog.Jobs
         private readonly ISnapshotCoordinator _snapshots;
 
         private readonly List<FileSystemWatcher> _watchers;
+        private readonly object _watcherLock = new();
+        private bool _stopping;
 
         private readonly Settings _settings;
 
@@ -53,50 +55,54 @@ namespace WinFIMLog.Jobs
 
         private void Stop()
         {
-            foreach (var watcher in _watchers)
+            lock (_watcherLock)
             {
-                watcher.EnableRaisingEvents = false;
-                watcher.Changed -= OnChanged;
-                watcher.Renamed -= OnRenamed;
-                watcher.Created -= OnCreated;
-                watcher.Deleted -= OnDeleted;
-                watcher.Error -= OnError;
-                watcher.Dispose();
+                if (_stopping) return;
+                _stopping = true;
+                foreach (var watcher in _watchers) DisposeWatcher(watcher);
+                _watchers.Clear();
             }
-            _watchers.Clear();
         }
 
         /// <summary>Applies watcher additions and removals for the newly resolved scope.</summary>
         public void Reconfigure()
         {
-            var desired = new HashSet<string>(_settings.MonitoredPaths, StringComparer.OrdinalIgnoreCase);
-            foreach (var watcher in _watchers.ToArray())
+            var configuration = _settings.Capture();
+            var desired = new HashSet<string>(configuration.MonitoredPaths, StringComparer.OrdinalIgnoreCase);
+            lock (_watcherLock)
             {
-                if (desired.Contains(watcher.Path)) continue;
-                watcher.EnableRaisingEvents = false;
-                watcher.Dispose();
-                _watchers.Remove(watcher);
-                _logger.LogInformation("Removed file system watcher for directory {Directory}", watcher.Path);
-            }
-            foreach (var path in desired.Where(path => !_watchers.Exists(watcher => string.Equals(watcher.Path, path, StringComparison.OrdinalIgnoreCase))))
-            {
-                _watchers.Add(CreateWatcher(path));
-                _logger.LogInformation("Added file system watcher for directory {Directory}", path);
+                if (_stopping) return;
+                foreach (var watcher in _watchers.ToArray())
+                {
+                    if (desired.Contains(watcher.Path)) continue;
+                    DisposeWatcher(watcher);
+                    _watchers.Remove(watcher);
+                    _logger.LogInformation("Removed file system watcher for directory {Directory}", watcher.Path);
+                }
+                foreach (var path in desired.Where(path => !_watchers.Exists(watcher => string.Equals(watcher.Path, path, StringComparison.OrdinalIgnoreCase))))
+                {
+                    _watchers.Add(CreateWatcher(path, configuration));
+                    _logger.LogInformation("Added file system watcher for directory {Directory}", path);
+                }
             }
         }
 
         private void InvokeWatchers()
         {
-            foreach (var path in _settings.MonitoredPaths)
+            var configuration = _settings.Capture();
+            lock (_watcherLock)
             {
-                var watcher = CreateWatcher(path);
-
-                _watchers.Add(watcher);
-                _logger.LogInformation("Initiated file system watcher for directory {directory}", path);
+                if (_stopping) return;
+                foreach (var path in configuration.MonitoredPaths)
+                {
+                    var watcher = CreateWatcher(path, configuration);
+                    _watchers.Add(watcher);
+                    _logger.LogInformation("Initiated file system watcher for directory {directory}", path);
+                }
             }
         }
 
-        private FileSystemWatcher CreateWatcher(string path)
+        private FileSystemWatcher CreateWatcher(string path, EffectiveSettings configuration)
         {
             var watcher = new FileSystemWatcher(path)
                 {
@@ -110,7 +116,7 @@ namespace WinFIMLog.Jobs
                                 | NotifyFilters.Security
                                 | NotifyFilters.Size,
                     IncludeSubdirectories = true,
-                    InternalBufferSize = _settings.WatcherBufferSizeKB * 1024,
+                    InternalBufferSize = configuration.WatcherBufferSizeKB * 1024,
                     Filter = string.Empty,
                     EnableRaisingEvents = false
                 };
@@ -130,8 +136,9 @@ namespace WinFIMLog.Jobs
 
         private void OnRenamed(object sender, RenamedEventArgs e)
         {
-            if (!_settings.IsMonitoredPath(e.FullPath) && !_settings.IsMonitoredPath(e.OldFullPath)) return;
-            _capture.TryAdmit(new RawFileSystemNotification(senderPath(e.FullPath) ?? senderPath(e.OldFullPath) ?? string.Empty,
+            var configuration = _settings.Capture();
+            if (!configuration.IsMonitoredPath(e.FullPath) && !configuration.IsMonitoredPath(e.OldFullPath)) return;
+            _capture.TryAdmit(new RawFileSystemNotification(senderPath(configuration, e.FullPath) ?? senderPath(configuration, e.OldFullPath) ?? string.Empty,
                 e.FullPath, ChangeCategory.Changed, DateTimeOffset.UtcNow, e.OldFullPath, e.FullPath));
         }
 
@@ -142,35 +149,59 @@ namespace WinFIMLog.Jobs
         private void OnError(object sender, ErrorEventArgs e)
         {
             if (sender is not FileSystemWatcher failed) return;
-            var scope = failed.Path;
-            _health.CoverageGap("FileSystemWatcher", scope, e.GetException().GetType().Name);
-            failed.EnableRaisingEvents = false;
-            failed.Dispose();
-            _watchers.Remove(failed);
+            string? scope = null;
+            Exception? restartFailure = null;
             try
             {
-                _watchers.Add(CreateWatcher(scope));
-                _snapshots.RequestFileSystemSnapshot("Watcher source failure", scope);
-                _health.SourceRecovered("FileSystemWatcher", scope, "WatcherRecreated;ReconciliationStarted");
+                lock (_watcherLock)
+                {
+                    if (_stopping || !_watchers.Contains(failed)) return;
+                    scope = failed.Path;
+                    _watchers.Remove(failed);
+                    DisposeWatcher(failed);
+                    var configuration = _settings.Capture();
+                    if (!configuration.MonitoredPaths.Contains(scope, StringComparer.OrdinalIgnoreCase)) return;
+                    _watchers.Add(CreateWatcher(scope, configuration));
+                }
             }
             catch (Exception exception)
             {
-                _health.CoverageGap("FileSystemWatcher", scope, $"RestartFailed:{exception.GetType().Name}");
+                restartFailure = exception;
             }
+
+            if (scope is null) return;
+            _health.CoverageGap("FileSystemWatcher", scope, e.GetException().GetType().Name);
+            if (restartFailure is not null)
+            { _health.CoverageGap("FileSystemWatcher", scope, $"RestartFailed:{restartFailure.GetType().Name}"); return; }
+            _snapshots.RequestFileSystemSnapshot("Watcher source failure", scope);
+            _health.SourceRecovered("FileSystemWatcher", scope, "WatcherRecreated;ReconciliationStarted");
+        }
+
+        private void DisposeWatcher(FileSystemWatcher watcher)
+        {
+            watcher.EnableRaisingEvents = false;
+            watcher.Changed -= OnChanged;
+            watcher.Renamed -= OnRenamed;
+            watcher.Created -= OnCreated;
+            watcher.Deleted -= OnDeleted;
+            watcher.Error -= OnError;
+            watcher.Dispose();
         }
 
         private void ProcessEvent(string path, ChangeCategory category)
         {
-            if (!_settings.IsMonitoredPath(path))
+            var configuration = _settings.Capture();
+            if (!configuration.IsMonitoredPath(path))
             {
                 return;
             }
 
             _capture.TryAdmit(new RawFileSystemNotification(
-                (senderPath(path) ?? string.Empty), path, category, DateTimeOffset.UtcNow));
+                (senderPath(configuration, path) ?? string.Empty), path, category, DateTimeOffset.UtcNow));
         }
 
-        private string? senderPath(string path) => Array.Find(_settings.MonitoredPaths, p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+        private static string? senderPath(EffectiveSettings configuration, string path) =>
+            Array.Find(configuration.MonitoredPaths, p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
 
         #region Dispose
 

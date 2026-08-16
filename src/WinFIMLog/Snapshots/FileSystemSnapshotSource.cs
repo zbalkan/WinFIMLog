@@ -11,8 +11,13 @@ namespace WinFIMLog.Snapshots
     public sealed class FileSystemSnapshotSource
     {
         private readonly long hashSizeLimit;
+        private readonly Func<string, bool> isIncluded;
 
-        public FileSystemSnapshotSource(int hashLimitMb) => hashSizeLimit = hashLimitMb * 1024L * 1024L;
+        public FileSystemSnapshotSource(int hashLimitMb, Func<string, bool>? isIncluded = null)
+        {
+            hashSizeLimit = hashLimitMb * 1024L * 1024L;
+            this.isIncluded = isIncluded ?? (_ => true);
+        }
 
         public IReadOnlyList<BaselineMember> Capture(IEnumerable<string> roots)
         {
@@ -23,6 +28,9 @@ namespace WinFIMLog.Snapshots
 
         private void CaptureNode(string path, List<BaselineMember> output)
         {
+            // Excluded directories prune their entire subtree; capture and notification
+            // admission therefore use exactly the same effective-scope predicate.
+            if (!isIncluded(path)) return;
             FileAttributes attributes;
             try { attributes = File.GetAttributes(path); }
             catch (FileNotFoundException) { return; }

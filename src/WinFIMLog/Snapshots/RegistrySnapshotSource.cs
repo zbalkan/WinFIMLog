@@ -10,6 +10,11 @@ namespace WinFIMLog.Snapshots
     /// <summary>Enumerates configured registry subtrees without relying on ETW state.</summary>
     public sealed class RegistrySnapshotSource
     {
+        private readonly Func<string, bool> isIncluded;
+
+        public RegistrySnapshotSource(Func<string, bool>? isIncluded = null) =>
+            this.isIncluded = isIncluded ?? (_ => true);
+
         public IReadOnlyList<BaselineMember> Capture(IEnumerable<string> roots)
         {
             if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
@@ -36,8 +41,9 @@ namespace WinFIMLog.Snapshots
             }
         }
 
-        private static void CaptureRoot(string fullName, List<BaselineMember> output)
+        private void CaptureRoot(string fullName, List<BaselineMember> output)
         {
+            if (!isIncluded(fullName)) return;
             var separator = fullName.IndexOf('\\');
             var hiveName = separator < 0 ? fullName : fullName[..separator];
             var subKey = separator < 0 ? string.Empty : fullName[(separator + 1)..];
@@ -51,8 +57,9 @@ namespace WinFIMLog.Snapshots
             catch { output.Add(Unavailable(fullName, EvidenceAvailability.Failed)); }
         }
 
-        private static void CaptureKey(RegistryKey key, string path, List<BaselineMember> output)
+        private void CaptureKey(RegistryKey key, string path, List<BaselineMember> output)
         {
+            if (!isIncluded(path)) return;
             var keyMember = new BaselineMember { Identity = path.ToUpperInvariant(), Path = path,
                 NodeType = SnapshotNodeType.RegistryKey, HashState = HashEvidenceState.NotApplicable };
             try { keyMember.AclEvidence = key.GetACL(); keyMember.AclState = EvidenceAvailability.Available; }
@@ -62,6 +69,7 @@ namespace WinFIMLog.Snapshots
 
             foreach (var valueName in Safe(() => key.GetValueNames()))
             {
+                if (!isIncluded(path + "\\" + valueName)) continue;
                 try
                 {
                     var value = key.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
@@ -76,6 +84,7 @@ namespace WinFIMLog.Snapshots
             }
             foreach (var childName in Safe(() => key.GetSubKeyNames()))
             {
+                if (!isIncluded(path + "\\" + childName)) continue;
                 try { using var child = key.OpenSubKey(childName, false); if (child is not null) CaptureKey(child, path + "\\" + childName, output); }
                 catch (UnauthorizedAccessException) { output.Add(Unavailable(path + "\\" + childName, EvidenceAvailability.AccessDenied)); }
                 catch { output.Add(Unavailable(path + "\\" + childName, EvidenceAvailability.Failed)); }

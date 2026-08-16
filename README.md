@@ -8,7 +8,9 @@ WinFIMLog is a Windows service for monitoring critical directories and Registry 
 
 The recurring snapshot schema, lifecycle, identity limitations and migration are
 specified in [the data model](docs/DATA-MODEL.md). Architecture decisions are
-indexed in [the ADR index](docs/adr/README.md).
+indexed in [the ADR index](docs/adr/README.md). Open design risks and their
+ordered remediation milestones are tracked in the
+[architecture remediation roadmap](docs/ARCHITECTURE-ROADMAP.md).
 
 ## Usage
 

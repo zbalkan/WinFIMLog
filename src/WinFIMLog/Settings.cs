@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using WinFIMLog.IO;
 using WinFIMLog.Configuration;
 
@@ -23,74 +24,74 @@ namespace WinFIMLog
         ///     Switch to enable/disable local database. When true, you cannot display previous hashes.
         ///     Default: true.
         /// </summary>
-        public bool EnableLocalDatabase { get; private set; } = true;
+        public bool EnableLocalDatabase { get => ReadState().EnableLocalDatabase; private set => WriteState().EnableLocalDatabase = value; }
 
         /// <summary>
         ///     Switch to enable/disable Registry monitoring.
         ///     Default: false.
         /// </summary>
-        public bool EnableRegistryMonitoring { get; private set; }
+        public bool EnableRegistryMonitoring { get => ReadState().EnableRegistryMonitoring; private set => WriteState().EnableRegistryMonitoring = value; }
 
         /// <summary>
         ///     File extensions to exclude from monitoring.
         ///     Default: Empty list.
         /// </summary>
-        public string[] ExcludedExtensions { get; private set; }
+        public string[] ExcludedExtensions { get => (string[])ReadState().ExcludedExtensions.Clone(); private set => WriteState().ExcludedExtensions = value; }
 
         /// <summary>
         ///     Registry keys to exclude from monitoring.
         ///     Default: Empty list.
         /// </summary>
-        public string[] ExcludedKeys { get; private set; }
+        public string[] ExcludedKeys { get => (string[])ReadState().ExcludedKeys.Clone(); private set => WriteState().ExcludedKeys = value; }
 
         /// <summary>
         ///     Filesystem directories to exclude from monitoring. Wildcards for folder names are accepted.
         ///     Default: Empty list.
         /// </summary>
-        public string[] ExcludedPaths { get; private set; }
+        public string[] ExcludedPaths { get => (string[])ReadState().ExcludedPaths.Clone(); private set => WriteState().ExcludedPaths = value; }
 
         /// <summary>
         ///     Ignore caculating hashes of large files for memory consumption.
         ///     Default: 1024 (1GB)
         /// </summary>
-        public int HashLimitMB { get; private set; }
+        public int HashLimitMB { get => ReadState().HashLimitMB; private set => WriteState().HashLimitMB = value; }
 
         /// <summary>
         ///     Interval in seconds to send an informational heartbeat log entry to allow monitoring
         ///     of the service itself. It can be disabled by setting it 0.
         ///     Default: 60
         /// </summary>
-        public int HeartbeatInterval { get; private set; }
+        public int HeartbeatInterval { get => ReadState().HeartbeatInterval; private set => WriteState().HeartbeatInterval = value; }
 
         /// <summary>Maximum raw filesystem notifications held in memory.</summary>
-        public int CaptureQueueCapacity { get; private set; } = 8192;
+        public int CaptureQueueCapacity { get => ReadState().CaptureQueueCapacity; private set => WriteState().CaptureQueueCapacity = value; }
 
         /// <summary>FileSystemWatcher native buffer size in KiB (8-64).</summary>
-        public int WatcherBufferSizeKB { get; private set; } = 64;
+        public int WatcherBufferSizeKB { get => ReadState().WatcherBufferSizeKB; private set => WriteState().WatcherBufferSizeKB = value; }
 
         /// <summary>Seconds between wildcard scope re-resolution checks.</summary>
-        public int ScopeReresolutionInterval { get; private set; } = 300;
+        public int ScopeReresolutionInterval { get => ReadState().ScopeReresolutionInterval; private set => WriteState().ScopeReresolutionInterval = value; }
 
         /// <summary>Seconds between authoritative filesystem snapshots (default: six hours).</summary>
-        public int FileSystemSnapshotInterval { get; private set; } = 21600;
+        public int FileSystemSnapshotInterval { get => ReadState().FileSystemSnapshotInterval; private set => WriteState().FileSystemSnapshotInterval = value; }
 
         /// <summary>Seconds between authoritative registry snapshots (default: six hours).</summary>
-        public int RegistrySnapshotInterval { get; private set; } = 21600;
+        public int RegistrySnapshotInterval { get => ReadState().RegistrySnapshotInterval; private set => WriteState().RegistrySnapshotInterval = value; }
 
         /// <summary>SHA-256 identity of the canonical effective scope.</summary>
-        public string ScopeHash { get; private set; } = string.Empty;
+        public string ScopeHash { get => ReadState().ScopeHash; private set => WriteState().ScopeHash = value; }
 
         /// <summary>
         ///     Registry keys to monitor.
         ///     Default: Empty list.
         /// </summary>
-        public string[] MonitoredKeys { get; private set; }
+        public string[] MonitoredKeys { get => (string[])ReadState().MonitoredKeys.Clone(); private set => WriteState().MonitoredKeys = value; }
 
         /// <summary>
         ///     Filesystem directories to monitor. Wildcards for folder names are accepted.
         ///     Default: Empty list.
         /// </summary>
-        public string[] MonitoredPaths { get; private set; }
+        public string[] MonitoredPaths { get => (string[])ReadState().MonitoredPaths.Clone(); private set => WriteState().MonitoredPaths = value; }
 
         /// <summary>
         ///     A flag that returns true if application loads the Settings successfully.
@@ -101,17 +102,8 @@ namespace WinFIMLog
 
         private const int DEFAULT_HEARTBEAT_INTERVAL = 60;
 
-        private Regex? excludedExtensionsPattern;
-
-        private Regex? excludedKeysPattern;
-
-        private Regex? excludedPathsPattern;
-
-        private Regex monitoredKeysPattern;
-
-        private Regex monitoredPathsPattern;
-
-        private RegistryScopeMatcher registryScopeMatcher;
+        private EffectiveSettings current = new();
+        private readonly AsyncLocal<EffectiveSettings?> building = new();
 
         private readonly object reloadLock = new();
 
@@ -133,16 +125,28 @@ namespace WinFIMLog
             _ = Directory.CreateDirectory(Directory.GetParent(DatabasePath)!.ToString());
             try
             {
+                building.Value = new EffectiveSettings();
                 ReadOrCreateRegistrySettings();
+                Volatile.Write(ref current, building.Value!);
+                building.Value = null;
                 Success = true;
             }
             catch (Exception ex)
             {
+                building.Value = null;
                 Debug.WriteLine(ex);
                 FailureReason = ex.Message;
                 Success = false;
             }
         }
+
+        internal Settings(EffectiveSettings initial)
+        {
+            current = initial;
+            Success = true;
+        }
+
+        internal void PublishForTest(EffectiveSettings next) => Volatile.Write(ref current, next);
 
         /// <summary>
         ///     Filters out the initial list
@@ -172,24 +176,13 @@ namespace WinFIMLog
             return matches.ToList();
         }
 
-        public bool IsMonitoredKey(string keyName) => registryScopeMatcher.IsMatch(keyName);
+        public EffectiveSettings Capture() => Volatile.Read(ref current);
+
+        public bool IsMonitoredKey(string keyName) => Capture().IsMonitoredKey(keyName);
 
         public bool IsMonitoredPath(string path)
         {
-            var monitored = monitoredPathsPattern!.IsMatch(path);
-            var excludedPath = false;
-            if (excludedPathsPattern != null)
-            {
-                excludedPath = excludedPathsPattern.IsMatch(path);
-            }
-
-            var excludedExtension = false;
-            if (excludedExtensionsPattern != null)
-            {
-                excludedExtension = excludedExtensionsPattern.IsMatch(path);
-            }
-
-            return monitored && !excludedPath && !excludedExtension;
+            return Capture().IsMonitoredPath(path);
         }
 
         /// <summary>Re-reads policy/preferences and atomically publishes a newly resolved scope.</summary>
@@ -198,84 +191,53 @@ namespace WinFIMLog
         {
             lock (reloadLock)
             {
-                var state = CaptureState();
-                var previous = ScopeHash;
+                var previousState = Capture();
+                var previous = previousState.ScopeHash;
                 try
                 {
+                    building.Value = new EffectiveSettings();
                     ReadOrCreateRegistrySettings();
-                    return (previous, ScopeHash, !string.Equals(previous, ScopeHash, StringComparison.Ordinal));
+                    var next = building.Value!;
+                    Volatile.Write(ref current, next);
+                    building.Value = null;
+                    return (previous, next.ScopeHash, !string.Equals(previous, next.ScopeHash, StringComparison.Ordinal));
                 }
                 catch
                 {
-                    RestoreState(state);
+                    building.Value = null;
                     throw;
                 }
             }
         }
 
-        private SettingsState CaptureState() => new(EnableLocalDatabase, EnableRegistryMonitoring,
-            ExcludedExtensions, ExcludedKeys, ExcludedPaths, HashLimitMB, HeartbeatInterval,
-            CaptureQueueCapacity, WatcherBufferSizeKB, ScopeReresolutionInterval,
-            FileSystemSnapshotInterval, RegistrySnapshotInterval, ScopeHash, MonitoredKeys,
-            MonitoredPaths, excludedExtensionsPattern, excludedKeysPattern, excludedPathsPattern,
-            monitoredKeysPattern, monitoredPathsPattern, registryScopeMatcher);
-
-        private void RestoreState(SettingsState state)
-        {
-            EnableLocalDatabase = state.EnableLocalDatabase;
-            EnableRegistryMonitoring = state.EnableRegistryMonitoring;
-            ExcludedExtensions = state.ExcludedExtensions;
-            ExcludedKeys = state.ExcludedKeys;
-            ExcludedPaths = state.ExcludedPaths;
-            HashLimitMB = state.HashLimitMB;
-            HeartbeatInterval = state.HeartbeatInterval;
-            CaptureQueueCapacity = state.CaptureQueueCapacity;
-            WatcherBufferSizeKB = state.WatcherBufferSizeKB;
-            ScopeReresolutionInterval = state.ScopeReresolutionInterval;
-            FileSystemSnapshotInterval = state.FileSystemSnapshotInterval;
-            RegistrySnapshotInterval = state.RegistrySnapshotInterval;
-            ScopeHash = state.ScopeHash;
-            MonitoredKeys = state.MonitoredKeys;
-            MonitoredPaths = state.MonitoredPaths;
-            excludedExtensionsPattern = state.ExcludedExtensionsPattern;
-            excludedKeysPattern = state.ExcludedKeysPattern;
-            excludedPathsPattern = state.ExcludedPathsPattern;
-            monitoredKeysPattern = state.MonitoredKeysPattern;
-            monitoredPathsPattern = state.MonitoredPathsPattern;
-            registryScopeMatcher = state.RegistryScopeMatcher;
-        }
-
-        private sealed record SettingsState(bool EnableLocalDatabase, bool EnableRegistryMonitoring,
-            string[] ExcludedExtensions, string[] ExcludedKeys, string[] ExcludedPaths,
-            int HashLimitMB, int HeartbeatInterval, int CaptureQueueCapacity, int WatcherBufferSizeKB,
-            int ScopeReresolutionInterval, int FileSystemSnapshotInterval, int RegistrySnapshotInterval,
-            string ScopeHash, string[] MonitoredKeys, string[] MonitoredPaths,
-            Regex? ExcludedExtensionsPattern, Regex? ExcludedKeysPattern, Regex? ExcludedPathsPattern,
-            Regex MonitoredKeysPattern, Regex MonitoredPathsPattern, RegistryScopeMatcher RegistryScopeMatcher);
+        private EffectiveSettings ReadState() => building.Value ?? Volatile.Read(ref current);
+        private EffectiveSettings WriteState() => building.Value ?? throw new InvalidOperationException("Settings can only be changed while building a generation.");
 
         private ParallelQuery<string> FilterMonitoredPaths(IEnumerable<string> paths) => from path in paths.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
-                                                                                         where monitoredPathsPattern!.IsMatch(path)
+                                                                                         where ReadState().MonitoredPathsPattern.IsMatch(path)
                                                                                          select path;
 
         private ParallelQuery<string> FilterOutExcludedExtensions(ParallelQuery<string> matches)
         {
-            if (excludedExtensionsPattern == null)
+            var pattern = ReadState().ExcludedExtensionsPattern;
+            if (pattern == null)
             {
                 return matches;
             }
             return from path in matches.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
-                   where !excludedExtensionsPattern.IsMatch(path)
+                   where !pattern.IsMatch(path)
                    select path;
         }
 
         private ParallelQuery<string> FilterOutExcludedPaths(ParallelQuery<string> matches)
         {
-            if (excludedPathsPattern == null)
+            var pattern = ReadState().ExcludedPathsPattern;
+            if (pattern == null)
             {
                 return matches;
             }
             return from path in matches.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
-                   where !excludedPathsPattern.IsMatch(path)
+                   where !pattern.IsMatch(path)
                    select path;
         }
 
@@ -414,7 +376,7 @@ namespace WinFIMLog
                 .Select(FileSystem.ResolveWildcardPath) // Resolve wildcard in paths like "%SYSTEMDRIVE%\\Users\\*\\Downloads"
                 .SelectMany(x => x) // Flatten the list of paths, as resolving wildcard ends up with a list of paths
                 .Order().ToArray();
-            monitoredPathsPattern = GenerateMonitoredPathsPattern();
+            WriteState().MonitoredPathsPattern = GenerateMonitoredPathsPattern();
 
             var excludedPaths = Registry.ReadMultiStringValue("ExcludedPaths");
             if (!Registry.EffectiveValueExists("ExcludedPaths"))
@@ -444,7 +406,7 @@ namespace WinFIMLog
                 .Select(FileSystem.ResolveWildcardPath) // Resolve wildcard in paths like "%SYSTEMDRIVE%\\Users\\*\\Downloads"
                 .SelectMany(x => x) // Flatten the list of paths, as resolving wildcard ends up with a list of paths
                 .Order().ToArray();
-            excludedPathsPattern = GenerateExcludedPathsPattern();
+            WriteState().ExcludedPathsPattern = GenerateExcludedPathsPattern();
 
             var excludedExtensions = Registry.ReadMultiStringValue("ExcludedExtensions");
             if (!Registry.EffectiveValueExists("ExcludedExtensions"))
@@ -453,7 +415,7 @@ namespace WinFIMLog
                 Registry.WriteMultiStringValue("ExcludedExtensions", excludedExtensions);
             }
             ExcludedExtensions = excludedExtensions.Order().ToArray();
-            excludedExtensionsPattern = GenerateExcludedExtensionsPattern();
+            WriteState().ExcludedExtensionsPattern = GenerateExcludedExtensionsPattern();
 
             var registryMonitoring = Registry.ReadDwordValue("EnableRegistryMonitoring");
             if (registryMonitoring == -1)
@@ -537,7 +499,7 @@ namespace WinFIMLog
             var effectiveMonitoredKeys = monitoredKeys.ToList();
             ScopeIdentity.EnsureConfigurationKeysMonitored(effectiveMonitoredKeys);
             MonitoredKeys = effectiveMonitoredKeys.Order(StringComparer.OrdinalIgnoreCase).ToArray();
-            monitoredKeysPattern = GenerateMonitoredKeysPattern();
+            WriteState().MonitoredKeysPattern = GenerateMonitoredKeysPattern();
 
             var excludedKeys = Registry.ReadMultiStringValue("ExcludedKeys");
             if (!Registry.EffectiveValueExists("ExcludedKeys"))
@@ -546,10 +508,10 @@ namespace WinFIMLog
                 Registry.WriteMultiStringValue("ExcludedKeys", excludedKeys);
             }
             ExcludedKeys = excludedKeys.Order().ToArray();
-            excludedKeysPattern = ExcludedKeys.Length == 1 && ExcludedKeys[0]?.Length == 0 ? null : GenerateExcludedKeysPattern();
+            WriteState().ExcludedKeysPattern = ExcludedKeys.Length == 1 && ExcludedKeys[0]?.Length == 0 ? null : GenerateExcludedKeysPattern();
 
             ConfigurationValidator.Validate(monitoredPaths, excludedPaths, MonitoredKeys, ExcludedKeys);
-            registryScopeMatcher = new RegistryScopeMatcher(MonitoredKeys, ExcludedKeys);
+            WriteState().RegistryScopeMatcher = new RegistryScopeMatcher(MonitoredKeys, ExcludedKeys);
 
             ScopeHash = ScopeIdentity.Compute(MonitoredPaths, ExcludedPaths, ExcludedExtensions, MonitoredKeys, ExcludedKeys);
 

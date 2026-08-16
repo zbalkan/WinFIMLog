@@ -32,7 +32,16 @@ namespace WinFIMLog.Events
         public static bool IsSupported(int schemaVersion) => schemaVersion == CurrentSchemaVersion;
     }
 
+    // Fields is intentionally open-ended, so source generation cannot discover the
+    // boxed scalar types that are assigned to it at runtime. Keep every scalar used
+    // by event producers in the context; otherwise serialization fails when the
+    // object converter encounters (for example) a boxed Int64 health metric.
     [JsonSerializable(typeof(EventContract))]
+    [JsonSerializable(typeof(long))]
+    [JsonSerializable(typeof(double))]
+    [JsonSerializable(typeof(int))]
+    [JsonSerializable(typeof(ushort))]
+    [JsonSerializable(typeof(ulong))]
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
     internal partial class EventJsonContext : JsonSerializerContext { }
 }

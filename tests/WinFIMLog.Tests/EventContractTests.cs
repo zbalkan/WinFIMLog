@@ -38,6 +38,28 @@ public sealed class EventContractTests
         Assert.AreEqual(expected, EventContract.IsSupported(version));
 
     [TestMethod]
+    public void Fields_support_all_numeric_scalar_types_used_by_event_producers()
+    {
+        var record = EventContract.Create(7790, "Health", "01TEST", "sha256:test",
+            new Dictionary<string, object?>
+            {
+                ["long"] = 42L,
+                ["double"] = 1.5D,
+                ["int"] = 7,
+                ["ushort"] = (ushort)7790,
+                ["ulong"] = 123UL
+            });
+
+        using var json = JsonDocument.Parse(record.ToJson());
+        var fields = json.RootElement.GetProperty("fields");
+        Assert.AreEqual(42L, fields.GetProperty("long").GetInt64());
+        Assert.AreEqual(1.5D, fields.GetProperty("double").GetDouble());
+        Assert.AreEqual(7, fields.GetProperty("int").GetInt32());
+        Assert.AreEqual(7790, fields.GetProperty("ushort").GetUInt16());
+        Assert.AreEqual(123UL, fields.GetProperty("ulong").GetUInt64());
+    }
+
+    [TestMethod]
     public void Every_record_type_has_its_required_machine_readable_fields()
     {
         AssertFields("FileSystemFinding", "category", "path", "objectType", "attributionStatus");

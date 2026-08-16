@@ -36,15 +36,30 @@ namespace WinFIMLog
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
 
-        private void Cleanup()
+        private async Task CleanupAsync(Task? fileSystemDiscoveryTask, Task? registryMonitorTask)
         {
-            // Cleanup members here
             _fsMonitor.Stop();
-            _fsMonitor.Dispose();
 
             if (_settings.EnableRegistryMonitoring)
             {
                 _regMonitor.Stop();
+            }
+
+            try
+            {
+                if (fileSystemDiscoveryTask != null)
+                {
+                    await fileSystemDiscoveryTask;
+                }
+
+                if (registryMonitorTask != null)
+                {
+                    await registryMonitorTask;
+                }
+            }
+            finally
+            {
+                _fsMonitor.Dispose();
                 _regMonitor.Dispose();
             }
         }
@@ -53,17 +68,22 @@ namespace WinFIMLog
         // Reference: https://blog.stephencleary.com/2020/05/backgroundservice-gotcha-startup.html
         private async Task ExecutableTask(CancellationToken stoppingToken)
         {
+            Task? fileSystemDiscoveryTask = null;
+            Task? registryMonitorTask = null;
+
             try
             {
                 if (_settings.EnableLocalDatabase && !_settings.IsFileDiscoveryCompleted)
                 {
-                    _ = StartFilesystemDiscoveryAsync(stoppingToken);
+                    fileSystemDiscoveryTask = StartFilesystemDiscoveryAsync(stoppingToken);
                 }
                 _fsMonitor.Start();
 
                 if (_settings.EnableRegistryMonitoring)
                 {
-                    _regMonitor.Start();
+                    // TraceEventSource.Process is synchronous and blocks until the ETW session is
+                    // stopped. Run it independently so heartbeat and host cancellation can proceed.
+                    registryMonitorTask = Task.Run(_regMonitor.Start, CancellationToken.None);
                 }
 
                 if (_settings.HeartbeatInterval <= 0)
@@ -83,7 +103,7 @@ namespace WinFIMLog
             }
             finally
             {
-                Cleanup();
+                await CleanupAsync(fileSystemDiscoveryTask, registryMonitorTask);
             }
         }
 

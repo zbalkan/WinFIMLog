@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
@@ -26,13 +25,15 @@ namespace WinFIMLog.Jobs
     {
         private const string ETWSessionName = "RegistryWatcher";
 
-        private const double MonitorTimeInSeconds = 0.2;
+        private const int SessionBufferSizeMegabytes = 64;
+
+        private const int SessionBufferQuantumKilobytes = 256;
+
+        private const string TraceEventBufferQuantumFieldName = "m_BufferQuantumKB";
 
         private const NtKeywords TraceFlags = NtKeywords.Registry;
 
         private readonly CancellationTokenSource _cancellationTokenSource;
-
-        private readonly List<RegistryChange> _changes;
 
         private readonly ILogger _logger;
 
@@ -44,6 +45,10 @@ namespace WinFIMLog.Jobs
 
         private readonly ObjectPool<StringBuilder> _sbPool = new DefaultObjectPoolProvider().CreateStringBuilderPool();
 
+        private readonly object _sessionLock = new();
+
+        private TraceEventSession? _session;
+
         private bool _disposedValue;
 
         public RegistryMonitorJob(ILogger logger, IBuffer<RegistryChange> regStore, Settings settings)
@@ -52,7 +57,6 @@ namespace WinFIMLog.Jobs
             _pid = Environment.ProcessId;
             _cancellationTokenSource = new CancellationTokenSource();
             _messageStore = regStore;
-            _changes = new List<RegistryChange>();
             _settings = settings;
         }
 
@@ -68,51 +72,102 @@ namespace WinFIMLog.Jobs
             // No baseline database for registry keys
             CleanupExistingSession();
 
-            _logger.LogInformation("Started ETW session 'RegistryWatcher' for Registry changes.");
-
-            while (!_cancellationTokenSource.IsCancellationRequested)
+            if (_cancellationTokenSource.IsCancellationRequested)
             {
-                var session = new TraceEventSession(ETWSessionName, null);
+                return;
+            }
+
+            using var session = CreateSession();
+            lock (_sessionLock)
+            {
+                _session = session;
+            }
+
+            try
+            {
+                using var cancellationRegistration = _cancellationTokenSource.Token.Register(() => session.Stop());
+                _logger.LogInformation("Started ETW session '{SessionName}' for Registry changes.", ETWSessionName);
+                session.Source.Process();
+
+                if (session.Source.EventsLost > 0)
+                {
+                    _logger.LogWarning(
+                        "ETW session '{SessionName}' lost {EventsLost} events. Consider reducing the monitored registry scope.",
+                        ETWSessionName,
+                        session.Source.EventsLost);
+                }
+            }
+            finally
+            {
+                lock (_sessionLock)
+                {
+                    if (ReferenceEquals(_session, session))
+                    {
+                        _session = null;
+                    }
+                }
+            }
+        }
+
+        private TraceEventSession CreateSession()
+        {
+            var session = new TraceEventSession(ETWSessionName)
+            {
+                StopOnDispose = true,
+                BufferSizeMB = SessionBufferSizeMegabytes
+            };
+
+            ConfigureBufferSize(session);
+
+            try
+            {
                 session.EnableKernelProvider(TraceFlags);
                 MakeKernelParserStateless(session.Source);
 
                 session.Source.Kernel.RegistryKCBRundownEnd += UpdateCache;
-
+                session.Source.Kernel.RegistryKCBCreate += UpdateCache;
                 session.Source.Kernel.RegistryCreate += ProcessEvent;
                 session.Source.Kernel.RegistryDelete += ProcessEvent;
                 session.Source.Kernel.RegistrySetValue += ProcessEvent;
                 session.Source.Kernel.RegistryDeleteValue += ProcessEvent;
                 session.Source.Kernel.RegistrySetInformation += ProcessEvent;
-
-                using (session)
-                {
-                    var timer = new Timer((object? _) => session!.Stop(), null, (int)(MonitorTimeInSeconds * 1000), Timeout.Infinite);
-                    session.Source.Process();
-                }
-
-                try
-                {
-                    _messageStore.AddRange(_changes);
-                    _changes.Clear();
-                }
-                catch (Exception ex)
-                {
-                    ex.Log(_logger);
-                }
-
-                session.Stop();
+                return session;
+            }
+            catch
+            {
                 session.Dispose();
+                throw;
             }
         }
 
-        private void UpdateCache(RegistryTraceData data) => Cached<string>.Save(data.KeyHandle, data.KeyName, TimeSpan.FromSeconds(MonitorTimeInSeconds * 2));
+        private static void ConfigureBufferSize(TraceEventSession session)
+        {
+            var field = typeof(TraceEventSession).GetField(
+                TraceEventBufferQuantumFieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            field?.SetValue(session, SessionBufferQuantumKilobytes);
+        }
+
+        private static void UpdateCache(RegistryTraceData data) =>
+            Cached<string>.Save(data.KeyHandle, data.KeyName, TimeSpan.FromHours(1));
 
         /// <summary>
         ///     Stop monitoring selected Registry keys
         /// </summary>
         /// <exception cref="AggregateException">
         /// </exception>
-        public void Stop() => _cancellationTokenSource.Cancel();
+        public void Stop()
+        {
+            _cancellationTokenSource.Cancel();
+
+            TraceEventSession? session;
+            lock (_sessionLock)
+            {
+                session = _session;
+            }
+
+            session?.Stop();
+        }
 
         private void CleanupExistingSession()
         {
@@ -121,8 +176,10 @@ namespace WinFIMLog.Jobs
                 var activeSessions = TraceEventSession.GetActiveSessionNames();
                 if (activeSessions.Contains(ETWSessionName))
                 {
-                    using var session = new TraceEventSession(ETWSessionName);
-                    session.Stop();
+                    using var session = new TraceEventSession(ETWSessionName, TraceEventSessionOptions.Attach)
+                    {
+                        StopOnDispose = true
+                    };
                     _logger.LogInformation("Cleaned up lingering ETW session 'RegistryWatcher' from a previous run.");
                 }
             }
@@ -216,7 +273,7 @@ namespace WinFIMLog.Jobs
                     Debug.WriteLine($"Processing event: {ev.EventName} for {keyName}");
                     var change = new RegistryChange(ev, keyName);
 
-                    _changes.Add(change);
+                    _messageStore.Add(change);
                 }
             }
             catch (Exception ex)
@@ -250,6 +307,7 @@ namespace WinFIMLog.Jobs
             {
                 if (disposing)
                 {
+                    Stop();
                     _cancellationTokenSource.Dispose();
                 }
 

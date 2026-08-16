@@ -10,7 +10,7 @@ Yes, we need a better name.
 
 ## Usage
 
-1. Install the service using `IntegrityService.msi`.
+1. Publish the service and install it with `IntegrityService.exe install`.
 2. The default values will be written to Registry.
 3. The filesystem monitoring will always be started.
 4. If the database is not disabled, and there is not a completed filesystem discovery, a filesystem discovery will be started.
@@ -199,39 +199,58 @@ Event logs IDs are taken from [WINFIM.NET](https://github.com/redblueteam/WinFIM
 
 ## Installation
 
-### MSI package installation
+### Self-installing service executable
 
-Use the `IntegrityService.Installer.msi` file to install. This is specifically used for ease of deployment. It will install the service with an automatic start setting. It does not start the service immediately. It is up to the administrators to let it start on next boot or an immediate start.
+IntegrityService now follows a Sysmon-like self-installer pattern: publish the service, copy or run the published `IntegrityService.exe` on the target host, and let the executable create or remove its own Windows Service registration. This avoids the old WiX/MSI project and keeps deployment to a single published application folder.
 
-### Details
+Publish the self-contained Windows build first:
 
-The second project called `IntegrityService.Installer` is a Wix project to create the uninstaller. Currently, it seeks for a single-file executable in path ".\publish\", which is the Publish path in my profile. You just need to change it to match yours.
+```powershell
+dotnet publish .\IntegrityService\IntegrityService.csproj `
+  --configuration Release `
+  --runtime win-x64 `
+  --self-contained true `
+  --output .\publish\win-x64 `
+  /p:PublishSingleFile=true `
+  /p:PublishReadyToRun=true `
+  /p:EnableCompressionInSingleFile=true
+```
 
-### Suggested `PublishProfile.pubxml` setup
+Install or update the service from an elevated PowerShell prompt:
 
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<!--
-https://go.microsoft.com/fwlink/?LinkID=208121.
--->
-<Project>
-  <PropertyGroup>
-    <Configuration>Release</Configuration>
-    <Platform>Any CPU</Platform>
-    <PublishDir>..\publish\</PublishDir>
-    <PublishProtocol>FileSystem</PublishProtocol>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>true</SelfContained>
-    <PublishSingleFile>true</PublishSingleFile>
-    <PublishReadyToRun>true</PublishReadyToRun>
-  </PropertyGroup>
-</Project>
+```powershell
+.\publish\win-x64\IntegrityService.exe install
+```
+
+To start the service immediately after installation, add `--start`:
+
+```powershell
+.\publish\win-x64\IntegrityService.exe install --start
+```
+
+The default install directory is `%ProgramFiles%\FIM`. Override it when needed:
+
+```powershell
+.\publish\win-x64\IntegrityService.exe install --install-dir 'C:\Program Files\FIM'
+```
+
+### Uninstall
+
+Run the self-installer from an elevated PowerShell prompt to stop and delete the service:
+
+```powershell
+.\publish\win-x64\IntegrityService.exe uninstall
+```
+
+Add `--remove-files` to remove the installed application directory as well. If you run uninstall from inside the install directory, delete the remaining executable after the command exits.
+
+```powershell
+.\publish\win-x64\IntegrityService.exe uninstall --remove-files
 ```
 
 ## Development
 
-You need to have .NET 8 for the service. The installer project requires Wix Toolset, and that requires enabling .NET 3.5 on development machine.
+You need .NET 8 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish IntegrityService release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
 
 ## Special thanks to:
 

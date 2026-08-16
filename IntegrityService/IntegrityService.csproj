@@ -10,9 +10,6 @@
         <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
         <PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <AssemblyVersion>0.2.0</AssemblyVersion>
-        <FileVersion>$(AssemblyVersion)</FileVersion>
-        <Version>$(AssemblyVersion)</Version>
         <PublishTrimmed>True</PublishTrimmed>
         <EnableTrimAnalyzer>True</EnableTrimAnalyzer>
     </PropertyGroup>

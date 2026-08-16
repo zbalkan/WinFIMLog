@@ -10,8 +10,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
-Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "IntegrityService.Installer", "IntegrityService.Installer\IntegrityService.Installer.wixproj", "{4C83F284-705E-4D80-91D6-0619E8B5FE92}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NtfsReader", "NtfsReader\NtfsReader.csproj", "{B8FD37C4-EA38-479B-8067-9FF2925416E4}"
 EndProject
 Global
@@ -30,14 +28,6 @@ Global
 		{FBD1734D-675E-4AED-AB12-1A7DA731A99A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{FBD1734D-675E-4AED-AB12-1A7DA731A99A}.Release|x86.ActiveCfg = Release|Any CPU
 		{FBD1734D-675E-4AED-AB12-1A7DA731A99A}.Release|x86.Build.0 = Release|Any CPU
-		{4C83F284-705E-4D80-91D6-0619E8B5FE92}.Debug|Any CPU.ActiveCfg = Debug|x86
-		{4C83F284-705E-4D80-91D6-0619E8B5FE92}.Debug|Any CPU.Build.0 = Debug|x86
-		{4C83F284-705E-4D80-91D6-0619E8B5FE92}.Debug|x86.ActiveCfg = Debug|x86
-		{4C83F284-705E-4D80-91D6-0619E8B5FE92}.Debug|x86.Build.0 = Debug|x86
-		{4C83F284-705E-4D80-91D6-0619E8B5FE92}.Release|Any CPU.ActiveCfg = Release|x86
-		{4C83F284-705E-4D80-91D6-0619E8B5FE92}.Release|Any CPU.Build.0 = Release|x86
-		{4C83F284-705E-4D80-91D6-0619E8B5FE92}.Release|x86.ActiveCfg = Release|x86
-		{4C83F284-705E-4D80-91D6-0619E8B5FE92}.Release|x86.Build.0 = Release|x86
 		{B8FD37C4-EA38-479B-8067-9FF2925416E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B8FD37C4-EA38-479B-8067-9FF2925416E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B8FD37C4-EA38-479B-8067-9FF2925416E4}.Debug|x86.ActiveCfg = Debug|Any CPU

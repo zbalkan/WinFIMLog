@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using FastCache;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.Data;
@@ -12,6 +12,8 @@ namespace WinFIMLog.Jobs
 {
     internal sealed class FileSystemEnrichmentWorker : BackgroundService
     {
+        private static readonly TimeSpan DuplicateWindow = TimeSpan.FromSeconds(5);
+        private readonly ConcurrentDictionary<string, (string Fingerprint, DateTime ExpiresUtc)> _recentChanges = new();
         private readonly FileSystemCaptureQueue _capture;
         private readonly ILiteDbContext _context;
         private readonly IBuffer<FileSystemChange> _output;
@@ -100,7 +102,11 @@ namespace WinFIMLog.Jobs
             }
 
             var fingerprint = $"{change.ChangeCategory}\0{change.ObjectType}\0{change.CurrentHash}\0{change.ACLs}";
-            var duplicate = Cached<string>.TryGet(change.FullPath, out var cached) && cached == fingerprint;
+            var now = DateTime.UtcNow;
+            var duplicate = _recentChanges.TryGetValue(change.FullPath, out var cached) &&
+                cached.ExpiresUtc > now && cached.Fingerprint == fingerprint;
+            if (cached.ExpiresUtc <= now)
+                _recentChanges.TryRemove(change.FullPath, out _);
             var changed = change.ChangeCategory is ChangeCategory.Created or ChangeCategory.Deleted || previous == null ||
                 change.ObjectType != previous.ObjectType ||
                 !string.Equals(change.CurrentHash, previous.CurrentHash, StringComparison.OrdinalIgnoreCase) ||
@@ -108,7 +114,7 @@ namespace WinFIMLog.Jobs
             if (changed && !duplicate)
             {
                 await _output.Add(change);
-                Cached<string>.Save(raw.FullPath, fingerprint, TimeSpan.FromSeconds(5));
+                _recentChanges[raw.FullPath] = (fingerprint, now + DuplicateWindow);
             }
         }
 

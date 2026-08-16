@@ -1,11 +1,9 @@
 using System;
 using System.Diagnostics;
-using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using FastCache;
 using WinFIMLog.FIM;
 using WinFIMLog.Utils;
 using Microsoft.Diagnostics.Tracing;
@@ -29,10 +27,6 @@ namespace WinFIMLog.Jobs
 
         private const int SessionBufferSizeMegabytes = 64;
 
-        private const int SessionBufferQuantumKilobytes = 256;
-
-        private const string TraceEventBufferQuantumFieldName = "m_BufferQuantumKB";
-
         private const NtKeywords TraceFlags = NtKeywords.Registry;
 
         private readonly ILogger _logger;
@@ -47,6 +41,8 @@ namespace WinFIMLog.Jobs
         private readonly ObjectPool<StringBuilder> _sbPool = new DefaultObjectPoolProvider().CreateStringBuilderPool();
 
         private readonly object _sessionLock = new();
+
+        private readonly RegistryKcbCache _keyCache = new();
 
         private TraceEventSession? _session;
         private long _reportedEventsLost;
@@ -65,10 +61,6 @@ namespace WinFIMLog.Jobs
         /// <summary>
         ///     Start monitoring selected Registry keys
         /// </summary>
-        /// <exception cref="FieldAccessException">
-        /// </exception>
-        /// <exception cref="TargetException">
-        /// </exception>
         public Task RunAsync(CancellationToken cancellationToken) => RunAsync(cancellationToken, null);
 
         public async Task RunAsync(CancellationToken cancellationToken, Action? sourceStarted)
@@ -109,21 +101,21 @@ namespace WinFIMLog.Jobs
                 BufferSizeMB = SessionBufferSizeMegabytes
             };
 
-            ConfigureBufferSize(session);
-
             try
             {
                 session.EnableKernelProvider(TraceFlags);
-                MakeKernelParserStateless(session.Source);
+                var kernel = new KernelTraceEventParser(
+                    session.Source,
+                    KernelTraceEventParser.ParserTrackingOptions.None);
 
-                session.Source.Kernel.RegistryKCBRundownEnd += UpdateCache;
-                session.Source.Kernel.RegistryKCBCreate += UpdateCache;
-                session.Source.Kernel.RegistryKCBDelete += DeleteCache;
-                session.Source.Kernel.RegistryCreate += ProcessEvent;
-                session.Source.Kernel.RegistryDelete += ProcessEvent;
-                session.Source.Kernel.RegistrySetValue += ProcessEvent;
-                session.Source.Kernel.RegistryDeleteValue += ProcessEvent;
-                session.Source.Kernel.RegistrySetInformation += ProcessEvent;
+                kernel.RegistryKCBRundownEnd += UpdateCache;
+                kernel.RegistryKCBCreate += UpdateCache;
+                kernel.RegistryKCBDelete += DeleteCache;
+                kernel.RegistryCreate += ProcessEvent;
+                kernel.RegistryDelete += ProcessEvent;
+                kernel.RegistrySetValue += ProcessEvent;
+                kernel.RegistryDeleteValue += ProcessEvent;
+                kernel.RegistrySetInformation += ProcessEvent;
                 return session;
             }
             catch
@@ -133,23 +125,11 @@ namespace WinFIMLog.Jobs
             }
         }
 
-        private static void ConfigureBufferSize(TraceEventSession session)
-        {
-            var field = typeof(TraceEventSession).GetField(
-                TraceEventBufferQuantumFieldName,
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            if (field == null)
-                throw new MissingFieldException(typeof(TraceEventSession).FullName, TraceEventBufferQuantumFieldName);
-            field.SetValue(session, SessionBufferQuantumKilobytes);
-        }
+        private void UpdateCache(RegistryTraceData data) =>
+            _keyCache.Update(data.KeyHandle, data.KeyName);
 
-        private static void UpdateCache(RegistryTraceData data) =>
-            Cached<string>.Save(data.KeyHandle, data.KeyName, TimeSpan.FromHours(1));
-
-        private static void DeleteCache(RegistryTraceData data) =>
-            // FastCache has no removal API. Replacing the binding with an immediately expiring
-            // value prevents a reused KCB handle being resolved to its deleted path.
-            Cached<string>.Save(data.KeyHandle, string.Empty, TimeSpan.FromTicks(1));
+        private void DeleteCache(RegistryTraceData data) =>
+            _keyCache.Remove(data.KeyHandle);
 
         private void ReportEventLoss(TraceEventSession session)
         {
@@ -157,6 +137,9 @@ namespace WinFIMLog.Jobs
             var previous = Interlocked.Exchange(ref _reportedEventsLost, total);
             if (total > previous)
             {
+                // Loss can include a KCB delete. Discard potentially stale handle bindings;
+                // the snapshot requested below is the authoritative recovery path.
+                _keyCache.Clear();
                 _logger.LogError(7791, "COVERAGE GAP Source=RegistryETW Scope=ConfiguredRegistryKeys Reason=EventsLost LostCount={LostCount}", total - previous);
                 _snapshots.RequestRegistrySnapshot("Registry ETW events lost", "ConfiguredRegistryKeys");
             }
@@ -194,7 +177,7 @@ namespace WinFIMLog.Jobs
 
             var fullNameBuilder = _sbPool.Get();
 
-            if (keyHandle != 0 && Cached<string>.TryGet(keyHandle, out var keyName))
+            if (keyHandle != 0 && _keyCache.TryGet(keyHandle, out var keyName))
             {
                 fullNameBuilder.Append(keyName);
             }
@@ -233,32 +216,6 @@ namespace WinFIMLog.Jobs
             }
 
             return configuration.IsMonitoredKey(keyName);
-        }
-
-        /// <summary>
-        ///     Prepare ETW parser
-        /// </summary>
-        /// <param name="traceSessionSource">
-        ///     WTW trace event source to listen
-        /// </param>
-        private void MakeKernelParserStateless(ETWTraceEventSource traceSessionSource)
-        {
-            try
-            {
-                ArgumentNullException.ThrowIfNull(traceSessionSource);
-
-                const KernelTraceEventParser.ParserTrackingOptions options = KernelTraceEventParser.ParserTrackingOptions.None;
-                var kernelParser = new KernelTraceEventParser(traceSessionSource, options);
-
-                var kernelField = typeof(ETWTraceEventSource).GetField("_Kernel", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (kernelField == null)
-                    throw new MissingFieldException(typeof(ETWTraceEventSource).FullName, "_Kernel");
-                kernelField.SetValue(traceSessionSource, kernelParser);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during Kernel parser stateless configuration.");
-            }
         }
 
         private void ProcessEvent(RegistryTraceData ev)

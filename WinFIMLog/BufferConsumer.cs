@@ -8,7 +8,6 @@
 
 using System;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using WinFIMLog.Data;
@@ -69,8 +68,8 @@ namespace WinFIMLog
 
                 if (_settings.EnableLocalDatabase)
                 {
-                    _ = _ctx.FileSystemChanges.InsertBulk(fsChanges.Select(m => m));
-                    Debug.WriteLine($"Succesfully inserted {fsCount} items.");
+                    _ = _ctx.FileSystemChanges.Upsert(fsChanges);
+                    Debug.WriteLine($"Successfully persisted {fsCount} items.");
                 }
 
                 foreach (var change in fsChanges)
@@ -97,8 +96,8 @@ namespace WinFIMLog
 
                 if (_settings.EnableLocalDatabase)
                 {
-                    _ = _ctx.RegistryChanges.InsertBulk(regChanges.Select(m => m));
-                    Debug.WriteLine($"Succesfully inserted {regCount} items.");
+                    _ = _ctx.RegistryChanges.Upsert(regChanges);
+                    Debug.WriteLine($"Successfully persisted {regCount} items.");
                 }
 
                 foreach (var change in regChanges)

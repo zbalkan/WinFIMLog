@@ -1,0 +1,12 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
+  <Project Path="src/NtfsReader/NtfsReader.csproj" />
+  <Project Path="src/WinFIMLog/WinFIMLog.csproj" />
+  <Project Path="tests/WinFIMLog.Tests/WinFIMLog.Tests.csproj" />
+</Solution>

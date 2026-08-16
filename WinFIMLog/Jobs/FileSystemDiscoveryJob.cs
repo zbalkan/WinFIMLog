@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using WinFIMLog.Data;
 using WinFIMLog.FIM;
@@ -102,8 +104,10 @@ namespace WinFIMLog.Jobs
             sw.Restart();
             var initialCount = filtered.Count;
 
-            // TODO: Find an easier way to filter out. This takes too much time.
-            var filteredOut = filtered.RemoveAll(x => _ctx.FileSystemChanges.Exists(c => c.Entity.Equals(x)));
+            var existing = new HashSet<string>(
+                _ctx.FileSystemChanges.FindAll().Select(change => change.Entity),
+                StringComparer.OrdinalIgnoreCase);
+            var filteredOut = filtered.RemoveAll(existing.Contains);
             sw.Stop();
             Debug.WriteLine("Filtering out completed: {0}", sw.Elapsed);
             if (filteredOut > 0)

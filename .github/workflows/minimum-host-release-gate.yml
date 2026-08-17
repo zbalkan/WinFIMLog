@@ -9,7 +9,7 @@ permissions:
 jobs:
   operational:
     # Operations supplies a persistent Windows Server 2019 runner with this label.
-    runs-on: [self-hosted, windows, winfimlog-minimum-host]
+    runs-on: [windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6

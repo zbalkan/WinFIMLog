@@ -118,7 +118,7 @@ namespace WinFIMLog.Snapshots
                 return false;
             }
             var baseline = repository.Begin(BaselineSource.Registry, configuration.ScopeHash,
-                SourceIdentityProvider.RegistryResolved(resolvedRoots), algorithmVersion: "registry-v1");
+                SourceIdentityProvider.RegistryResolved(resolvedRoots), algorithmVersion: "registry-v2");
             baseline.ConsistencyMethod = "ResolvedLoadedHiveManifest";
             baseline.ObservationPasses = 1;
             try

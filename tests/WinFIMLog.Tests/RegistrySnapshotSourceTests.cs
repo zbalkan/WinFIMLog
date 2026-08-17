@@ -10,6 +10,32 @@ namespace WinFIMLog.Tests;
 public sealed class RegistrySnapshotSourceTests
 {
     [TestMethod]
+    public void ResolveRoots_removes_duplicate_and_descendant_roots()
+    {
+        var roots = RegistrySnapshotSource.ResolveRoots([
+            @"HKEY_LOCAL_MACHINE\Software\Vendor\Product",
+            @"HKEY_LOCAL_MACHINE\Software",
+            @"hkey_local_machine\software\",
+            @"HKEY_USERS\S-1-5-18\Software"
+        ]);
+
+        Assert.AreSequenceEqual([
+            @"HKEY_LOCAL_MACHINE\Software",
+            @"HKEY_USERS\S-1-5-18\Software"
+        ], roots);
+    }
+
+    [TestMethod]
+    public void Key_and_value_at_the_same_path_have_distinct_identities()
+    {
+        var path = @"HKEY_LOCAL_MACHINE\Software\Vendor\Name";
+
+        Assert.AreNotEqual(
+            RegistrySnapshotSource.Identity(path, SnapshotNodeType.RegistryKey),
+            RegistrySnapshotSource.Identity(path, SnapshotNodeType.RegistryValue));
+    }
+
+    [TestMethod]
     public void Capture_records_typed_values_and_key_acl_evidence()
     {
         if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("Windows Registry required."); return; }

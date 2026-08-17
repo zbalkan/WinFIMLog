@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace WinFIMLog.Configuration
 {
@@ -13,7 +11,7 @@ namespace WinFIMLog.Configuration
         public const string PreferenceKey = @"HKEY_LOCAL_MACHINE\SOFTWARE\WinFIMLog";
 
         public static string Compute(IEnumerable<string> monitoredPaths, IEnumerable<string> excludedPaths,
-            IEnumerable<string> excludedExtensions, IEnumerable<string> monitoredKeys, IEnumerable<string> excludedKeys)
+             IEnumerable<string> excludedExtensions, IEnumerable<string> monitoredKeys, IEnumerable<string> excludedKeys)
         {
             var canonical = string.Join("\n", new[]
             {
@@ -21,7 +19,23 @@ namespace WinFIMLog.Configuration
                 Canonicalise("XE", excludedExtensions), Canonicalise("MK", monitoredKeys),
                 Canonicalise("XK", excludedKeys)
             });
-            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+
+            Span<byte> hash = stackalloc byte[32];
+            var byteCount = System.Text.Encoding.UTF8.GetByteCount(canonical);
+
+            if (byteCount <= 1024)
+            {
+                Span<byte> utf8Bytes = stackalloc byte[byteCount];
+                System.Text.Encoding.UTF8.GetBytes(canonical, utf8Bytes);
+                System.Security.Cryptography.SHA256.HashData(utf8Bytes, hash);
+            }
+            else
+            {
+                var utf8Bytes = System.Text.Encoding.UTF8.GetBytes(canonical);
+                System.Security.Cryptography.SHA256.HashData(utf8Bytes, hash);
+            }
+
+            return Convert.ToHexStringLower(hash);
         }
 
         public static void EnsureConfigurationKeysMonitored(ICollection<string> monitoredKeys)

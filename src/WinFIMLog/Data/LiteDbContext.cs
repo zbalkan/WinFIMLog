@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using WinFIMLog.FIM;
 using LiteDB;
 using Microsoft.Extensions.Options;
@@ -34,6 +35,8 @@ namespace WinFIMLog.Data
         ///     Hardcoded database file name is fim.db. Initial database size is set to 800MB for
         ///     performance reasons.
         /// </summary>
+        [DynamicDependency(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor,
+            typeof(EventOutboxRecord))]
         public LiteDbContext(IOptions<LiteDbOptions> options)
         {
             _database = new LiteDatabase(new ConnectionString()

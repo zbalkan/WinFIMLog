@@ -39,6 +39,15 @@ public sealed class EventOutboxTests
     }
 
     [TestMethod]
+    public void Outbox_records_have_the_constructor_required_by_LiteDB()
+    {
+        var constructor = typeof(EventOutboxRecord).GetConstructor(Type.EmptyTypes);
+
+        Assert.IsNotNull(constructor);
+        Assert.IsTrue(constructor.IsPublic);
+    }
+
+    [TestMethod]
     public void Projection_and_outbox_are_committed_atomically()
     {
         var record = Record("atomic");

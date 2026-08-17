@@ -32,7 +32,7 @@ namespace WinFIMLog.Jobs
                 if (string.IsNullOrWhiteSpace(item.Payload))
                 {
                     outbox.DiscardInvalid(item, "EmptyPayload");
-                    logger.LogError(
+                    logger.LogWarning(
                         "Event outbox record {RecordId} has an empty payload and was discarded",
                         item.Id);
                     continue;

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using LiteDB;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -105,8 +106,8 @@ public sealed class EventOutboxTests
             CreatedAt = DateTimeOffset.UtcNow,
             NextAttemptAt = DateTimeOffset.MinValue
         });
-        var publisher = new EventOutboxPublisher(outbox, new FailOnceWriter(),
-            NullLogger<EventOutboxPublisher>.Instance);
+        var logger = new RecordingLogger<EventOutboxPublisher>();
+        var publisher = new EventOutboxPublisher(outbox, new FailOnceWriter(), logger);
 
         Assert.IsTrue(publisher.PublishReady());
 
@@ -114,6 +115,7 @@ public sealed class EventOutboxTests
         Assert.IsNotNull(discarded.DeliveredAt);
         Assert.AreEqual(1, discarded.DeliveryAttempts);
         Assert.AreEqual("EmptyPayload", discarded.LastError);
+        Assert.AreSequenceEqual([LogLevel.Warning], logger.Levels);
         Assert.IsFalse(publisher.PublishReady());
     }
 
@@ -155,5 +157,17 @@ public sealed class EventOutboxTests
             _ = record.ToJson();
             if (fail) { fail = false; throw new IOException("fault injection"); }
         }
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogLevel> Levels { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Levels.Add(logLevel);
     }
 }

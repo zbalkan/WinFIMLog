@@ -59,7 +59,9 @@ namespace WinFIMLog
                     try
                     {
                         if (!ProcessChanges())
+                        {
                             await Task.Delay(TimeSpan.FromMilliseconds(100), stoppingToken);
+                        }
                     }
                     catch (Exception exception)
                     {
@@ -100,7 +102,9 @@ namespace WinFIMLog
             foreach (var change in changes)
             {
                 if (!latest.TryGetValue(change.Entity, out var current) || change.DateTime > current.DateTime)
+                {
                     latest[change.Entity] = change;
+                }
             }
 
             return latest.Values;
@@ -262,7 +266,10 @@ namespace WinFIMLog
                 {
                     last = exception;
                     _health.SinkFailure(sink, exception.GetType().Name, attempt);
-                    if (attempt < 3) Thread.Sleep(TimeSpan.FromMilliseconds(100 * (1 << (attempt - 1))));
+                    if (attempt < 3)
+                    {
+                        Thread.Sleep(TimeSpan.FromMilliseconds(100 * (1 << (attempt - 1))));
+                    }
                 }
             }
             throw new InvalidOperationException($"{sink} write failed after retries; batch was not acknowledged.", last);

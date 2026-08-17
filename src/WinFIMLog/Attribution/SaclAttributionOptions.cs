@@ -12,13 +12,36 @@ namespace WinFIMLog.Attribution
         public void Validate()
         {
             var count = FileScopes.Length + RegistryScopes.Length;
-            if (!Enabled) return;
-            if (count == 0) throw new InvalidOperationException("SACL attribution requires an explicit scope.");
-            if (count > 64) throw new InvalidOperationException("SACL attribution is limited to 64 explicit scopes.");
+            if (!Enabled)
+            {
+                return;
+            }
+
+            if (count == 0)
+            {
+                throw new InvalidOperationException("SACL attribution requires an explicit scope.");
+            }
+
+            if (count > 64)
+            {
+                throw new InvalidOperationException("SACL attribution is limited to 64 explicit scopes.");
+            }
+
             foreach (var scope in FileScopes)
-                if (scope.Contains('*')) throw new InvalidOperationException($"SACL file scope must not contain wildcards: {scope}");
+            {
+                if (scope.Contains('*'))
+                {
+                    throw new InvalidOperationException($"SACL file scope must not contain wildcards: {scope}");
+                }
+            }
+
             foreach (var scope in RegistryScopes)
-                if (scope.Contains('*')) throw new InvalidOperationException($"SACL registry scope must not contain wildcards: {scope}");
+            {
+                if (scope.Contains('*'))
+                {
+                    throw new InvalidOperationException($"SACL registry scope must not contain wildcards: {scope}");
+                }
+            }
         }
     }
 }

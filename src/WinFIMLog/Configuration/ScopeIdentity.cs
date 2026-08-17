@@ -35,13 +35,18 @@ namespace WinFIMLog.Configuration
             foreach (var exclusion in excludedKeys.Where(value => !string.IsNullOrWhiteSpace(value)))
             {
                 if (Covers(exclusion, PolicyKey) || Covers(exclusion, PreferenceKey))
+                {
                     throw new ConfigurationValidationException($"ExcludedKeys value '{exclusion}' covers the protected configuration key. Configuration keys cannot be excluded.");
+                }
             }
         }
 
         private static void AddIfMissing(ICollection<string> values, string value)
         {
-            if (!values.Contains(value, StringComparer.OrdinalIgnoreCase)) values.Add(value);
+            if (!values.Contains(value, StringComparer.OrdinalIgnoreCase))
+            {
+                values.Add(value);
+            }
         }
 
         private static string Canonicalise(string name, IEnumerable<string> values) => name + "=" +

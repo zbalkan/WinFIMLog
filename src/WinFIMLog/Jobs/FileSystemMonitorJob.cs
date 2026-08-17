@@ -44,7 +44,11 @@ namespace WinFIMLog.Jobs
             var desired = new HashSet<string>(configuration.MonitoredPaths, StringComparer.OrdinalIgnoreCase);
             lock (_watcherLock)
             {
-                if (_stopping) return;
+                if (_stopping)
+                {
+                    return;
+                }
+
                 foreach (var watcher in _watchers.ToArray())
                 {
                     if (desired.Contains(watcher.Path) &&
@@ -131,7 +135,11 @@ namespace WinFIMLog.Jobs
             var configuration = _settings.Capture();
             lock (_watcherLock)
             {
-                if (_stopping) return;
+                if (_stopping)
+                {
+                    return;
+                }
+
                 foreach (var path in configuration.MonitoredPaths)
                 {
                     var watcher = CreateWatcher(path, configuration);
@@ -149,19 +157,31 @@ namespace WinFIMLog.Jobs
 
         private void OnError(object sender, ErrorEventArgs e)
         {
-            if (sender is not FileSystemWatcher failed) return;
+            if (sender is not FileSystemWatcher failed)
+            {
+                return;
+            }
+
             string? scope = null;
             Exception? restartFailure = null;
             try
             {
                 lock (_watcherLock)
                 {
-                    if (_stopping || !_watchers.Contains(failed)) return;
+                    if (_stopping || !_watchers.Contains(failed))
+                    {
+                        return;
+                    }
+
                     scope = failed.Path;
                     _watchers.Remove(failed);
                     DisposeWatcher(failed);
                     var configuration = _settings.Capture();
-                    if (!configuration.MonitoredPaths.Contains(scope, StringComparer.OrdinalIgnoreCase)) return;
+                    if (!configuration.MonitoredPaths.Contains(scope, StringComparer.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
                     _watchers.Add(CreateWatcher(scope, configuration));
                 }
             }
@@ -170,7 +190,11 @@ namespace WinFIMLog.Jobs
                 restartFailure = exception;
             }
 
-            if (scope is null) return;
+            if (scope is null)
+            {
+                return;
+            }
+
             _health.CoverageGap("FileSystemWatcher", scope, e.GetException().GetType().Name);
             if (restartFailure is not null)
             { _health.CoverageGap("FileSystemWatcher", scope, $"RestartFailed:{restartFailure.GetType().Name}"); return; }
@@ -207,9 +231,17 @@ namespace WinFIMLog.Jobs
         {
             lock (_watcherLock)
             {
-                if (_stopping) return;
+                if (_stopping)
+                {
+                    return;
+                }
+
                 _stopping = true;
-                foreach (var watcher in _watchers) DisposeWatcher(watcher);
+                foreach (var watcher in _watchers)
+                {
+                    DisposeWatcher(watcher);
+                }
+
                 _watchers.Clear();
             }
         }

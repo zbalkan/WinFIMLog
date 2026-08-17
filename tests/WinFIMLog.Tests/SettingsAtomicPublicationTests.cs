@@ -25,7 +25,10 @@ public sealed class SettingsAtomicPublicationTests
                 observed.IsMonitoredPath(@"C:\A\evidence.txt") && !observed.IsMonitoredPath(@"C:\B\evidence.txt");
             var validB = observed.ScopeHash == "B" && observed.MonitoredPaths[0] == @"C:\B" &&
                 observed.IsMonitoredPath(@"C:\B\evidence.txt") && !observed.IsMonitoredPath(@"C:\A\evidence.txt");
-            if (!validA && !validB) mixed.Enqueue($"{observed.ScopeHash}:{observed.MonitoredPaths[0]}");
+            if (!validA && !validB)
+            {
+                mixed.Enqueue($"{observed.ScopeHash}:{observed.MonitoredPaths[0]}");
+            }
         });
 
         Assert.IsEmpty(mixed);

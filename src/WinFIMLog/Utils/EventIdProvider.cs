@@ -8,9 +8,15 @@ namespace WinFIMLog.Utils
     {
         public ushort ComputeEventId<TState>(LogLevel level, EventId eventId, TState state)
         {
-            if (eventId.Id is > 0 and <= ushort.MaxValue) return (ushort)eventId.Id;
+            if (eventId.Id is > 0 and <= ushort.MaxValue)
+            {
+                return (ushort)eventId.Id;
+            }
 
-            if (level == LogLevel.Error || level == LogLevel.Critical) return 7770;
+            if (level == LogLevel.Error || level == LogLevel.Critical)
+            {
+                return 7770;
+            }
 
             if (level == LogLevel.Information &&
                 state is IEnumerable<KeyValuePair<string, object?>> properties &&
@@ -37,7 +43,11 @@ namespace WinFIMLog.Utils
         {
             foreach (var property in properties)
             {
-                if (!string.Equals(property.Key, name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!string.Equals(property.Key, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 value = Convert.ToString(property.Value) ?? string.Empty;
                 return true;
             }

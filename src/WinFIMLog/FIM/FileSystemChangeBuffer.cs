@@ -23,7 +23,9 @@ namespace WinFIMLog.FIM
             // These batches are small and ConcurrentDictionary already synchronizes writes.
             // Avoid Parallel.ForEach's partitioning, work items, and delegates on this hot path.
             foreach (var change in changes)
+            {
                 store[change.Id] = change;
+            }
 
             return Task.CompletedTask;
         }

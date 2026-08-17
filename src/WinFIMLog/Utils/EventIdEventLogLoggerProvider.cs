@@ -25,10 +25,16 @@ namespace WinFIMLog.Utils
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
                 Exception? exception, Func<TState, Exception?, string> formatter)
             {
-                if (!IsEnabled(logLevel)) return;
+                if (!IsEnabled(logLevel))
+                {
+                    return;
+                }
 
                 var message = formatter(state, exception);
-                if (exception != null) message = $"{message}{Environment.NewLine}{exception}";
+                if (exception != null)
+                {
+                    message = $"{message}{Environment.NewLine}{exception}";
+                }
 
                 EnsureSource();
                 EventLog.WriteEntry(sourceName, message, EntryType(logLevel),
@@ -44,11 +50,17 @@ namespace WinFIMLog.Utils
 
             private void EnsureSource()
             {
-                if (EventLog.SourceExists(sourceName)) return;
+                if (EventLog.SourceExists(sourceName))
+                {
+                    return;
+                }
+
                 lock (sourceLock)
                 {
                     if (!EventLog.SourceExists(sourceName))
+                    {
                         EventLog.CreateEventSource(new EventSourceCreationData(sourceName, logName));
+                    }
                 }
             }
         }

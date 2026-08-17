@@ -77,7 +77,10 @@ namespace WinFIMLog.Data
 
         public bool ExecuteTransaction(Action action)
         {
-            lock (writeLock) return _database.BeginTrans() && Execute(action);
+            lock (writeLock)
+            {
+                return _database.BeginTrans() && Execute(action);
+            }
         }
 
         private void Dispose(bool disposing)

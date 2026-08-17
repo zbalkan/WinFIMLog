@@ -45,7 +45,10 @@ namespace WinFIMLog.Utils
 
         private static void RemoveExpiredEntries(DateTime now)
         {
-            if (Entries.Count < 1024) return;
+            if (Entries.Count < 1024)
+            {
+                return;
+            }
 
             foreach (var entry in Entries)
             {

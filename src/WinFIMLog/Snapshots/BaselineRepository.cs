@@ -47,14 +47,22 @@ namespace WinFIMLog.Snapshots
                 .ToList().Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
             foreach (var baseline in context.Baselines.Find(x => x.Source == completed.Source).ToList())
             {
-                if (keep.Contains(baseline.Id)) continue;
+                if (keep.Contains(baseline.Id))
+                {
+                    continue;
+                }
+
                 if (!context.ExecuteTransaction(() =>
                     context.BaselineMembers.DeleteMany(x => x.BaselineId == baseline.Id)))
                 {
                     throw new InvalidOperationException("Could not compact baseline members.");
                 }
 
-                if (context.ReconciliationResults.Exists(x => x.BaselineId == baseline.Id && x.DeliveredAt == null)) continue;
+                if (context.ReconciliationResults.Exists(x => x.BaselineId == baseline.Id && x.DeliveredAt == null))
+                {
+                    continue;
+                }
+
                 if (!context.ExecuteTransaction(() =>
                 {
                     context.ReconciliationResults.DeleteMany(x => x.BaselineId == baseline.Id);
@@ -82,7 +90,9 @@ namespace WinFIMLog.Snapshots
             baseline.Status = BaselineStatus.Invalid;
             baseline.InvalidReason = reason;
             if (!context.ExecuteTransaction(() => context.Baselines.Update(baseline)))
+            {
                 throw new InvalidOperationException("Could not commit invalid baseline state.");
+            }
         }
 
         public IReadOnlyList<BaselineMember> Members(string baselineId) =>
@@ -95,18 +105,24 @@ namespace WinFIMLog.Snapshots
             string? endCursor = null)
         {
             if (baseline.Status != BaselineStatus.Building)
+            {
                 throw new InvalidOperationException("Only a building baseline can be completed.");
+            }
 
             var materialised = members.ToList();
             if (materialised.GroupBy(x => x.Identity, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1))
+            {
                 throw new InvalidOperationException("A baseline cannot contain duplicate identities.");
+            }
 
             var previous = LatestComplete(baseline.Source, baseline.ScopeHash, baseline.SourceIdentity,
                 baseline.SchemaVersion, baseline.AlgorithmVersion);
             var results = Diff(baseline.Id, previous, materialised);
             baseline.Status = BaselineStatus.Reconciling;
             if (!context.ExecuteTransaction(() => context.Baselines.Update(baseline)))
+            {
                 throw new InvalidOperationException("Could not commit baseline reconciliation state.");
+            }
 
             // Stage members in bounded transactions so a large scan cannot monopolise
             // the single embedded writer. Only the final promotion makes them authoritative.
@@ -127,7 +143,11 @@ namespace WinFIMLog.Snapshots
 
             if (!context.ExecuteTransaction(() =>
             {
-                foreach (var result in results) context.ReconciliationResults.Insert(result);
+                foreach (var result in results)
+                {
+                    context.ReconciliationResults.Insert(result);
+                }
+
                 baseline.ItemCount = materialised.Count;
                 baseline.EndCursor = endCursor;
                 baseline.CompletedAt = DateTimeOffset.UtcNow;
@@ -146,7 +166,10 @@ namespace WinFIMLog.Snapshots
             IEnumerable<BaselineMember> convergedMembers)
         {
             if (baseline.Status != BaselineStatus.Building && baseline.Status != BaselineStatus.Reconciling)
+            {
                 throw new InvalidOperationException("The baseline is not being built.");
+            }
+
             baseline.Status = BaselineStatus.Building;
             return ReconcileAndComplete(baseline, convergedMembers);
         }
@@ -154,9 +177,15 @@ namespace WinFIMLog.Snapshots
         public void RecordDeliveryAttempt(ReconciliationResult result, bool delivered)
         {
             result.DeliveryAttempts++;
-            if (delivered) result.DeliveredAt = DateTimeOffset.UtcNow;
+            if (delivered)
+            {
+                result.DeliveredAt = DateTimeOffset.UtcNow;
+            }
+
             if (!context.ExecuteTransaction(() => context.ReconciliationResults.Update(result)))
+            {
                 throw new InvalidOperationException("Could not commit reconciliation delivery state.");
+            }
         }
 
         private static ReconciliationResult Result(string baselineId, string identity, ReconciliationChange change, string? oldPath,
@@ -173,7 +202,11 @@ namespace WinFIMLog.Snapshots
 
         private List<ReconciliationResult> Diff(string baselineId, BaselineMetadata? previous, List<BaselineMember> current)
         {
-            if (previous is null) return [];
+            if (previous is null)
+            {
+                return [];
+            }
+
             var before = Members(previous.Id).ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
             var after = current.ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
             var now = DateTimeOffset.UtcNow;
@@ -181,12 +214,19 @@ namespace WinFIMLog.Snapshots
             foreach (var pair in after)
             {
                 if (!before.TryGetValue(pair.Key, out var old))
+                {
                     output.Add(Result(baselineId, pair.Key, ReconciliationChange.Created, null, pair.Value.Path, previous.Id, now));
+                }
                 else if (!string.Equals(old.Fingerprint, pair.Value.Fingerprint, StringComparison.Ordinal))
+                {
                     output.Add(Result(baselineId, pair.Key, ReconciliationChange.Changed, old.Path, pair.Value.Path, previous.Id, now));
+                }
             }
             foreach (var pair in before.Where(x => !after.ContainsKey(x.Key)))
+            {
                 output.Add(Result(baselineId, pair.Key, ReconciliationChange.Deleted, pair.Value.Path, null, previous.Id, now));
+            }
+
             return output;
         }
 

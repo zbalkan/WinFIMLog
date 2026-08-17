@@ -17,7 +17,11 @@ namespace WinFIMLog.Snapshots
             for (var pass = 2; pass <= maximumPasses; pass++)
             {
                 var current = capture();
-                if (Equivalent(previous, current)) return (current, pass);
+                if (Equivalent(previous, current))
+                {
+                    return (current, pass);
+                }
+
                 previous = current;
             }
             throw new SnapshotUnstableException(
@@ -26,7 +30,11 @@ namespace WinFIMLog.Snapshots
 
         private static bool Equivalent(IReadOnlyList<BaselineMember> left, IReadOnlyList<BaselineMember> right)
         {
-            if (left.Count != right.Count) return false;
+            if (left.Count != right.Count)
+            {
+                return false;
+            }
+
             var before = left.ToDictionary(x => x.Identity, x => x.Fingerprint, StringComparer.OrdinalIgnoreCase);
             return right.All(item => before.TryGetValue(item.Identity, out var fingerprint) &&
                 string.Equals(fingerprint, item.Fingerprint, StringComparison.Ordinal));

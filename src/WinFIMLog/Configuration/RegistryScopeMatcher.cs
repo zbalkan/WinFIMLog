@@ -20,7 +20,11 @@ namespace WinFIMLog.Configuration
 
         public static bool Matches(string configuredName, string eventName)
         {
-            if (IsWithin(configuredName, eventName)) return true;
+            if (IsWithin(configuredName, eventName))
+            {
+                return true;
+            }
+
             if (!configuredName.StartsWith(CurrentUser, StringComparison.OrdinalIgnoreCase) ||
                 !eventName.StartsWith(Users + "\\", StringComparison.OrdinalIgnoreCase))
             {
@@ -29,16 +33,28 @@ namespace WinFIMLog.Configuration
 
             var afterUsers = eventName[(Users.Length + 1)..];
             var separator = afterUsers.IndexOf('\\');
-            if (separator <= 0) return false;
+            if (separator <= 0)
+            {
+                return false;
+            }
+
             var sid = afterUsers[..separator];
-            if (!sid.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!sid.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
             var perUserName = CurrentUser + afterUsers[separator..];
             return IsWithin(configuredName, perUserName);
         }
 
         public bool IsMatch(string keyName)
         {
-            if (string.IsNullOrWhiteSpace(keyName)) return false;
+            if (string.IsNullOrWhiteSpace(keyName))
+            {
+                return false;
+            }
+
             return _included.Any(pattern => Matches(pattern, keyName)) &&
                    !_excluded.Any(pattern => Matches(pattern, keyName));
         }

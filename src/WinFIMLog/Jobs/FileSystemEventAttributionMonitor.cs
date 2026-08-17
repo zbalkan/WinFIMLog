@@ -53,14 +53,21 @@ namespace WinFIMLog.Jobs
 
         internal static bool IsLegacySessionName(string sessionName)
         {
-            if (!sessionName.StartsWith(LegacySessionNamePrefix, StringComparison.Ordinal)) return false;
+            if (!sessionName.StartsWith(LegacySessionNamePrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
             return int.TryParse(sessionName.AsSpan(LegacySessionNamePrefix.Length), out var processId) &&
                    processId > 0;
         }
 
         internal void Start()
         {
-            if (_thread != null) return;
+            if (_thread != null)
+            {
+                return;
+            }
 
             _thread = new Thread(Monitor)
             {
@@ -90,7 +97,11 @@ namespace WinFIMLog.Jobs
         private static ulong? ReadSequence(TraceEvent data)
         {
             var value = data.PayloadByName("ProcessSequenceNumber");
-            if (value == null) return null;
+            if (value == null)
+            {
+                return null;
+            }
+
             try { return Convert.ToUInt64(value); }
             catch (Exception) { return null; }
         }
@@ -98,7 +109,10 @@ namespace WinFIMLog.Jobs
         private void EndProcess(ProcessTraceData data)
         {
             var sequence = ReadSequence(data);
-            if (sequence != null) _processes.End(data.ProcessID, sequence.Value);
+            if (sequence != null)
+            {
+                _processes.End(data.ProcessID, sequence.Value);
+            }
         }
 
         private void Monitor()
@@ -145,7 +159,10 @@ namespace WinFIMLog.Jobs
 
             var path = data.PayloadByName("FileName") as string;
             var configuration = _settings.Capture();
-            if (string.IsNullOrWhiteSpace(path) || !configuration.IsMonitoredPath(path)) return;
+            if (string.IsNullOrWhiteSpace(path) || !configuration.IsMonitoredPath(path))
+            {
+                return;
+            }
 
             var sequence = ReadSequence(data);
             if (sequence == null)
@@ -171,7 +188,10 @@ namespace WinFIMLog.Jobs
         private void RecordProcess(ProcessTraceData data)
         {
             var sequence = ReadSequence(data);
-            if (sequence == null) return;
+            if (sequence == null)
+            {
+                return;
+            }
 
             string? username = null;
             string? sid = null;
@@ -187,7 +207,9 @@ namespace WinFIMLog.Jobs
             _processes.Record(new ProcessInstanceEvidence(data.ProcessID, sequence.Value,
                 data.ProcessName ?? string.Empty, new DateTimeOffset(data.TimeStamp), username, sid));
             if (string.Equals(data.OpcodeName, "DCStart", StringComparison.OrdinalIgnoreCase))
+            {
                 _processes.MarkRundownComplete();
+            }
         }
 
         private void RemoveLegacySessions()
@@ -196,7 +218,10 @@ namespace WinFIMLog.Jobs
             // kernel logger per crash. Reclaim only that application-owned legacy namespace.
             foreach (var activeSessionName in TraceEventSession.GetActiveSessionNames())
             {
-                if (!IsLegacySessionName(activeSessionName)) continue;
+                if (!IsLegacySessionName(activeSessionName))
+                {
+                    continue;
+                }
 
                 try
                 {

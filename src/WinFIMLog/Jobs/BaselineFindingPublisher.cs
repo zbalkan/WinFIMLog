@@ -21,7 +21,11 @@ namespace WinFIMLog.Jobs
             foreach (var result in repository.PendingResults())
             {
                 var baseline = repository.Find(result.BaselineId);
-                if (baseline is null) continue;
+                if (baseline is null)
+                {
+                    continue;
+                }
+
                 worked = true;
                 try
                 {
@@ -51,7 +55,10 @@ namespace WinFIMLog.Jobs
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                if (!PublishPending()) await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken);
+                if (!PublishPending())
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken);
+                }
             }
         }
     }

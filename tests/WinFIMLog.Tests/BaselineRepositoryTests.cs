@@ -34,8 +34,15 @@ public sealed class BaselineRepositoryTests
     public void Cleanup()
     {
         context.Dispose();
-        if (File.Exists(databasePath)) File.Delete(databasePath);
-        if (File.Exists(databasePath + "-log")) File.Delete(databasePath + "-log");
+        if (File.Exists(databasePath))
+        {
+            File.Delete(databasePath);
+        }
+
+        if (File.Exists(databasePath + "-log"))
+        {
+            File.Delete(databasePath + "-log");
+        }
     }
 
     [TestMethod]
@@ -45,7 +52,11 @@ public sealed class BaselineRepositoryTests
         {
             var baseline = repository.Begin(BaselineSource.FileSystem, "scope", "volume");
             repository.ReconcileAndComplete(baseline, [Member("A", $"hash-{generation}")]);
-            foreach (var result in repository.PendingResults()) repository.RecordDeliveryAttempt(result, true);
+            foreach (var result in repository.PendingResults())
+            {
+                repository.RecordDeliveryAttempt(result, true);
+            }
+
             repository.CompactAfterCompletion(baseline, generationsToKeep: 2);
         }
 

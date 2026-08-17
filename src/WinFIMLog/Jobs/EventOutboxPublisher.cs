@@ -49,7 +49,10 @@ namespace WinFIMLog.Jobs
             while (!stoppingToken.IsCancellationRequested)
             {
                 var worked = PublishReady();
-                if (!worked) await Task.Delay(TimeSpan.FromMilliseconds(250), stoppingToken);
+                if (!worked)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(250), stoppingToken);
+                }
             }
         }
     }

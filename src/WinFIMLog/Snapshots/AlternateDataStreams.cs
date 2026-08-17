@@ -10,13 +10,20 @@ namespace WinFIMLog.Snapshots
         {
             var names = new List<string>();
             var handle = FindFirstStream(path, 0, out var data, 0);
-            if (handle == new IntPtr(-1)) return [];
+            if (handle == new IntPtr(-1))
+            {
+                return [];
+            }
+
             try
             {
                 do
                 {
                     // The default ::$DATA is deliberately excluded; only its content is hashed.
-                    if (!string.Equals(data.Name, "::$DATA", StringComparison.OrdinalIgnoreCase)) names.Add(data.Name);
+                    if (!string.Equals(data.Name, "::$DATA", StringComparison.OrdinalIgnoreCase))
+                    {
+                        names.Add(data.Name);
+                    }
                 } while (FindNextStream(handle, out data));
             }
             finally { FindClose(handle); }

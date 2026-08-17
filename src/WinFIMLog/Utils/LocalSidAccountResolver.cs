@@ -29,7 +29,10 @@ namespace WinFIMLog.Utils
                 return cached.AccountName;
             }
 
-            if (!OperatingSystem.IsWindows()) return null;
+            if (!OperatingSystem.IsWindows())
+            {
+                return null;
+            }
 
             lock (RefreshLock)
             {
@@ -56,7 +59,10 @@ namespace WinFIMLog.Utils
 
         private static void Refresh(DateTime now)
         {
-            if (LsaEnumerateLogonSessions(out var count, out var sessions) != 0) return;
+            if (LsaEnumerateLogonSessions(out var count, out var sessions) != 0)
+            {
+                return;
+            }
 
             try
             {
@@ -73,7 +79,10 @@ namespace WinFIMLog.Utils
                     try
                     {
                         var data = Marshal.PtrToStructure<SecurityLogonSessionData>(dataAddress);
-                        if (data.Sid == IntPtr.Zero) continue;
+                        if (data.Sid == IntPtr.Zero)
+                        {
+                            continue;
+                        }
 
                         var sid = new SecurityIdentifier(data.Sid).Value;
                         var user = data.UserName.ToString();

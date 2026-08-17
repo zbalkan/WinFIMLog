@@ -133,8 +133,14 @@ namespace WinFIMLog
 
         private async Task ReconfigureRegistryMonitorAsync(CancellationToken serviceToken)
         {
-            if (_settings.EnableRegistryMonitoring) StartRegistryMonitor(serviceToken);
-            else await StopRegistryMonitorAsync();
+            if (_settings.EnableRegistryMonitoring)
+            {
+                StartRegistryMonitor(serviceToken);
+            }
+            else
+            {
+                await StopRegistryMonitorAsync();
+            }
         }
 
         private async Task RefreshScopeAsync(CancellationToken stoppingToken)
@@ -145,7 +151,11 @@ namespace WinFIMLog
                 try
                 {
                     var result = _settings.Reload();
-                    if (!result.Changed) continue;
+                    if (!result.Changed)
+                    {
+                        continue;
+                    }
+
                     _fsMonitor.Reconfigure();
                     await ReconfigureRegistryMonitorAsync(stoppingToken);
                     _health.ConfigurationChanged(result.PreviousHash, result.CurrentHash);
@@ -169,12 +179,20 @@ namespace WinFIMLog
                 {
                     await _regMonitor.RunAsync(() =>
                     {
-                        if (!recovering) return;
+                        if (!recovering)
+                        {
+                            return;
+                        }
+
                         recovering = false;
                         _health.SourceRecovered("RegistryETW", "ConfiguredRegistryKeys",
                             "SourceRestarted;ReconciliationRequested");
                     }, stoppingToken);
-                    if (stoppingToken.IsCancellationRequested) return;
+                    if (stoppingToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
                     throw new InvalidOperationException("Registry ETW source stopped unexpectedly.");
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
@@ -193,7 +211,11 @@ namespace WinFIMLog
         {
             lock (_registryLifecycleLock)
             {
-                if (_registryMonitorTask is { IsCompleted: false }) return;
+                if (_registryMonitorTask is { IsCompleted: false })
+                {
+                    return;
+                }
+
                 _registryMonitorCancellation?.Dispose();
                 _registryMonitorCancellation = CancellationTokenSource.CreateLinkedTokenSource(serviceToken);
                 _registryMonitorTask = RunRegistryMonitorWithRecoveryAsync(_registryMonitorCancellation.Token);
@@ -211,7 +233,11 @@ namespace WinFIMLog
                 _registryMonitorTask = null;
                 _registryMonitorCancellation = null;
             }
-            if (task is null) return;
+            if (task is null)
+            {
+                return;
+            }
+
             cancellation!.Cancel();
             try { await task; }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }

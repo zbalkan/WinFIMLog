@@ -22,7 +22,11 @@ namespace WinFIMLog.Snapshots
         public IReadOnlyList<BaselineMember> Capture(IEnumerable<string> roots)
         {
             var output = new List<BaselineMember>();
-            foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase)) CaptureNode(root, output);
+            foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                CaptureNode(root, output);
+            }
+
             return output;
         }
 
@@ -70,7 +74,11 @@ namespace WinFIMLog.Snapshots
         {
             // Excluded directories prune their entire subtree; capture and notification
             // admission therefore use exactly the same effective-scope predicate.
-            if (!isIncluded(path)) return;
+            if (!isIncluded(path))
+            {
+                return;
+            }
+
             FileAttributes attributes;
             try { attributes = File.GetAttributes(path); }
             catch (FileNotFoundException) { return; }
@@ -94,14 +102,25 @@ namespace WinFIMLog.Snapshots
                 LinkCount = !directory && !reparse ? FileLinkCount.TryGet(path) : null
             };
             CaptureAcl(path, member);
-            if (!directory && !reparse) CaptureHash(path, member);
+            if (!directory && !reparse)
+            {
+                CaptureHash(path, member);
+            }
+
             output.Add(member);
 
             // Reparse points are evidence nodes, never traversal roots.
-            if (!directory || reparse) return;
+            if (!directory || reparse)
+            {
+                return;
+            }
+
             try
             {
-                foreach (var child in Directory.EnumerateFileSystemEntries(path)) CaptureNode(child, output);
+                foreach (var child in Directory.EnumerateFileSystemEntries(path))
+                {
+                    CaptureNode(child, output);
+                }
             }
             catch (UnauthorizedAccessException) { member.AclState = EvidenceAvailability.AccessDenied; }
             catch (IOException) { member.AclState = EvidenceAvailability.Failed; }

@@ -150,7 +150,9 @@ namespace WinFIMLog.Jobs
         private string GetFullKeyName(ulong keyHandle, string eventKeyName, string eventValueName)
         {
             if (string.IsNullOrWhiteSpace(eventKeyName) && string.IsNullOrWhiteSpace(eventValueName))
+            {
                 return string.Empty;
+            }
 
             var fullNameBuilder = _sbPool.Get();
 
@@ -161,13 +163,21 @@ namespace WinFIMLog.Jobs
 
             if (!string.IsNullOrWhiteSpace(eventKeyName))
             {
-                if (fullNameBuilder.Length > 0) fullNameBuilder.Append('\\');
+                if (fullNameBuilder.Length > 0)
+                {
+                    fullNameBuilder.Append('\\');
+                }
+
                 fullNameBuilder.Append(eventKeyName);
             }
 
             if (!string.IsNullOrWhiteSpace(eventValueName))
             {
-                if (fullNameBuilder.Length > 0) fullNameBuilder.Append('\\');
+                if (fullNameBuilder.Length > 0)
+                {
+                    fullNameBuilder.Append('\\');
+                }
+
                 fullNameBuilder.Append(eventValueName);
             }
 
@@ -262,7 +272,11 @@ namespace WinFIMLog.Jobs
                 if (disposing)
                 {
                     TraceEventSession? session;
-                    lock (_sessionLock) session = _session;
+                    lock (_sessionLock)
+                    {
+                        session = _session;
+                    }
+
                     session?.Stop();
                 }
 

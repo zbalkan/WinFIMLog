@@ -27,7 +27,11 @@ namespace WinFIMLog.Snapshots
         private static string VolumeIdentity(string path)
         {
             var root = Path.GetPathRoot(Path.GetFullPath(path)) ?? path;
-            if (!OperatingSystem.IsWindows()) return root;
+            if (!OperatingSystem.IsWindows())
+            {
+                return root;
+            }
+
             var volumeName = new StringBuilder(261);
             var fileSystemName = new StringBuilder(261);
             if (!GetVolumeInformation(root, volumeName, volumeName.Capacity, out var serial, out _, out _,

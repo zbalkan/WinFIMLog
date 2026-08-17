@@ -67,7 +67,11 @@ namespace WinFIMLog.Jobs
         {
             var configuration = _settings.Capture();
             var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, configuration.HashLimitMB, configuration.ScopeHash);
-            if (change == null) return;
+            if (change == null)
+            {
+                return;
+            }
+
             change.OldPath = raw.OldPath;
             change.NewPath = raw.NewPath;
 
@@ -111,7 +115,10 @@ namespace WinFIMLog.Jobs
             var duplicate = _recentChanges.TryGetValue(change.FullPath, out var cached) &&
                 cached.ExpiresUtc > now && cached.Fingerprint == fingerprint;
             if (cached.ExpiresUtc <= now)
+            {
                 _recentChanges.TryRemove(change.FullPath, out _);
+            }
+
             var changed = change.ChangeCategory is ChangeCategory.Created or ChangeCategory.Deleted || previous == null ||
                 change.ObjectType != previous.ObjectType ||
                 !string.Equals(change.CurrentHash, previous.CurrentHash, StringComparison.OrdinalIgnoreCase) ||

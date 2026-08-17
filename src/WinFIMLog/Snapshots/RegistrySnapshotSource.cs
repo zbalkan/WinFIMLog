@@ -21,15 +21,27 @@ namespace WinFIMLog.Snapshots
 
         public IReadOnlyList<BaselineMember> Capture(IEnumerable<string> roots)
         {
-            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("Registry snapshots require Windows.");
+            }
+
             return CaptureResolved(ResolveRoots(roots));
         }
 
         public IReadOnlyList<BaselineMember> CaptureResolved(IEnumerable<string> resolvedRoots)
         {
-            if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("Registry snapshots require Windows.");
+            }
+
             var members = new List<BaselineMember>();
-            foreach (var root in RemoveOverlappingRoots(resolvedRoots)) CaptureRoot(root, members);
+            foreach (var root in RemoveOverlappingRoots(resolvedRoots))
+            {
+                CaptureRoot(root, members);
+            }
+
             return members;
         }
 
@@ -42,7 +54,11 @@ namespace WinFIMLog.Snapshots
                     !root.StartsWith(prefix + "\\", StringComparison.OrdinalIgnoreCase))
                 { yield return root; continue; }
 
-                if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
+                if (!OperatingSystem.IsWindows())
+                {
+                    throw new PlatformNotSupportedException("Registry snapshots require Windows.");
+                }
+
                 var suffix = root.Length == prefix.Length ? string.Empty : root[prefix.Length..];
                 foreach (var sid in Registry.Users.GetSubKeyNames()
                     .Where(name => name.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase) &&
@@ -96,7 +112,11 @@ namespace WinFIMLog.Snapshots
 
         private void CaptureKey(RegistryKey key, string path, List<BaselineMember> output)
         {
-            if (!isIncluded(path)) return;
+            if (!isIncluded(path))
+            {
+                return;
+            }
+
             var keyMember = new BaselineMember
             {
                 Identity = Identity(path, SnapshotNodeType.RegistryKey),
@@ -109,9 +129,13 @@ namespace WinFIMLog.Snapshots
             catch { keyMember.AclState = EvidenceAvailability.Failed; }
             output.Add(keyMember);
 
-            foreach (var valueName in Safe(() => key.GetValueNames()))
+            foreach (var valueName in Safe(key.GetValueNames))
             {
-                if (!isIncluded(path + "\\" + valueName)) continue;
+                if (!isIncluded(path + "\\" + valueName))
+                {
+                    continue;
+                }
+
                 try
                 {
                     var value = key.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
@@ -130,10 +154,18 @@ namespace WinFIMLog.Snapshots
                 catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.AccessDenied)); }
                 catch { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.Failed)); }
             }
-            foreach (var childName in Safe(() => key.GetSubKeyNames()))
+            foreach (var childName in Safe(key.GetSubKeyNames))
             {
-                if (!isIncluded(path + "\\" + childName)) continue;
-                try { using var child = key.OpenSubKey(childName, false); if (child is not null) CaptureKey(child, path + "\\" + childName, output); }
+                if (!isIncluded(path + "\\" + childName))
+                {
+                    continue;
+                }
+
+                try { using var child = key.OpenSubKey(childName, false); if (child is not null)
+                    {
+                        CaptureKey(child, path + "\\" + childName, output);
+                    }
+                }
                 catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.AccessDenied)); }
                 catch { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.Failed)); }
             }
@@ -141,7 +173,11 @@ namespace WinFIMLog.Snapshots
 
         private void CaptureRoot(string fullName, List<BaselineMember> output)
         {
-            if (!isIncluded(fullName)) return;
+            if (!isIncluded(fullName))
+            {
+                return;
+            }
+
             var separator = fullName.IndexOf('\\');
             var hiveName = separator < 0 ? fullName : fullName[..separator];
             var subKey = separator < 0 ? string.Empty : fullName[(separator + 1)..];
@@ -149,7 +185,10 @@ namespace WinFIMLog.Snapshots
             try
             {
                 using var key = hive.OpenSubKey(subKey, false);
-                if (key is not null) CaptureKey(key, fullName.TrimEnd('\\'), output);
+                if (key is not null)
+                {
+                    CaptureKey(key, fullName.TrimEnd('\\'), output);
+                }
             }
             catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(fullName, EvidenceAvailability.AccessDenied)); }
             catch { output.Add(Unavailable(fullName, EvidenceAvailability.Failed)); }

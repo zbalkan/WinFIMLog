@@ -49,7 +49,10 @@ namespace WinFIMLog.Snapshots
         public void RequestScopeSnapshot(string reason)
         {
             RequestFileSystemSnapshot(reason);
-            if (settings.EnableRegistryMonitoring) RequestRegistrySnapshot(reason);
+            if (settings.EnableRegistryMonitoring)
+            {
+                RequestRegistrySnapshot(reason);
+            }
         }
 
         internal static TimeSpan RetryDelay(int failures) =>
@@ -129,10 +132,18 @@ namespace WinFIMLog.Snapshots
         private static async Task<SnapshotRequest?> WaitForRequestOrDelay(ChannelReader<SnapshotRequest> reader,
             TimeSpan delay, CancellationToken cancellationToken)
         {
-            if (delay > TimeSpan.FromSeconds(5)) delay = TimeSpan.FromSeconds(5);
+            if (delay > TimeSpan.FromSeconds(5))
+            {
+                delay = TimeSpan.FromSeconds(5);
+            }
+
             var timer = Task.Delay(delay > TimeSpan.Zero ? delay : TimeSpan.Zero, cancellationToken);
             var available = reader.WaitToReadAsync(cancellationToken).AsTask();
-            if (await Task.WhenAny(timer, available) == timer) return null;
+            if (await Task.WhenAny(timer, available) == timer)
+            {
+                return null;
+            }
+
             return reader.TryRead(out var request) ? request : null;
         }
 
@@ -154,7 +165,11 @@ namespace WinFIMLog.Snapshots
                 if (now < due)
                 {
                     var request = await WaitForRequestOrDelay(requests, due - now, cancellationToken);
-                    if (request is null) continue;
+                    if (request is null)
+                    {
+                        continue;
+                    }
+
                     logger.LogWarning(
                         "Tier 0 {Source} full snapshot requested: {Reason}; affected scope {AffectedScope} promoted to full configured scope",
                         source, request.Reason, request.AffectedScope ?? "all configured scope");

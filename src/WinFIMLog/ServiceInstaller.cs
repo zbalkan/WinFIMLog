@@ -139,7 +139,9 @@ namespace WinFIMLog
             var result = RunProcess("powershell.exe", "-NoProfile", "-NonInteractive",
                 "-ExecutionPolicy", "Bypass", "-File", script);
             if (result.ExitCode != 0)
+            {
                 throw new InvalidOperationException($"Event channel configuration failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
+            }
         }
 
         private static ProcessResult RunProcess(string fileName, params string[] arguments)
@@ -184,7 +186,11 @@ namespace WinFIMLog
             {
                 RunSc("stop", ServiceName);
                 var removalScript = Path.Combine(installDirectory, "uninstall-event-channels.ps1");
-                if (File.Exists(removalScript)) RunPowerShell(removalScript);
+                if (File.Exists(removalScript))
+                {
+                    RunPowerShell(removalScript);
+                }
+
                 RunSc("delete", ServiceName);
             }
 

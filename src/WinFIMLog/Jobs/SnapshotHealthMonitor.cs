@@ -45,12 +45,16 @@ namespace WinFIMLog.Jobs
             while (!stoppingToken.IsCancellationRequested)
             {
                 Check(BaselineSource.FileSystem);
-                if (settings.EnableRegistryMonitoring) Check(BaselineSource.Registry);
+                if (settings.EnableRegistryMonitoring)
+                {
+                    Check(BaselineSource.Registry);
+                }
+
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             }
         }
 
         private ref bool Overdue(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) return ref fileSystemOverdue; return ref registryOverdue; }
+        { if (source == BaselineSource.FileSystem) { return ref fileSystemOverdue; } return ref registryOverdue; }
     }
 }

@@ -36,8 +36,15 @@ public sealed class SnapshotCoordinationTests
         }
         finally
         {
-            if (File.Exists(databasePath)) File.Delete(databasePath);
-            if (File.Exists(databasePath + "-log")) File.Delete(databasePath + "-log");
+            if (File.Exists(databasePath))
+            {
+                File.Delete(databasePath);
+            }
+
+            if (File.Exists(databasePath + "-log"))
+            {
+                File.Delete(databasePath + "-log");
+            }
         }
     }
 

@@ -809,7 +809,9 @@ namespace System.IO.Filesystem.Ntfs
             if (runOffsetBytes[i - 1] >= 0x80)
             {
                 while (i < 8)
+                {
                     runOffsetBytes[i++] = 0xFF;
+                }
             }
 
             return runOffset;

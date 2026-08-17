@@ -11,7 +11,9 @@ namespace WinFIMLog.Jobs
         public void Remove(ulong handle)
         {
             if (handle != 0)
+            {
                 _entries.TryRemove(handle, out _);
+            }
         }
 
         public bool TryGet(ulong handle, out string path) =>
@@ -20,7 +22,9 @@ namespace WinFIMLog.Jobs
         public void Update(ulong handle, string path)
         {
             if (handle == 0 || string.IsNullOrEmpty(path))
+            {
                 return;
+            }
 
             _entries[handle] = path;
         }

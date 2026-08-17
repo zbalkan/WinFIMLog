@@ -91,13 +91,20 @@ public sealed class OptionalAttributionTests
         for (var offset = 0; offset < il.Length;)
         {
             short value = il[offset++];
-            if (value == 0xfe) value = (short)(0xfe00 | il[offset++]);
+            if (value == 0xfe)
+            {
+                value = (short)(0xfe00 | il[offset++]);
+            }
+
             var opCode = OpCodesByValue[value];
 
             if (opCode.OperandType == OperandType.InlineMethod)
             {
                 var called = subject.Module.ResolveMethod(BitConverter.ToInt32(il, offset));
-                if (called?.DeclaringType == declaringType && called.Name == methodName) return true;
+                if (called?.DeclaringType == declaringType && called.Name == methodName)
+                {
+                    return true;
+                }
             }
 
             offset += OperandSize(opCode.OperandType, il, offset);
@@ -111,7 +118,10 @@ public sealed class OptionalAttributionTests
         var result = new Dictionary<short, OpCode>();
         foreach (var field in typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static))
         {
-            if (field.GetValue(null) is OpCode opCode) result[opCode.Value] = opCode;
+            if (field.GetValue(null) is OpCode opCode)
+            {
+                result[opCode.Value] = opCode;
+            }
         }
 
         return result;

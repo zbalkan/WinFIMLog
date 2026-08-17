@@ -36,7 +36,14 @@ namespace WinFIMLog.FIM
         {
             _ages.TryDequeue(out _);
             _metrics.SetOldest(_ages.TryPeek(out var oldest) ? oldest : null);
-            if (succeeded) _metrics.Completed(); else _metrics.Failed();
+            if (succeeded)
+            {
+                _metrics.Completed();
+            }
+            else
+            {
+                _metrics.Failed();
+            }
         }
 
         /// <summary>Stops admission after all watcher producers have stopped.</summary>

@@ -8,7 +8,11 @@ namespace WinFIMLog.Snapshots
     {
         public static int? TryGet(string path)
         {
-            if (!OperatingSystem.IsWindows()) return null;
+            if (!OperatingSystem.IsWindows())
+            {
+                return null;
+            }
+
             try
             {
                 using var handle = System.IO.File.OpenHandle(path);

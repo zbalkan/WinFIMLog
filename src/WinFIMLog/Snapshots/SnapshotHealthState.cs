@@ -52,18 +52,18 @@ namespace WinFIMLog.Snapshots
         { var ticks = Interlocked.Read(ref value); return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero); }
 
         private ref long Duration(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) return ref fileSystemDurationTicks; return ref registryDurationTicks; }
+        { if (source == BaselineSource.FileSystem) { return ref fileSystemDurationTicks; } return ref registryDurationTicks; }
 
         private ref int Failures(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) return ref fileSystemFailures; return ref registryFailures; }
+        { if (source == BaselineSource.FileSystem) { return ref fileSystemFailures; } return ref registryFailures; }
 
         private ref long LastSuccess(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) return ref fileSystemLastSuccess; return ref registryLastSuccess; }
+        { if (source == BaselineSource.FileSystem) { return ref fileSystemLastSuccess; } return ref registryLastSuccess; }
 
         private ref int Running(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) return ref fileSystemRunning; return ref registryRunning; }
+        { if (source == BaselineSource.FileSystem) { return ref fileSystemRunning; } return ref registryRunning; }
 
         private ref long StartedAt(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) return ref fileSystemStarted; return ref registryStarted; }
+        { if (source == BaselineSource.FileSystem) { return ref fileSystemStarted; } return ref registryStarted; }
     }
 }

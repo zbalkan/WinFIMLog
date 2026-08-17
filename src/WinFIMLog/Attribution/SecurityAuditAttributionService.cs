@@ -48,7 +48,10 @@ namespace WinFIMLog.Attribution
         public override Task StartAsync(CancellationToken cancellationToken)
         {
             options.Validate();
-            if (!options.Enabled) return base.StartAsync(cancellationToken);
+            if (!options.Enabled)
+            {
+                return base.StartAsync(cancellationToken);
+            }
 
             RequirePolicy(WindowsAuditPolicyConformance.FileSystemSubcategory, "File System");
             RequirePolicy(WindowsAuditPolicyConformance.RegistrySubcategory, "Registry");
@@ -77,7 +80,11 @@ namespace WinFIMLog.Attribution
             var eventData = document.Descendants().Where(element => element.Name.LocalName == "Data");
             var objectName = eventData.FirstOrDefault(element =>
                 (string?)element.Attribute("Name") is "ObjectName" or "KeyName")?.Value;
-            if (string.IsNullOrWhiteSpace(objectName)) return false;
+            if (string.IsNullOrWhiteSpace(objectName))
+            {
+                return false;
+            }
+
             return options.FileScopes.Concat(options.RegistryScopes).Any(scope =>
                 objectName.StartsWith(scope, StringComparison.OrdinalIgnoreCase));
         }
@@ -92,7 +99,11 @@ namespace WinFIMLog.Attribution
             using var record = args.EventRecord;
             // Preserve native XML: it contains SubjectUserSid/Name and, for 4657, old/new values.
             var xml = record?.ToXml();
-            if (xml == null || !IsDeclaredScope(xml)) return;
+            if (xml == null || !IsDeclaredScope(xml))
+            {
+                return;
+            }
+
             var document = XDocument.Parse(xml);
             var data = document.Descendants().Where(element => element.Name.LocalName == "Data" && element.Attribute("Name") != null)
                 .GroupBy(element => element.Attribute("Name")!.Value, StringComparer.OrdinalIgnoreCase)
@@ -122,7 +133,11 @@ namespace WinFIMLog.Attribution
 
         private void RequirePolicy(Guid subcategory, string name)
         {
-            if (policy.IsEnabled(subcategory, out var reason)) return;
+            if (policy.IsEnabled(subcategory, out var reason))
+            {
+                return;
+            }
+
             health.CoverageGap("SACLAttribution", name, $"AuditPolicyMissing:{reason}", 0);
             throw new InvalidOperationException($"SACL attribution requires the '{name}' audit subcategory: {reason}");
         }

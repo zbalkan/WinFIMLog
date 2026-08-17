@@ -20,7 +20,11 @@ namespace WinFIMLog.Jobs
             {
                 var days = Math.Max(1, options.Value.DeliveredOutboxDays);
                 var deleted = outbox.DeleteDeliveredBefore(DateTimeOffset.UtcNow.AddDays(-days));
-                if (deleted > 0) logger.LogInformation("Removed {Count} delivered Event Log outbox records", deleted);
+                if (deleted > 0)
+                {
+                    logger.LogInformation("Removed {Count} delivered Event Log outbox records", deleted);
+                }
+
                 await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
             }
         }

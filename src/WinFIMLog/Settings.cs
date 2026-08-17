@@ -230,7 +230,11 @@ namespace WinFIMLog
         {
             var value = Registry.ReadDwordValue(name);
             if (value == -1) { Registry.WriteDwordValue(name, defaultValue); value = defaultValue; }
-            if (value < 60) throw new InvalidOperationException($"{name} must be at least 60 seconds.");
+            if (value < 60)
+            {
+                throw new InvalidOperationException($"{name} must be at least 60 seconds.");
+            }
+
             return value;
         }
 
@@ -551,7 +555,11 @@ namespace WinFIMLog
                 captureQueueCapacity = 8192;
                 Registry.WriteDwordValue("CaptureQueueCapacity", captureQueueCapacity);
             }
-            if (captureQueueCapacity < 1) throw new InvalidOperationException("CaptureQueueCapacity must be greater than zero.");
+            if (captureQueueCapacity < 1)
+            {
+                throw new InvalidOperationException("CaptureQueueCapacity must be greater than zero.");
+            }
+
             CaptureQueueCapacity = captureQueueCapacity;
 
             var watcherBufferSizeKb = Registry.ReadDwordValue("WatcherBufferSizeKB");
@@ -560,7 +568,11 @@ namespace WinFIMLog
                 watcherBufferSizeKb = 64;
                 Registry.WriteDwordValue("WatcherBufferSizeKB", watcherBufferSizeKb);
             }
-            if (watcherBufferSizeKb is < 8 or > 64) throw new InvalidOperationException("WatcherBufferSizeKB must be between 8 and 64.");
+            if (watcherBufferSizeKb is < 8 or > 64)
+            {
+                throw new InvalidOperationException("WatcherBufferSizeKB must be between 8 and 64.");
+            }
+
             WatcherBufferSizeKB = watcherBufferSizeKb;
 
             var scopeInterval = Registry.ReadDwordValue("ScopeReresolutionInterval");
@@ -569,7 +581,11 @@ namespace WinFIMLog
                 scopeInterval = 300;
                 Registry.WriteDwordValue("ScopeReresolutionInterval", scopeInterval);
             }
-            if (scopeInterval < 10) throw new InvalidOperationException("ScopeReresolutionInterval must be at least 10 seconds.");
+            if (scopeInterval < 10)
+            {
+                throw new InvalidOperationException("ScopeReresolutionInterval must be at least 10 seconds.");
+            }
+
             ScopeReresolutionInterval = scopeInterval;
 
             FileSystemSnapshotInterval = ReadPositiveInterval("FileSystemSnapshotInterval", 21600);

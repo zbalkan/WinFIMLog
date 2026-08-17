@@ -34,7 +34,9 @@ namespace WinFIMLog.Events
             item.DeliveredAt = DateTimeOffset.UtcNow;
             item.LastError = null;
             if (!context.ExecuteTransaction(() => context.EventOutbox.Update(item)))
+            {
                 throw new InvalidOperationException("Could not commit Event Log delivery acknowledgement.");
+            }
         }
 
         public void DiscardInvalid(EventOutboxRecord item, string reason)
@@ -43,7 +45,9 @@ namespace WinFIMLog.Events
             item.DeliveredAt = DateTimeOffset.UtcNow;
             item.LastError = reason;
             if (!context.ExecuteTransaction(() => context.EventOutbox.Update(item)))
+            {
                 throw new InvalidOperationException("Could not commit invalid Event Log outbox record state.");
+            }
         }
 
         public void Enqueue(EventContract record, bool error = false) =>
@@ -59,7 +63,11 @@ namespace WinFIMLog.Events
                 projection?.Invoke();
                 foreach (var item in materialised)
                 {
-                    if (context.EventOutbox.Exists(x => x.Id == item.Record.RecordId)) continue;
+                    if (context.EventOutbox.Exists(x => x.Id == item.Record.RecordId))
+                    {
+                        continue;
+                    }
+
                     context.EventOutbox.Insert(new EventOutboxRecord
                     {
                         Id = item.Record.RecordId,
@@ -88,7 +96,9 @@ namespace WinFIMLog.Events
             var delaySeconds = Math.Min(300, 1 << Math.Min(item.DeliveryAttempts - 1, 8));
             item.NextAttemptAt = DateTimeOffset.UtcNow.AddSeconds(delaySeconds);
             if (!context.ExecuteTransaction(() => context.EventOutbox.Update(item)))
+            {
                 throw new InvalidOperationException("Could not commit Event Log delivery failure state.");
+            }
         }
 
         public IReadOnlyList<EventOutboxRecord> Ready(DateTimeOffset now, int limit = 200) =>

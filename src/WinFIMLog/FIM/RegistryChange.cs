@@ -166,7 +166,9 @@ namespace WinFIMLog.FIM
         private string StripFullName(string fullName, string valueName)
         {
             if (string.IsNullOrEmpty(fullName))
+            {
                 return string.Empty;
+            }
 
             // Remove the ValueName if provided
             if (!string.IsNullOrEmpty(valueName))

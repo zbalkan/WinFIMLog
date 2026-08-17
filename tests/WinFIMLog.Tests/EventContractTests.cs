@@ -95,10 +95,16 @@ public sealed class EventContractTests
     private static void AssertFields(string recordType, params string[] names)
     {
         var fields = new Dictionary<string, object?>();
-        foreach (var name in names) fields[name] = name.EndsWith("At", StringComparison.Ordinal) ? DateTimeOffset.UtcNow : "value";
+        foreach (var name in names)
+        {
+            fields[name] = name.EndsWith("At", StringComparison.Ordinal) ? DateTimeOffset.UtcNow : "value";
+        }
+
         var record = EventContract.Create(7790, recordType, "record", "scope", fields);
         using var json = JsonDocument.Parse(record.FormatEventLogMessage());
         foreach (var name in names)
+        {
             Assert.IsTrue(json.RootElement.GetProperty("fields").TryGetProperty(name, out _), $"{recordType}.{name} is absent");
+        }
     }
 }

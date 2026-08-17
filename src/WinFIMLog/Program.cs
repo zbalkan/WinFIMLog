@@ -33,12 +33,13 @@ namespace WinFIMLog
                 {
                     logging.ClearProviders();
                     logging.SetMinimumLevel(LogLevel.Information);
-
                     logging.AddProvider(new EventIdEventLogLoggerProvider("WinFIMLog", "WinFIMLog"));
                 })
                 .ConfigureAppConfiguration(configuration => _ = configuration.AddWindowsRegistry(Registry.RootName, Registry.Hive, false))
                 .ConfigureServices(services =>
                 {
+                    // Suppress console messages like "Application started. Press Ctrl+C to shut down.", "Hosting environment: Development", etc.
+                    _ = services.Configure<ConsoleLifetimeOptions>(options => options.SuppressStatusMessages = true);
                     _ = services.AddOptions<SaclAttributionOptions>()
                         .BindConfiguration("Attribution:Sacl");
                     _ = services.AddOptions<RetentionOptions>()

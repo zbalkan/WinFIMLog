@@ -169,8 +169,11 @@ namespace WinFIMLog.Snapshots
                 {
                     state.Succeeded(source);
                     if (failures > 0)
+                    {
                         health.SourceRecovered($"{source}Snapshot", configuration.ScopeHash,
                             $"CompletedAfter{failures}Failures");
+                    }
+
                     failures = 0;
                     var interval = source == BaselineSource.FileSystem
                         ? configuration.FileSystemSnapshotInterval : configuration.RegistrySnapshotInterval;

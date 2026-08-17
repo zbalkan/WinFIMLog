@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace WinFIMLog.Configuration
 {
-    public static class ConfigurationValidator
+    public static partial class ConfigurationValidator
     {
         private static readonly string[] Hives =
         [
@@ -31,7 +31,9 @@ namespace WinFIMLog.Configuration
                 throw Invalid("registry key", value, "wildcards are not supported");
             if (!Hives.Any(hive => value.Equals(hive, StringComparison.OrdinalIgnoreCase) ||
                                    value.StartsWith(hive + "\\", StringComparison.OrdinalIgnoreCase)))
+            {
                 throw Invalid("registry key", value, "must start with a supported full hive name");
+            }
         }
 
         public static void ValidatePath(string value)
@@ -40,7 +42,7 @@ namespace WinFIMLog.Configuration
                 throw Invalid("path", value, "must not be empty");
 
             var expanded = Environment.ExpandEnvironmentVariables(value);
-            if (!Regex.IsMatch(expanded, @"^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+)", RegexOptions.CultureInvariant))
+            if (!AbsolutePathPattern().IsMatch(expanded))
                 throw Invalid("path", value, "must be an absolute path");
 
             if (expanded.Contains('?'))
@@ -49,7 +51,9 @@ namespace WinFIMLog.Configuration
             var segments = expanded.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
             if (segments.Count(segment => segment.Contains('*')) > 1 ||
                 segments.Any(segment => segment.Contains('*') && segment != "*"))
+            {
                 throw Invalid("path", value, "'*' must occupy one complete path segment");
+            }
         }
 
         private static ConfigurationValidationException Invalid(string kind, string value, string reason) =>
@@ -69,5 +73,8 @@ namespace WinFIMLog.Configuration
                 }
             }
         }
+
+        [GeneratedRegex(@"^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+)", RegexOptions.CultureInvariant)]
+        private static partial Regex AbsolutePathPattern();
     }
 }

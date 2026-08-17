@@ -19,7 +19,7 @@ namespace WinFIMLog
 
         private readonly AsyncLocal<EffectiveSettings?> building = new();
 
-        private readonly object reloadLock = new();
+        private readonly Lock reloadLock = new();
 
         private EffectiveSettings current = new();
 
@@ -101,7 +101,7 @@ namespace WinFIMLog
         /// </summary>
         public string[] ExcludedPaths { get => (string[])ReadState().ExcludedPaths.Clone(); private set => WriteState().ExcludedPaths = value; }
 
-        public string? FailureReason { get; private set; }
+        public string? FailureReason { get; }
 
         /// <summary>Seconds between authoritative filesystem snapshots (default: six hours).</summary>
         public int FileSystemSnapshotInterval { get => ReadState().FileSystemSnapshotInterval; private set => WriteState().FileSystemSnapshotInterval = value; }
@@ -180,10 +180,7 @@ namespace WinFIMLog
 
         public bool IsMonitoredKey(string keyName) => Capture().IsMonitoredKey(keyName);
 
-        public bool IsMonitoredPath(string path)
-        {
-            return Capture().IsMonitoredPath(path);
-        }
+        public bool IsMonitoredPath(string path) => Capture().IsMonitoredPath(path);
 
         /// <summary>Re-reads policy/preferences and atomically publishes a newly resolved scope.</summary>
         /// <returns>The previous and current hashes and whether effective scope changed.</returns>
@@ -199,8 +196,11 @@ namespace WinFIMLog
                     ReadOrCreateRegistrySettings();
                     var next = building.Value!;
                     if (previousState.CaptureQueueCapacity != next.CaptureQueueCapacity)
+                    {
                         throw new ConfigurationValidationException(
                             "CaptureQueueCapacity is fixed at startup; restart the service to apply this change.");
+                    }
+
                     Volatile.Write(ref current, next);
                     building.Value = null;
                     return (previous, next.ScopeHash, GenerationChanged(previousState, next));

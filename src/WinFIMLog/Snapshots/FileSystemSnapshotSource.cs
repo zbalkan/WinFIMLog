@@ -39,7 +39,7 @@ namespace WinFIMLog.Snapshots
         private static string[] EnumerateStreamNames(string path) =>
             // The unnamed $DATA stream is represented by ContentHash. Named stream discovery is
             // available on Windows through FindFirstStreamW; an empty array means none observed.
-            OperatingSystem.IsWindows() ? AlternateDataStreams.Enumerate(path) : Array.Empty<string>();
+            OperatingSystem.IsWindows() ? AlternateDataStreams.Enumerate(path) : [];
 
         private static BaselineMember Unavailable(string path, EvidenceAvailability state) => new()
         {
@@ -86,7 +86,7 @@ namespace WinFIMLog.Snapshots
                 Path = Path.GetFullPath(path),
                 NodeType = reparse ? SnapshotNodeType.ReparsePoint : directory ? SnapshotNodeType.Directory : SnapshotNodeType.File,
                 HashState = directory || reparse ? HashEvidenceState.NotApplicable : HashEvidenceState.Failed,
-                StreamNames = directory || reparse ? Array.Empty<string>() : EnumerateStreamNames(path),
+                StreamNames = directory || reparse ? [] : EnumerateStreamNames(path),
                 IsSystem = attributes.HasFlag(FileAttributes.System),
                 IsSparse = attributes.HasFlag(FileAttributes.SparseFile),
                 IsTemporary = attributes.HasFlag(FileAttributes.Temporary),

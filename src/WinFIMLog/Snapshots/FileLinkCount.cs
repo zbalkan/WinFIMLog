@@ -4,14 +4,14 @@ using Microsoft.Win32.SafeHandles;
 
 namespace WinFIMLog.Snapshots
 {
-    internal static class FileLinkCount
+    internal static partial class FileLinkCount
     {
         public static int? TryGet(string path)
         {
             if (!OperatingSystem.IsWindows()) return null;
             try
             {
-                using SafeFileHandle handle = System.IO.File.OpenHandle(path);
+                using var handle = System.IO.File.OpenHandle(path);
                 return GetFileInformationByHandle(handle, out var information)
                     ? checked((int)information.NumberOfLinks) : null;
             }
@@ -19,8 +19,11 @@ namespace WinFIMLog.Snapshots
         }
 
         [DllImport("kernel32.dll", SetLastError = true)]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability",
+            "SYSLIB1054:Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time",
+            Justification = "ByHandleFileInformation does not support compile time P/Invoke")]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetFileInformationByHandle(SafeFileHandle file,
+        private extern static bool GetFileInformationByHandle(SafeFileHandle file,
             out ByHandleFileInformation information);
 
         [StructLayout(LayoutKind.Sequential)]

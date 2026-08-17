@@ -20,7 +20,7 @@ namespace WinFIMLog.FIM
 
         public FileSystemCaptureQueue(int capacity, HealthMetrics metrics, IHealthReporter health)
         {
-            if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
+            ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
             _metrics = metrics;
             _health = health;
             _channel = Channel.CreateBounded<RawFileSystemNotification>(new BoundedChannelOptions(capacity)

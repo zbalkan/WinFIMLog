@@ -4,7 +4,7 @@ using System.Security;
 
 namespace WinFIMLog.Utils
 {
-    internal static class NativeMethods
+    internal static partial class NativeMethods
     {
         private enum KEY_INFORMATION_CLASS
         {
@@ -27,9 +27,9 @@ namespace WinFIMLog.Utils
             MaxKeyInfoClass                 // The maximum value in this enumeration type.
         }
 
-        [DllImport("advapi32", SetLastError = true), SuppressUnmanagedCodeSecurity]
+        [LibraryImport("advapi32", SetLastError = true), SuppressUnmanagedCodeSecurity]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static extern int OpenProcessToken(IntPtr processHandle, // handle to process
+        public static partial int OpenProcessToken(IntPtr processHandle, // handle to process
             int desiredAccess, // desired access to process
             ref IntPtr tokenHandle // handle to open access token
         );

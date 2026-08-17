@@ -47,7 +47,7 @@ namespace WinFIMLog
         }
 
         // Cannot run in parallel as the local database does not support concurrent writes.
-        internal bool ProcessChanges() => ProcessFileSystemChanges() | ProcessRegistryChanges();
+        internal bool ProcessChanges() => ProcessFileSystemChanges() || ProcessRegistryChanges();
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -160,7 +160,10 @@ namespace WinFIMLog
                             {
                                 foreach (var previous in _ctx.FileSystemChanges.FindAll()
                                     .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase)).ToList())
+                                {
                                     _ctx.FileSystemChanges.Delete(previous.Id);
+                                }
+
                                 _ctx.FileSystemChanges.Insert(change);
                             }
                         }
@@ -227,7 +230,10 @@ namespace WinFIMLog
                             {
                                 foreach (var previous in _ctx.RegistryChanges.FindAll()
                                     .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase)).ToList())
+                                {
                                     _ctx.RegistryChanges.Delete(previous.Id);
+                                }
+
                                 _ctx.RegistryChanges.Insert(change);
                             }
                         }

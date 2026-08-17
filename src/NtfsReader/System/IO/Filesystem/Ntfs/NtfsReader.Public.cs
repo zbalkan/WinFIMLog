@@ -165,11 +165,8 @@ namespace System.IO.Filesystem.Ntfs
 
         public void Dispose()
         {
-            if (_volumeHandle != null)
-            {
-                _volumeHandle.Dispose();
-                _volumeHandle = null;
-            }
+            _volumeHandle?.Dispose();
+            _volumeHandle = null;
         }
 
         #endregion

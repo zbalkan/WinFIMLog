@@ -20,7 +20,7 @@ namespace WinFIMLog
         private readonly ILogger<JobOrchestrator> _logger;
 
         private readonly HealthMetrics _metrics;
-        private readonly object _registryLifecycleLock = new();
+        private readonly Lock _registryLifecycleLock = new();
         private readonly RegistryMonitorJob _regMonitor;
 
         private readonly Settings _settings;
@@ -57,8 +57,10 @@ namespace WinFIMLog
             {
                 _capture.CompleteWriter();
                 if (cancellationToken.IsCancellationRequested && _metrics.QueueDepth > 0)
+                {
                     _health.CoverageGap("ShutdownPipeline", _settings.ScopeHash,
                         "HostShutdownTimeout", _metrics.QueueDepth);
+                }
             }
         }
 
@@ -165,13 +167,13 @@ namespace WinFIMLog
             {
                 try
                 {
-                    await _regMonitor.RunAsync(stoppingToken, () =>
+                    await _regMonitor.RunAsync(() =>
                     {
                         if (!recovering) return;
                         recovering = false;
                         _health.SourceRecovered("RegistryETW", "ConfiguredRegistryKeys",
                             "SourceRestarted;ReconciliationRequested");
-                    });
+                    }, stoppingToken);
                     if (stoppingToken.IsCancellationRequested) return;
                     throw new InvalidOperationException("Registry ETW source stopped unexpectedly.");
                 }

@@ -9,7 +9,7 @@ namespace WinFIMLog.Attribution
         bool IsEnabled(Guid subcategory, out string reason);
     }
 
-    internal sealed class WindowsAuditPolicyConformance : IAuditPolicyConformance
+    internal sealed partial class WindowsAuditPolicyConformance : IAuditPolicyConformance
     {
         public static readonly Guid FileSystemSubcategory = new("0CCE921D-69AE-11D9-BED3-505054503030");
         public static readonly Guid RegistrySubcategory = new("0CCE9228-69AE-11D9-BED3-505054503030");
@@ -34,12 +34,12 @@ namespace WinFIMLog.Attribution
             finally { AuditFree(buffer); }
         }
 
-        [DllImport("advapi32.dll")]
-        private static extern void AuditFree(IntPtr buffer);
+        [LibraryImport("advapi32.dll")]
+        private static partial void AuditFree(IntPtr buffer);
 
-        [DllImport("advapi32.dll", SetLastError = true)]
+        [LibraryImport("advapi32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool AuditQuerySystemPolicy([In] Guid[] subCategoryGuids,
+        private static partial bool AuditQuerySystemPolicy([In] Guid[] subCategoryGuids,
             uint policyCount, out IntPtr auditPolicy);
 
         [StructLayout(LayoutKind.Sequential)]

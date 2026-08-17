@@ -4,13 +4,13 @@ using System.Runtime.InteropServices;
 
 namespace WinFIMLog.Snapshots
 {
-    internal static class AlternateDataStreams
+    internal static partial class AlternateDataStreams
     {
         internal static string[] Enumerate(string path)
         {
             var names = new List<string>();
             var handle = FindFirstStream(path, 0, out var data, 0);
-            if (handle == new IntPtr(-1)) return Array.Empty<string>();
+            if (handle == new IntPtr(-1)) return [];
             try
             {
                 do
@@ -24,13 +24,19 @@ namespace WinFIMLog.Snapshots
             return names.ToArray();
         }
 
-        [DllImport("kernel32.dll")][return: MarshalAs(UnmanagedType.Bool)] private static extern bool FindClose(IntPtr handle);
+        [LibraryImport("kernel32.dll")][return: MarshalAs(UnmanagedType.Bool)] private static partial bool FindClose(IntPtr handle);
 
-        [DllImport("kernel32.dll", EntryPoint = "FindFirstStreamW", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern IntPtr FindFirstStream(string fileName, int infoLevel, out StreamData data, int flags);
+        [DllImport("kernel32.dll", EntryPoint = "FindFirstStreamW", SetLastError = true, CharSet = CharSet.Unicode)]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability",
+            "SYSLIB1054:Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time",
+            Justification = "StreamData does not support compile time P/Invoke")]
+        private extern static IntPtr FindFirstStream(string fileName, int infoLevel, out StreamData data, int flags);
 
-        [DllImport("kernel32.dll", EntryPoint = "FindNextStreamW", CharSet = CharSet.Unicode, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)] private static extern bool FindNextStream(IntPtr handle, out StreamData data);
+        [DllImport("kernel32.dll", EntryPoint = "FindNextStreamW", SetLastError = true)]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability",
+            "SYSLIB1054:Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time",
+            Justification = "StreamData does not support compile time P/Invoke")]
+        [return: MarshalAs(UnmanagedType.Bool)] private extern static bool FindNextStream(IntPtr handle, out StreamData data);
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         private struct StreamData

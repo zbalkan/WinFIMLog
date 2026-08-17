@@ -21,7 +21,10 @@ namespace WinFIMLog.Events
             var deleted = 0;
             if (!context.ExecuteTransaction(() => deleted =
                 context.EventOutbox.DeleteMany(x => x.DeliveredAt != null && x.DeliveredAt < cutoff)))
+            {
                 throw new InvalidOperationException("Could not commit Event Log outbox retention.");
+            }
+
             return deleted;
         }
 
@@ -72,7 +75,10 @@ namespace WinFIMLog.Events
                         NextAttemptAt = DateTimeOffset.MinValue
                     });
                 }
-            })) throw new InvalidOperationException("The evidence/outbox transaction did not commit.");
+            }))
+            {
+                throw new InvalidOperationException("The evidence/outbox transaction did not commit.");
+            }
         }
 
         public void Failed(EventOutboxRecord item, Exception exception)

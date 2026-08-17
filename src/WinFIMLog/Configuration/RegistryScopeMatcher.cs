@@ -22,7 +22,10 @@ namespace WinFIMLog.Configuration
         {
             if (IsWithin(configuredName, eventName)) return true;
             if (!configuredName.StartsWith(CurrentUser, StringComparison.OrdinalIgnoreCase) ||
-                !eventName.StartsWith(Users + "\\", StringComparison.OrdinalIgnoreCase)) return false;
+                !eventName.StartsWith(Users + "\\", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
 
             var afterUsers = eventName[(Users.Length + 1)..];
             var separator = afterUsers.IndexOf('\\');

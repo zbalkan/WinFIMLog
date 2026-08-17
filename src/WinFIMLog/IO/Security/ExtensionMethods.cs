@@ -110,8 +110,7 @@ namespace WinFIMLog.IO.Security
                 yield break;
             }
 
-            var names = Enum.GetNames(typeof(T));
-            foreach (var flag in names)
+            foreach (var flag in Enum.GetNames<T>())
             {
                 yield return flag;
             }
@@ -192,10 +191,9 @@ namespace WinFIMLog.IO.Security
         private static string OwnerName(FileSecurity fileSecurity)
         {
             ArgumentNullException.ThrowIfNull(fileSecurity);
-            IdentityReference? sid = null;
             try
             {
-                sid = fileSecurity.GetOwner(typeof(SecurityIdentifier));
+                var sid = fileSecurity.GetOwner(typeof(SecurityIdentifier));
                 if (sid == null)
                 {
                     return string.Empty;
@@ -224,11 +222,9 @@ namespace WinFIMLog.IO.Security
         private static string PrimaryGroupOfOwnerName(FileSecurity fileSecurity)
         {
             ArgumentNullException.ThrowIfNull(fileSecurity);
-
-            IdentityReference? primaryGroup = null;
             try
             {
-                primaryGroup = fileSecurity.GetGroup(typeof(SecurityIdentifier));
+                var primaryGroup = fileSecurity.GetGroup(typeof(SecurityIdentifier));
                 if (primaryGroup == null)
                 {
                     return string.Empty;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using LiteDB;
 using Microsoft.Extensions.Options;
 using WinFIMLog.Events;
@@ -17,7 +18,7 @@ namespace WinFIMLog.Data
 
         private const long MB = 1024 * 1024;
         private readonly LiteDatabase _database;
-        private readonly object writeLock = new();
+        private readonly Lock writeLock = new();
         private bool disposedValue;
 
         /// <summary>

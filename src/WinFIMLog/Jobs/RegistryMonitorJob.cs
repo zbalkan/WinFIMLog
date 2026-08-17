@@ -36,7 +36,7 @@ namespace WinFIMLog.Jobs
         private readonly int _pid;
 
         private readonly ObjectPool<StringBuilder> _sbPool = new DefaultObjectPoolProvider().CreateStringBuilderPool();
-        private readonly object _sessionLock = new();
+        private readonly Lock _sessionLock = new();
         private readonly Settings _settings;
         private readonly ISnapshotCoordinator _snapshots;
         private bool _disposedValue;
@@ -55,9 +55,9 @@ namespace WinFIMLog.Jobs
         /// <summary>
         ///     Start monitoring selected Registry keys
         /// </summary>
-        public Task RunAsync(CancellationToken cancellationToken) => RunAsync(cancellationToken, null);
+        public Task RunAsync(CancellationToken cancellationToken) => RunAsync(null, cancellationToken);
 
-        public async Task RunAsync(CancellationToken cancellationToken, Action? sourceStarted)
+        public async Task RunAsync(Action? sourceStarted, CancellationToken cancellationToken)
         {
             CleanupExistingSession();
             using var session = CreateSession();
@@ -68,10 +68,10 @@ namespace WinFIMLog.Jobs
 
             try
             {
-                using var cancellationRegistration = cancellationToken.Register(() => session.Stop());
+                await using var cancellationRegistration = cancellationToken.Register(() => session.Stop());
                 _logger.LogInformation("Started ETW session '{SessionName}' for Registry changes.", ETWSessionName);
                 sourceStarted?.Invoke();
-                using var lossPoll = new Timer(_ => ReportEventLoss(session), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+                await using var lossPoll = new Timer(_ => ReportEventLoss(session), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
                 await Task.Run(session.Source.Process, CancellationToken.None);
                 ReportEventLoss(session);
             }
@@ -205,8 +205,10 @@ namespace WinFIMLog.Jobs
                 if (IsMonitoredEvent(configuration, keyName, ev.ProcessID))
                 {
                     Debug.WriteLine($"Processing event: {ev.EventName} for {keyName}");
-                    var change = new RegistryChange(ev, keyName);
-                    change.ScopeHash = configuration.ScopeHash;
+                    var change = new RegistryChange(ev, keyName)
+                    {
+                        ScopeHash = configuration.ScopeHash
+                    };
 
                     _messageStore.Add(change);
                 }

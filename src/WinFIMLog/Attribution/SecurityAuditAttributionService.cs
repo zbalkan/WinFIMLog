@@ -40,7 +40,7 @@ namespace WinFIMLog.Attribution
 
         public override void Dispose()
         {
-            if (watcher != null) watcher.EventRecordWritten -= OnRecord;
+            watcher?.EventRecordWritten -= OnRecord;
             watcher?.Dispose();
             base.Dispose();
         }
@@ -94,8 +94,7 @@ namespace WinFIMLog.Attribution
             var xml = record?.ToXml();
             if (xml == null || !IsDeclaredScope(xml)) return;
             var document = XDocument.Parse(xml);
-            var data = document.Descendants().Where(element => element.Name.LocalName == "Data")
-                .Where(element => element.Attribute("Name") != null)
+            var data = document.Descendants().Where(element => element.Name.LocalName == "Data" && element.Attribute("Name") != null)
                 .GroupBy(element => element.Attribute("Name")!.Value, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => (object?)group.Last().Value,
                     StringComparer.OrdinalIgnoreCase);

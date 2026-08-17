@@ -19,7 +19,7 @@ namespace WinFIMLog.Jobs
         private readonly ILogger _logger;
         private readonly Settings _settings;
         private readonly ISnapshotCoordinator _snapshots;
-        private readonly object _watcherLock = new();
+        private readonly Lock _watcherLock = new();
         private readonly List<FileSystemWatcher> _watchers;
         private bool _disposedValue;
         private bool _stopping;
@@ -48,7 +48,11 @@ namespace WinFIMLog.Jobs
                 foreach (var watcher in _watchers.ToArray())
                 {
                     if (desired.Contains(watcher.Path) &&
-                        watcher.InternalBufferSize == configuration.WatcherBufferSizeKB * 1024) continue;
+                        watcher.InternalBufferSize == configuration.WatcherBufferSizeKB * 1024)
+                    {
+                        continue;
+                    }
+
                     DisposeWatcher(watcher);
                     _watchers.Remove(watcher);
                     _logger.LogInformation("Removed file system watcher for directory {Directory}", watcher.Path);
@@ -78,7 +82,7 @@ namespace WinFIMLog.Jobs
             }
         }
 
-        private static string? senderPath(EffectiveSettings configuration, string path) =>
+        private static string? SenderPath(EffectiveSettings configuration, string path) =>
             Array.Find(configuration.MonitoredPaths, p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
 
         private FileSystemWatcher CreateWatcher(string path, EffectiveSettings configuration)
@@ -178,8 +182,12 @@ namespace WinFIMLog.Jobs
         {
             var configuration = _settings.Capture();
             if (!_baselineAvailability.IsEstablished(configuration) ||
-                (!configuration.IsMonitoredPath(e.FullPath) && !configuration.IsMonitoredPath(e.OldFullPath))) return;
-            _capture.TryAdmit(new RawFileSystemNotification(senderPath(configuration, e.FullPath) ?? senderPath(configuration, e.OldFullPath) ?? string.Empty,
+                (!configuration.IsMonitoredPath(e.FullPath) && !configuration.IsMonitoredPath(e.OldFullPath)))
+            {
+                return;
+            }
+
+            _capture.TryAdmit(new RawFileSystemNotification(SenderPath(configuration, e.FullPath) ?? SenderPath(configuration, e.OldFullPath) ?? string.Empty,
                 e.FullPath, ChangeCategory.Changed, DateTimeOffset.UtcNow, e.OldFullPath, e.FullPath));
         }
 
@@ -192,7 +200,7 @@ namespace WinFIMLog.Jobs
             }
 
             _capture.TryAdmit(new RawFileSystemNotification(
-                (senderPath(configuration, path) ?? string.Empty), path, category, DateTimeOffset.UtcNow));
+                SenderPath(configuration, path) ?? string.Empty, path, category, DateTimeOffset.UtcNow));
         }
 
         private void Stop()

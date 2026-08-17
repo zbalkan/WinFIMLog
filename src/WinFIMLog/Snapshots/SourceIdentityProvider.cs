@@ -32,7 +32,10 @@ namespace WinFIMLog.Snapshots
             var fileSystemName = new StringBuilder(261);
             if (!GetVolumeInformation(root, volumeName, volumeName.Capacity, out var serial, out _, out _,
                     fileSystemName, fileSystemName.Capacity))
+            {
                 throw new IOException($"Cannot identify volume '{root}'.", new Win32Exception(Marshal.GetLastWin32Error()));
+            }
+
             return $"{root}|{serial:X8}|{fileSystemName}";
         }
     }

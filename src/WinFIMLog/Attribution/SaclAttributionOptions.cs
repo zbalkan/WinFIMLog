@@ -6,8 +6,8 @@ namespace WinFIMLog.Attribution
     public sealed class SaclAttributionOptions
     {
         public bool Enabled { get; set; }
-        public string[] FileScopes { get; set; } = Array.Empty<string>();
-        public string[] RegistryScopes { get; set; } = Array.Empty<string>();
+        public string[] FileScopes { get; set; } = [];
+        public string[] RegistryScopes { get; set; } = [];
 
         public void Validate()
         {

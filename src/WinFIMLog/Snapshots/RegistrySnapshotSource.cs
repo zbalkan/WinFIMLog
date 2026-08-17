@@ -46,7 +46,9 @@ namespace WinFIMLog.Snapshots
                 foreach (var sid in Registry.Users.GetSubKeyNames()
                     .Where(name => name.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase) &&
                                    !name.EndsWith("_Classes", StringComparison.OrdinalIgnoreCase)))
+                {
                     yield return "HKEY_USERS\\" + sid + suffix;
+                }
             }
         }
 
@@ -74,7 +76,7 @@ namespace WinFIMLog.Snapshots
         };
 
         private static string[] Safe(Func<string[]> action)
-        { try { return action(); } catch { return Array.Empty<string>(); } }
+        { try { return action(); } catch { return []; } }
 
         private static byte[]? Serialise(object? value) => value switch
         { null => null, byte[] bytes => bytes, string[] strings => Encoding.UTF8.GetBytes(string.Join("\0", strings)), _ => Encoding.UTF8.GetBytes(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty) };

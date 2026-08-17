@@ -12,7 +12,7 @@ namespace WinFIMLog.Snapshots
         internal static (IReadOnlyList<BaselineMember> Members, int Passes) Capture(
             Func<IReadOnlyList<BaselineMember>> capture, int maximumPasses = 3)
         {
-            if (maximumPasses < 2) throw new ArgumentOutOfRangeException(nameof(maximumPasses));
+            ArgumentOutOfRangeException.ThrowIfLessThan(maximumPasses, 2);
             var previous = capture();
             for (var pass = 2; pass <= maximumPasses; pass++)
             {

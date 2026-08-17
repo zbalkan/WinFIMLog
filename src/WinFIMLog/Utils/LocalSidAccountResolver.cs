@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Threading;
 
 namespace WinFIMLog.Utils
 {
@@ -9,13 +10,13 @@ namespace WinFIMLog.Utils
     /// Resolves SIDs from logon-session data already held by the local LSA. Unlike account
     /// translation, this lookup does not need a domain controller.
     /// </summary>
-    internal static class LocalSidAccountResolver
+    internal static partial class LocalSidAccountResolver
     {
         private static readonly ConcurrentDictionary<string, CacheEntry> Entries =
             new(StringComparer.OrdinalIgnoreCase);
 
         private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
-        private static readonly object RefreshLock = new();
+        private static readonly Lock RefreshLock = new();
         private static DateTime _nextRefreshUtc;
 
         internal static string? Resolve(string sid)
@@ -44,14 +45,14 @@ namespace WinFIMLog.Utils
                 : null;
         }
 
-        [DllImport("secur32.dll")]
-        private static extern uint LsaEnumerateLogonSessions(out ulong logonSessionCount, out IntPtr logonSessionList);
+        [LibraryImport("secur32.dll")]
+        private static partial uint LsaEnumerateLogonSessions(out ulong logonSessionCount, out IntPtr logonSessionList);
 
-        [DllImport("secur32.dll")]
-        private static extern uint LsaFreeReturnBuffer(IntPtr buffer);
+        [LibraryImport("secur32.dll")]
+        private static partial uint LsaFreeReturnBuffer(IntPtr buffer);
 
-        [DllImport("secur32.dll")]
-        private static extern uint LsaGetLogonSessionData(ref Luid logonId, out IntPtr ppLogonSessionData);
+        [LibraryImport("secur32.dll")]
+        private static partial uint LsaGetLogonSessionData(ref Luid logonId, out IntPtr ppLogonSessionData);
 
         private static void Refresh(DateTime now)
         {
@@ -93,13 +94,13 @@ namespace WinFIMLog.Utils
                     }
                     finally
                     {
-                        LsaFreeReturnBuffer(dataAddress);
+                        _ = LsaFreeReturnBuffer(dataAddress);
                     }
                 }
             }
             finally
             {
-                LsaFreeReturnBuffer(sessions);
+                _ = LsaFreeReturnBuffer(sessions);
             }
         }
 

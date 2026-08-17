@@ -35,15 +35,15 @@ namespace WinFIMLog.Jobs
         /// </summary>
         /// <exception cref="System.IO.IOException">
         /// </exception>
-        /// <exception cref="System.UnauthorizedAccessException">
+        /// <exception cref="UnauthorizedAccessException">
         /// </exception>
-        /// <exception cref="System.AggregateException">
+        /// <exception cref="AggregateException">
         /// </exception>
         /// <exception cref="System.Text.RegularExpressions.RegexMatchTimeoutException">
         /// </exception>
-        /// <exception cref="System.OperationCanceledException">
+        /// <exception cref="OperationCanceledException">
         /// </exception>
-        /// <exception cref="System.OverflowException">
+        /// <exception cref="OverflowException">
         /// </exception>
         internal void Start()
         {
@@ -58,7 +58,7 @@ namespace WinFIMLog.Jobs
             var filesCount = files.Count.ToString("N0");
             var filteredAfterLastScanCount = filtered.Count.ToString("N0");
             var diff = (files.Count - filtered.Count).ToString("N0");
-            var percentage = files.Count == 0
+            var percentage = files.IsEmpty
                 ? 0d.ToString("N2")
                 : ((double)(files.Count - filtered.Count) * 100 / files.Count).ToString("N2");
 
@@ -130,11 +130,11 @@ namespace WinFIMLog.Jobs
         /// </returns>
         /// <exception cref="RegexMatchTimeoutException">
         /// </exception>
-        /// <exception cref="System.OperationCanceledException">
+        /// <exception cref="OperationCanceledException">
         /// </exception>
-        /// <exception cref="System.AggregateException">
+        /// <exception cref="AggregateException">
         /// </exception>
-        /// <exception cref="System.OverflowException">
+        /// <exception cref="OverflowException">
         /// </exception>
         /// <exception cref="System.Text.RegularExpressions.RegexMatchTimeoutException">
         /// </exception>
@@ -159,9 +159,9 @@ namespace WinFIMLog.Jobs
         /// </returns>
         /// <exception cref="System.IO.IOException">
         /// </exception>
-        /// <exception cref="System.UnauthorizedAccessException">
+        /// <exception cref="UnauthorizedAccessException">
         /// </exception>
-        /// <exception cref="System.AggregateException">
+        /// <exception cref="AggregateException">
         /// </exception>
         private ConcurrentBag<string> RunNtfsDiscovery(out Stopwatch sw)
         {

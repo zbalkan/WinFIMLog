@@ -34,9 +34,7 @@ namespace WinFIMLog.IO
                         FileShare.ReadWrite | FileShare.Delete);
                     using var bufferedStream = new BufferedStream(fileStream, 1024 * 32);
                     using var sha = SHA256.Create();
-                    digest = BitConverter
-                        .ToString(sha.ComputeHash(bufferedStream))
-                        .Replace("-", string.Empty);
+                    digest = Convert.ToHexString(sha.ComputeHash(bufferedStream));
                 }
                 catch (UnauthorizedAccessException ex)
                 {

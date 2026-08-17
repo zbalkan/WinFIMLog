@@ -63,7 +63,7 @@ namespace System.IO.Filesystem.Ntfs
 
                 if (nodeList == null)
                 {
-                    nodeList = new List<INode>();
+                    nodeList = [];
                     fragmentsAggregate[fragmentCount] = nodeList;
                 }
 
@@ -88,7 +88,7 @@ namespace System.IO.Filesystem.Ntfs
 
                 if (nodeList == null)
                 {
-                    nodeList = new List<INode>();
+                    nodeList = [];
                     sizeAggregate[node.Size] = nodeList;
                 }
 

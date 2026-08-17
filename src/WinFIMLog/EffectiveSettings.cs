@@ -10,18 +10,18 @@ namespace WinFIMLog
         internal int CaptureQueueCapacity { get; set; } = 8192;
         internal bool EnableLocalDatabase { get; set; } = true;
         internal bool EnableRegistryMonitoring { get; set; }
-        internal string[] ExcludedExtensions { get; set; } = Array.Empty<string>();
+        internal string[] ExcludedExtensions { get; set; } = [];
         internal Regex? ExcludedExtensionsPattern { get; set; }
-        internal string[] ExcludedKeys { get; set; } = Array.Empty<string>();
+        internal string[] ExcludedKeys { get; set; } = [];
         internal Regex? ExcludedKeysPattern { get; set; }
-        internal string[] ExcludedPaths { get; set; } = Array.Empty<string>();
+        internal string[] ExcludedPaths { get; set; } = [];
         internal Regex? ExcludedPathsPattern { get; set; }
         internal int FileSystemSnapshotInterval { get; set; } = 21600;
         internal int HashLimitMB { get; set; }
         internal int HeartbeatInterval { get; set; }
-        internal string[] MonitoredKeys { get; set; } = Array.Empty<string>();
+        internal string[] MonitoredKeys { get; set; } = [];
         internal Regex MonitoredKeysPattern { get; set; } = null!;
-        internal string[] MonitoredPaths { get; set; } = Array.Empty<string>();
+        internal string[] MonitoredPaths { get; set; } = [];
         internal Regex MonitoredPathsPattern { get; set; } = null!;
         internal RegistryScopeMatcher RegistryScopeMatcher { get; set; } = null!;
         internal int RegistrySnapshotInterval { get; set; } = 21600;

@@ -26,7 +26,7 @@ namespace WinFIMLog.FIM
         /// <param name="hashLimitMb">The maximum file size in megabytes for hash calculation.</param>
         /// <param name="fileSystemChange">The change object</param>
         /// <exception cref="NotSupportedException"></exception>
-        /// <exception cref="System.Security.SecurityException"></exception>
+        /// <exception cref="SecurityException"></exception>
         /// <exception cref="System.Reflection.TargetInvocationException"></exception>
         /// <exception cref="PathTooLongException"></exception> <exception cref="UnauthorizedAccessException"></exception>
         public static FileSystemChange? FromPath(string path, ChangeCategory category, int hashLimitMb)
@@ -64,7 +64,7 @@ namespace WinFIMLog.FIM
         public static FileSystemChange? FromPath(string path, ChangeCategory category, int hashLimitMb, string scopeHash)
         {
             var change = FromPath(path, category, hashLimitMb);
-            if (change != null) change.ScopeHash = scopeHash;
+            change?.ScopeHash = scopeHash;
             return change;
         }
 

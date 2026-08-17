@@ -51,7 +51,7 @@ namespace WinFIMLog.Snapshots
         public string Path { get; set; } = string.Empty;
         public byte[]? RegistryValueData { get; set; }
         public string? RegistryValueKind { get; set; }
-        public string[] StreamNames { get; set; } = Array.Empty<string>();
+        public string[] StreamNames { get; set; } = [];
     }
 
     public sealed class BaselineMetadata

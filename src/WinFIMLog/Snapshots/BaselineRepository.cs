@@ -30,7 +30,11 @@ namespace WinFIMLog.Snapshots
             {
                 SupersedeInapplicable(source, scopeHash, sourceIdentity, schemaVersion, algorithmVersion);
                 context.Baselines.Insert(baseline);
-            })) throw new InvalidOperationException("Could not commit the baseline start transaction.");
+            }))
+            {
+                throw new InvalidOperationException("Could not commit the baseline start transaction.");
+            }
+
             return baseline;
         }
 
@@ -46,13 +50,19 @@ namespace WinFIMLog.Snapshots
                 if (keep.Contains(baseline.Id)) continue;
                 if (!context.ExecuteTransaction(() =>
                     context.BaselineMembers.DeleteMany(x => x.BaselineId == baseline.Id)))
+                {
                     throw new InvalidOperationException("Could not compact baseline members.");
+                }
+
                 if (context.ReconciliationResults.Exists(x => x.BaselineId == baseline.Id && x.DeliveredAt == null)) continue;
                 if (!context.ExecuteTransaction(() =>
                 {
                     context.ReconciliationResults.DeleteMany(x => x.BaselineId == baseline.Id);
                     context.Baselines.Delete(baseline.Id);
-                })) throw new InvalidOperationException("Could not compact baseline metadata.");
+                }))
+                {
+                    throw new InvalidOperationException("Could not compact baseline metadata.");
+                }
             }
         }
 
@@ -109,7 +119,10 @@ namespace WinFIMLog.Snapshots
                         member.BaselineId = baseline.Id;
                         context.BaselineMembers.Insert(member);
                     }
-                })) throw new InvalidOperationException("A baseline staging transaction did not commit.");
+                }))
+                {
+                    throw new InvalidOperationException("A baseline staging transaction did not commit.");
+                }
             }
 
             if (!context.ExecuteTransaction(() =>
@@ -120,7 +133,11 @@ namespace WinFIMLog.Snapshots
                 baseline.CompletedAt = DateTimeOffset.UtcNow;
                 baseline.Status = BaselineStatus.Complete;
                 context.Baselines.Update(baseline);
-            })) throw new InvalidOperationException("The baseline completion transaction did not commit.");
+            }))
+            {
+                throw new InvalidOperationException("The baseline completion transaction did not commit.");
+            }
+
             return results;
         }
 
@@ -156,7 +173,7 @@ namespace WinFIMLog.Snapshots
 
         private List<ReconciliationResult> Diff(string baselineId, BaselineMetadata? previous, List<BaselineMember> current)
         {
-            if (previous is null) return new List<ReconciliationResult>();
+            if (previous is null) return [];
             var before = Members(previous.Id).ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
             var after = current.ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
             var now = DateTimeOffset.UtcNow;
@@ -179,7 +196,11 @@ namespace WinFIMLog.Snapshots
             foreach (var item in context.Baselines.Find(x => x.Source == source && x.Status == BaselineStatus.Complete).ToList())
             {
                 if (item.ScopeHash == scopeHash && item.SourceIdentity == identity &&
-                    item.SchemaVersion == schema && item.AlgorithmVersion == algorithm) continue;
+                    item.SchemaVersion == schema && item.AlgorithmVersion == algorithm)
+                {
+                    continue;
+                }
+
                 item.Applicability = BaselineApplicability.Superseded;
                 context.Baselines.Update(item);
             }

@@ -38,11 +38,12 @@ namespace System.IO.Filesystem.Ntfs
         [DllImport("kernel32", CharSet = CharSet.Auto, BestFitMapping = false)]
         private static extern bool GetVolumeNameForVolumeMountPoint(string volumeName, StringBuilder uniqueVolumeName, int uniqueNameBufferCapacity);
 
-        [DllImport("kernel32", CharSet = CharSet.Auto, BestFitMapping = false)]
-        private static extern SafeFileHandle CreateFile(string lpFileName, FileAccess fileAccess, FileShare fileShare, IntPtr lpSecurityAttributes, FileMode fileMode, int dwFlagsAndAttributes, IntPtr hTemplateFile);
+        [LibraryImport("kernel32", StringMarshalling = StringMarshalling.Utf16)]
+        private static partial SafeFileHandle CreateFile(string lpFileName, FileAccess fileAccess, FileShare fileShare, IntPtr lpSecurityAttributes, FileMode fileMode, int dwFlagsAndAttributes, IntPtr hTemplateFile);
 
-        [DllImport("kernel32", CharSet = CharSet.Auto)]
-        private static extern bool ReadFile(SafeFileHandle hFile, IntPtr lpBuffer, uint nNumberOfBytesToRead, out uint lpNumberOfBytesRead, ref NativeOverlapped lpOverlapped);
+        [LibraryImport("kernel32")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool ReadFile(SafeFileHandle hFile, IntPtr lpBuffer, uint nNumberOfBytesToRead, out uint lpNumberOfBytesRead, ref NativeOverlapped lpOverlapped);
 
         [Serializable]
         private enum FileMode

@@ -528,7 +528,7 @@ namespace System.IO.Filesystem.Ntfs
         StandardInformation[] _standardInformations;
         Stream[][] _streams;
         readonly DriveInfo _driveInfo;
-        readonly List<string> _names = new List<string>();
+        readonly List<string> _names = [];
         readonly RetrieveMode _retrieveMode;
         byte[] _bitmapData;
 
@@ -712,7 +712,7 @@ namespace System.IO.Filesystem.Ntfs
 
                 if (bootSector->ClustersPerMftRecord >= 128)
                 {
-                    diskInfo.BytesPerMftRecord = ((ulong)1 << (byte)(256 - (byte)bootSector->ClustersPerMftRecord));
+                    diskInfo.BytesPerMftRecord = (ulong)1 << (byte)(256 - (byte)bootSector->ClustersPerMftRecord);
                 }
                 else
                 {
@@ -858,8 +858,8 @@ namespace System.IO.Filesystem.Ntfs
                 while (RunData[Index] != 0)
                 {
                     /* Decode the RunData and calculate the next Lcn. */
-                    var RunLengthSize = (RunData[Index] & 0x0F);
-                    var RunOffsetSize = ((RunData[Index] & 0xF0) >> 4);
+                    var RunLengthSize = RunData[Index] & 0x0F;
+                    var RunOffsetSize = (RunData[Index] & 0xF0) >> 4;
                     
                     if (++Index >= RunDataLength)
                     {
@@ -895,7 +895,7 @@ namespace System.IO.Filesystem.Ntfs
                     if (Offset > ExtentVcn)
                     {
                         ExtentLcn = ExtentLcn + Offset - ExtentVcn;
-                        ExtentLength -= (Offset - ExtentVcn);
+                        ExtentLength -= Offset - ExtentVcn;
                         ExtentVcn = Offset;
                     }
 
@@ -1240,8 +1240,8 @@ namespace System.IO.Filesystem.Ntfs
             while (runData[index] != 0)
             {
                 /* Decode the RunData and calculate the next Lcn. */
-                var runLengthSize = (runData[index] & 0x0F);
-                var runOffsetSize = ((runData[index] & 0xF0) >> 4);
+                var runLengthSize = runData[index] & 0x0F;
+                var runOffsetSize = (runData[index] & 0xF0) >> 4;
 
                 if (++index >= runDataLength)
                 {
@@ -1484,7 +1484,7 @@ namespace System.IO.Filesystem.Ntfs
                     List<Stream> streams = null;
                     if ((_retrieveMode & RetrieveMode.Streams) == RetrieveMode.Streams)
                     {
-                        streams = new List<Stream>();
+                        streams = [];
                     }
 
                     if (!ProcessMftRecord(
@@ -1509,7 +1509,7 @@ namespace System.IO.Filesystem.Ntfs
                 stopwatch.Stop();
 
                 Trace.WriteLine(
-                    $"{(float) totalBytesRead / (1024 * 1024):F3} MB of volume metadata has been read in {(float) stopwatch.Elapsed.TotalSeconds:F3} s at {((float) totalBytesRead / (1024 * 1024)) / stopwatch.Elapsed.TotalSeconds:F3} MB/s"
+                    $"{(float) totalBytesRead / (1024 * 1024):F3} MB of volume metadata has been read in {(float) stopwatch.Elapsed.TotalSeconds:F3} s at {(float) totalBytesRead / (1024 * 1024) / stopwatch.Elapsed.TotalSeconds:F3} MB/s"
                 );
 
                 return nodes;

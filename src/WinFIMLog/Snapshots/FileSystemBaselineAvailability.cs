@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 
 namespace WinFIMLog.Snapshots
 {
@@ -9,7 +10,7 @@ namespace WinFIMLog.Snapshots
     public sealed class FileSystemBaselineAvailability
     {
         private readonly BaselineRepository repository;
-        private readonly object sync = new();
+        private readonly Lock sync = new();
         private string establishedIdentity = string.Empty;
         private string establishedScope = string.Empty;
 
@@ -23,8 +24,10 @@ namespace WinFIMLog.Snapshots
         {
             var identity = SourceIdentityProvider.FileSystem(configuration.MonitoredPaths);
             lock (sync)
+            {
                 return string.Equals(establishedScope, configuration.ScopeHash, StringComparison.Ordinal) &&
                     string.Equals(establishedIdentity, identity, StringComparison.Ordinal);
+            }
         }
 
         public void Refresh(EffectiveSettings configuration)

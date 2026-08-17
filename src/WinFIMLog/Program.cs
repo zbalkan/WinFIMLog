@@ -36,10 +36,7 @@ namespace WinFIMLog
 
                     logging.AddProvider(new EventIdEventLogLoggerProvider("WinFIMLog", "WinFIMLog"));
                 })
-                .ConfigureAppConfiguration(configuration =>
-                {
-                    _ = configuration.AddWindowsRegistry(Registry.RootName, Registry.Hive, false);
-                })
+                .ConfigureAppConfiguration(configuration => _ = configuration.AddWindowsRegistry(Registry.RootName, Registry.Hive, false))
                 .ConfigureServices(services =>
                 {
                     _ = services.AddOptions<SaclAttributionOptions>()

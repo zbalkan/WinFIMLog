@@ -8,8 +8,10 @@ namespace WinFIMLog.Configuration
         public SettingsStartupValidator(Settings settings)
         {
             if (!settings.Success)
+            {
                 throw new ConfigurationValidationException(
                     $"WinFIMLog configuration could not be loaded: {settings.FailureReason ?? "unknown error"}");
+            }
         }
 
         public System.Threading.Tasks.Task StartAsync(System.Threading.CancellationToken cancellationToken) =>

@@ -19,8 +19,7 @@ namespace WinFIMLog
                 return false;
             }
 
-            string command = args[0].ToLowerInvariant();
-            switch (command)
+            switch (args[0].ToLowerInvariant())
             {
                 case "install":
                 case "-i":
@@ -48,9 +47,9 @@ namespace WinFIMLog
 
         private static void CopyApplicationFiles(string sourceDirectory, string installDirectory, string sourceExecutable, string targetExecutable)
         {
-            foreach (string file in Directory.EnumerateFiles(sourceDirectory))
+            foreach (var file in Directory.EnumerateFiles(sourceDirectory))
             {
-                string target = Path.Combine(installDirectory, Path.GetFileName(file));
+                var target = Path.Combine(installDirectory, Path.GetFileName(file));
                 if (string.Equals(file, target, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -70,13 +69,13 @@ namespace WinFIMLog
 
         private static string GetDefaultInstallDirectory()
         {
-            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             return Path.Combine(programFiles, DefaultInstallFolderName);
         }
 
         private static string? GetOption(string[] args, string optionName)
         {
-            for (int i = 0; i < args.Length; i++)
+            for (var i = 0; i < args.Length; i++)
             {
                 if (string.Equals(args[i], optionName, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
                 {
@@ -92,12 +91,12 @@ namespace WinFIMLog
 
         private static void Install(string[] args)
         {
-            string installDirectory = GetOption(args, "--install-dir") ?? GetDefaultInstallDirectory();
-            bool startService = HasOption(args, "--start");
-            string sourceExecutable = GetCurrentExecutablePath();
-            string targetExecutable = Path.Combine(installDirectory, Path.GetFileName(sourceExecutable));
+            var installDirectory = GetOption(args, "--install-dir") ?? GetDefaultInstallDirectory();
+            var startService = HasOption(args, "--start");
+            var sourceExecutable = GetCurrentExecutablePath();
+            var targetExecutable = Path.Combine(installDirectory, Path.GetFileName(sourceExecutable));
 
-            bool serviceExists = ServiceExists();
+            var serviceExists = ServiceExists();
             if (serviceExists)
             {
                 RunSc("stop", ServiceName);
@@ -106,7 +105,7 @@ namespace WinFIMLog
             Directory.CreateDirectory(installDirectory);
             CopyApplicationFiles(Path.GetDirectoryName(sourceExecutable)!, installDirectory, sourceExecutable, targetExecutable);
 
-            string quotedBinaryPath = Quote(targetExecutable);
+            var quotedBinaryPath = Quote(targetExecutable);
             if (serviceExists)
             {
                 RunSc("config", ServiceName, "binPath=", quotedBinaryPath, "start=", "auto", "DisplayName=", DisplayName);
@@ -137,7 +136,7 @@ namespace WinFIMLog
 
         private static void RunPowerShell(string script)
         {
-            ProcessResult result = RunProcess("powershell.exe", "-NoProfile", "-NonInteractive",
+            var result = RunProcess("powershell.exe", "-NoProfile", "-NonInteractive",
                 "-ExecutionPolicy", "Bypass", "-File", script);
             if (result.ExitCode != 0)
                 throw new InvalidOperationException($"Event channel configuration failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
@@ -145,25 +144,25 @@ namespace WinFIMLog
 
         private static ProcessResult RunProcess(string fileName, params string[] arguments)
         {
-            using Process process = new Process();
+            using var process = new Process();
             process.StartInfo.FileName = fileName;
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
-            foreach (string argument in arguments)
+            foreach (var argument in arguments)
             {
                 process.StartInfo.ArgumentList.Add(argument);
             }
 
             process.Start();
-            string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
             process.WaitForExit();
             return new ProcessResult(process.ExitCode, output);
         }
 
         private static void RunSc(params string[] arguments)
         {
-            ProcessResult result = RunProcess("sc.exe", arguments);
+            var result = RunProcess("sc.exe", arguments);
             if (result.ExitCode != 0 && !IsIgnorableStopFailure(arguments, result.Output))
             {
                 throw new InvalidOperationException($"sc.exe {string.Join(' ', arguments)} failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
@@ -172,19 +171,19 @@ namespace WinFIMLog
 
         private static bool ServiceExists()
         {
-            ProcessResult result = RunProcess("sc.exe", "query", ServiceName);
+            var result = RunProcess("sc.exe", "query", ServiceName);
             return result.ExitCode == 0;
         }
 
         private static void Uninstall(string[] args)
         {
-            bool removeFiles = HasOption(args, "--remove-files");
-            string installDirectory = GetOption(args, "--install-dir") ?? GetDefaultInstallDirectory();
+            var removeFiles = HasOption(args, "--remove-files");
+            var installDirectory = GetOption(args, "--install-dir") ?? GetDefaultInstallDirectory();
 
             if (ServiceExists())
             {
                 RunSc("stop", ServiceName);
-                string removalScript = Path.Combine(installDirectory, "uninstall-event-channels.ps1");
+                var removalScript = Path.Combine(installDirectory, "uninstall-event-channels.ps1");
                 if (File.Exists(removalScript)) RunPowerShell(removalScript);
                 RunSc("delete", ServiceName);
             }

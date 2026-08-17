@@ -17,6 +17,7 @@ namespace WinFIMLog.Jobs
         private readonly FileSystemCaptureQueue _capture;
         private readonly IHealthReporter _health;
         private readonly ISnapshotCoordinator _snapshots;
+        private readonly FileSystemBaselineAvailability _baselineAvailability;
 
         private readonly List<FileSystemWatcher> _watchers;
         private readonly object _watcherLock = new();
@@ -26,7 +27,8 @@ namespace WinFIMLog.Jobs
 
         private bool _disposedValue;
 
-        public FileSystemMonitorJob(ILogger logger, FileSystemCaptureQueue capture, IHealthReporter health, Settings settings, ISnapshotCoordinator snapshots)
+        public FileSystemMonitorJob(ILogger logger, FileSystemCaptureQueue capture, IHealthReporter health,
+            Settings settings, ISnapshotCoordinator snapshots, FileSystemBaselineAvailability baselineAvailability)
         {
             _logger = logger;
             _watchers = [];
@@ -34,6 +36,7 @@ namespace WinFIMLog.Jobs
             _health = health;
             _settings = settings;
             _snapshots = snapshots;
+            _baselineAvailability = baselineAvailability;
         }
 
         public async Task RunAsync(CancellationToken cancellationToken)
@@ -68,6 +71,7 @@ namespace WinFIMLog.Jobs
         public void Reconfigure()
         {
             var configuration = _settings.Capture();
+            _baselineAvailability.Refresh(configuration);
             var desired = new HashSet<string>(configuration.MonitoredPaths, StringComparer.OrdinalIgnoreCase);
             lock (_watcherLock)
             {
@@ -138,7 +142,8 @@ namespace WinFIMLog.Jobs
         private void OnRenamed(object sender, RenamedEventArgs e)
         {
             var configuration = _settings.Capture();
-            if (!configuration.IsMonitoredPath(e.FullPath) && !configuration.IsMonitoredPath(e.OldFullPath)) return;
+            if (!_baselineAvailability.IsEstablished(configuration) ||
+                (!configuration.IsMonitoredPath(e.FullPath) && !configuration.IsMonitoredPath(e.OldFullPath))) return;
             _capture.TryAdmit(new RawFileSystemNotification(senderPath(configuration, e.FullPath) ?? senderPath(configuration, e.OldFullPath) ?? string.Empty,
                 e.FullPath, ChangeCategory.Changed, DateTimeOffset.UtcNow, e.OldFullPath, e.FullPath));
         }
@@ -192,7 +197,7 @@ namespace WinFIMLog.Jobs
         private void ProcessEvent(string path, ChangeCategory category)
         {
             var configuration = _settings.Capture();
-            if (!configuration.IsMonitoredPath(path))
+            if (!configuration.IsMonitoredPath(path) || !_baselineAvailability.IsEstablished(configuration))
             {
                 return;
             }

@@ -34,7 +34,8 @@ namespace WinFIMLog
                       Settings settings,
                       IHealthReporter health,
                       HealthMetrics metrics,
-                      ISnapshotCoordinator snapshots)
+                      ISnapshotCoordinator snapshots,
+                      FileSystemBaselineAvailability fileSystemBaselineAvailability)
         {
             _logger = logger;
             _settings = settings;
@@ -43,7 +44,8 @@ namespace WinFIMLog
             _snapshots = snapshots;
             _capture = capture;
             _regMonitor = new RegistryMonitorJob(_logger, regStore, settings, snapshots);
-            _fsMonitor = new FileSystemMonitorJob(_logger, capture, health, settings, snapshots);
+            _fsMonitor = new FileSystemMonitorJob(_logger, capture, health, settings, snapshots,
+                fileSystemBaselineAvailability);
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);

@@ -67,6 +67,7 @@ namespace WinFIMLog
                     _ = services.AddHostedService<StorageMaintenanceService>();
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
                     _ = services.AddSingleton<BaselineRepository>();
+                    _ = services.AddSingleton<FileSystemBaselineAvailability>();
                     // Reject invalid settings before any source or snapshot hosted service starts.
                     _ = services.AddHostedService<SettingsStartupValidator>();
                     // Optional and deliberately independent of snapshot/completeness services.

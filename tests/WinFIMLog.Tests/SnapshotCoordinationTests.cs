@@ -21,9 +21,10 @@ public sealed class SnapshotCoordinationTests
         try
         {
             var settings = new Settings(SettingsAtomicPublicationTests.GenerationForTest("scope", Path.GetTempPath()));
-            var service = new SnapshotService(new BaselineRepository(context), settings,
+            var repository = new BaselineRepository(context);
+            var service = new SnapshotService(repository, settings,
                 NullLogger<SnapshotService>.Instance, new RecordingHealth(), new SnapshotHealthState(),
-                Options.Create(new RetentionOptions()));
+                Options.Create(new RetentionOptions()), new FileSystemBaselineAvailability(repository, settings));
 
             for (var index = 0; index < 10_000; index++)
             {

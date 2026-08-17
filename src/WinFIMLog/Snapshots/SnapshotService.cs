@@ -20,6 +20,7 @@ namespace WinFIMLog.Snapshots
         private readonly IHealthReporter health;
         private readonly SnapshotHealthState state;
         private readonly RetentionOptions retention;
+        private readonly FileSystemBaselineAvailability fileSystemBaselineAvailability;
         private readonly Channel<SnapshotRequest> fileSystemRequests = BoundedRequests();
         private readonly Channel<SnapshotRequest> registryRequests = BoundedRequests();
 
@@ -28,7 +29,7 @@ namespace WinFIMLog.Snapshots
 
         public SnapshotService(BaselineRepository repository, Settings settings,
             ILogger<SnapshotService> logger, IHealthReporter health, SnapshotHealthState state,
-            IOptions<RetentionOptions> retention)
+            IOptions<RetentionOptions> retention, FileSystemBaselineAvailability fileSystemBaselineAvailability)
         {
             this.repository = repository;
             this.settings = settings;
@@ -36,6 +37,7 @@ namespace WinFIMLog.Snapshots
             this.health = health;
             this.state = state;
             this.retention = retention.Value;
+            this.fileSystemBaselineAvailability = fileSystemBaselineAvailability;
         }
 
         public void RequestFileSystemSnapshot(string reason, string? affectedScope = null) =>
@@ -149,6 +151,7 @@ namespace WinFIMLog.Snapshots
                 baseline.ConsistencyMethod = "CursorlessConsecutiveAgreement";
                 baseline.ObservationPasses = observation.Passes;
                 _ = repository.ReconcileAndCompleteAfterConvergence(baseline, observation.Members);
+                fileSystemBaselineAvailability.Refresh(configuration);
                 logger.LogInformation("Completed filesystem baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}",
                     baseline.Id, baseline.ItemCount, baseline.ScopeHash);
                 repository.CompactAfterCompletion(baseline, retention.BaselineGenerations);

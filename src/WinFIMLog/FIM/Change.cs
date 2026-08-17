@@ -6,23 +6,19 @@ namespace WinFIMLog.FIM
     {
         public string ACLs { get; set; }
 
-        public AttributionStatus AttributionStatus { get; set; } = AttributionStatus.Unattributed;
+        /// <summary>Consumer-facing confidence in the optional attribution.</summary>
+        public string AttributionConfidence { get; set; } = "None";
 
         /// <summary>Technique used to obtain the optional identity evidence.</summary>
         public string AttributionMethod { get; set; } = "None";
 
-        /// <summary>Consumer-facing confidence in the optional attribution.</summary>
-        public string AttributionConfidence { get; set; } = "None";
+        /// <summary>Machine-readable explanation when attribution is incomplete.</summary>
+        public string? AttributionMissingReason { get; set; }
 
         /// <summary>Timestamp of the source event used for correlation.</summary>
         public DateTimeOffset? AttributionSourceTimestamp { get; set; }
 
-        /// <summary>Machine-readable explanation when attribution is incomplete.</summary>
-        public string? AttributionMissingReason { get; set; }
-
-        /// <summary>Kernel process sequence number; unlike PID, this identifies an instance.</summary>
-        public ulong? ProcessSequenceNumber { get; set; }
-
+        public AttributionStatus AttributionStatus { get; set; } = AttributionStatus.Unattributed;
         public ChangeCategory ChangeCategory { get; set; }
 
         public ConfigChangeType ConfigChangeType { get; set; }
@@ -37,11 +33,13 @@ namespace WinFIMLog.FIM
 
         public string? ProcessName { get; set; }
 
-        public string SourceComputer { get; set; }
+        /// <summary>Kernel process sequence number; unlike PID, this identifies an instance.</summary>
+        public ulong? ProcessSequenceNumber { get; set; }
 
         /// <summary>Canonical identity of the effective monitoring scope.</summary>
         public string ScopeHash { get; set; } = string.Empty;
 
+        public string SourceComputer { get; set; }
         public string? Username { get; set; }
 
         public string? UserSID { get; set; }

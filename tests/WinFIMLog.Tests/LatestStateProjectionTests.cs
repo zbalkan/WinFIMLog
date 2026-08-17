@@ -58,8 +58,12 @@ public sealed class LatestStateProjectionTests
 
     private sealed class RecordingHealth : IHealthReporter
     {
-        public void CoverageGap(string source, string scope, string reason, long lostCount = 1) { }
-        public void SourceRecovered(string source, string scope, string action) { }
+        public void CoverageGap(string source, string scope, string reason, long lostCount = 1)
+        { }
+
         public void SinkFailure(string sink, string reason, int attempt) => Assert.Fail($"Unexpected sink failure: {sink}/{reason}");
+
+        public void SourceRecovered(string source, string scope, string action)
+        { }
     }
 }

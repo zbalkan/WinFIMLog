@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -24,6 +23,17 @@ namespace WinFIMLog.Configuration
             ScopeIdentity.RejectProtectedExclusions(excludedKeys);
         }
 
+        public static void ValidateKey(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                throw Invalid("registry key", value, "must not be empty");
+            if (value.Contains('*') || value.Contains('?'))
+                throw Invalid("registry key", value, "wildcards are not supported");
+            if (!Hives.Any(hive => value.Equals(hive, StringComparison.OrdinalIgnoreCase) ||
+                                   value.StartsWith(hive + "\\", StringComparison.OrdinalIgnoreCase)))
+                throw Invalid("registry key", value, "must start with a supported full hive name");
+        }
+
         public static void ValidatePath(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -42,16 +52,8 @@ namespace WinFIMLog.Configuration
                 throw Invalid("path", value, "'*' must occupy one complete path segment");
         }
 
-        public static void ValidateKey(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                throw Invalid("registry key", value, "must not be empty");
-            if (value.Contains('*') || value.Contains('?'))
-                throw Invalid("registry key", value, "wildcards are not supported");
-            if (!Hives.Any(hive => value.Equals(hive, StringComparison.OrdinalIgnoreCase) ||
-                                   value.StartsWith(hive + "\\", StringComparison.OrdinalIgnoreCase)))
-                throw Invalid("registry key", value, "must start with a supported full hive name");
-        }
+        private static ConfigurationValidationException Invalid(string kind, string value, string reason) =>
+            new($"The {kind} '{value}' {reason}.");
 
         private static void ValidateValues(string setting, IEnumerable<string> values, Action<string> validator, bool allowEmpty)
         {
@@ -67,8 +69,5 @@ namespace WinFIMLog.Configuration
                 }
             }
         }
-
-        private static ConfigurationValidationException Invalid(string kind, string value, string reason) =>
-            new($"The {kind} '{value}' {reason}.");
     }
 }

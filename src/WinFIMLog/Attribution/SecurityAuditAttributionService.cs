@@ -17,11 +17,11 @@ namespace WinFIMLog.Attribution
     /// <summary>Consumes native 4663/4657 subject evidence for an explicitly enabled SACL tier.</summary>
     internal sealed class SecurityAuditAttributionService : BackgroundService
     {
-        private readonly SaclAttributionOptions options;
-        private readonly IAuditPolicyConformance policy;
+        private readonly ILocalEventSink eventSink;
         private readonly IHealthReporter health;
         private readonly ILogger<SecurityAuditAttributionService> logger;
-        private readonly ILocalEventSink eventSink;
+        private readonly SaclAttributionOptions options;
+        private readonly IAuditPolicyConformance policy;
         private readonly Settings settings;
         private EventLogWatcher? watcher;
 
@@ -36,6 +36,13 @@ namespace WinFIMLog.Attribution
             this.logger = logger;
             this.eventSink = eventSink;
             this.settings = settings;
+        }
+
+        public override void Dispose()
+        {
+            if (watcher != null) watcher.EventRecordWritten -= OnRecord;
+            watcher?.Dispose();
+            base.Dispose();
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)
@@ -61,11 +68,18 @@ namespace WinFIMLog.Attribution
             return base.StartAsync(cancellationToken);
         }
 
-        private void RequirePolicy(Guid subcategory, string name)
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+            Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+
+        private bool IsDeclaredScope(string xml)
         {
-            if (policy.IsEnabled(subcategory, out var reason)) return;
-            health.CoverageGap("SACLAttribution", name, $"AuditPolicyMissing:{reason}", 0);
-            throw new InvalidOperationException($"SACL attribution requires the '{name}' audit subcategory: {reason}");
+            var document = XDocument.Parse(xml);
+            var eventData = document.Descendants().Where(element => element.Name.LocalName == "Data");
+            var objectName = eventData.FirstOrDefault(element =>
+                (string?)element.Attribute("Name") is "ObjectName" or "KeyName")?.Value;
+            if (string.IsNullOrWhiteSpace(objectName)) return false;
+            return options.FileScopes.Concat(options.RegistryScopes).Any(scope =>
+                objectName.StartsWith(scope, StringComparison.OrdinalIgnoreCase));
         }
 
         private void OnRecord(object? sender, EventRecordWrittenEventArgs args)
@@ -107,25 +121,11 @@ namespace WinFIMLog.Attribution
             }
         }
 
-        private bool IsDeclaredScope(string xml)
+        private void RequirePolicy(Guid subcategory, string name)
         {
-            var document = XDocument.Parse(xml);
-            var eventData = document.Descendants().Where(element => element.Name.LocalName == "Data");
-            var objectName = eventData.FirstOrDefault(element =>
-                (string?)element.Attribute("Name") is "ObjectName" or "KeyName")?.Value;
-            if (string.IsNullOrWhiteSpace(objectName)) return false;
-            return options.FileScopes.Concat(options.RegistryScopes).Any(scope =>
-                objectName.StartsWith(scope, StringComparison.OrdinalIgnoreCase));
-        }
-
-        protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-            Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
-
-        public override void Dispose()
-        {
-            if (watcher != null) watcher.EventRecordWritten -= OnRecord;
-            watcher?.Dispose();
-            base.Dispose();
+            if (policy.IsEnabled(subcategory, out var reason)) return;
+            health.CoverageGap("SACLAttribution", name, $"AuditPolicyMissing:{reason}", 0);
+            throw new InvalidOperationException($"SACL attribution requires the '{name}' audit subcategory: {reason}");
         }
     }
 }

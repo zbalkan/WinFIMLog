@@ -7,26 +7,22 @@
 // This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
 
 using System;
-using WinFIMLog.FIM;
 using LiteDB;
-using WinFIMLog.Snapshots;
 using WinFIMLog.Events;
+using WinFIMLog.FIM;
+using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Data
 {
     public interface ILiteDbContext : IDisposable
     {
+        ILiteCollection<BaselineMember> BaselineMembers { get; }
+        ILiteCollection<BaselineMetadata> Baselines { get; }
+        ILiteCollection<EventOutboxRecord> EventOutbox { get; }
         ILiteCollection<FileSystemChange> FileSystemChanges { get; }
 
-        ILiteCollection<RegistryChange> RegistryChanges { get; }
-
-        ILiteCollection<BaselineMetadata> Baselines { get; }
-
-        ILiteCollection<BaselineMember> BaselineMembers { get; }
-
         ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
-
-        ILiteCollection<EventOutboxRecord> EventOutbox { get; }
+        ILiteCollection<RegistryChange> RegistryChanges { get; }
 
         bool ExecuteTransaction(Action action);
     }

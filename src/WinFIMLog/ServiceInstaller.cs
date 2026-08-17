@@ -8,9 +8,9 @@ namespace WinFIMLog
     internal static class ServiceInstaller
     {
         internal const string ServiceName = "WinFIMLog";
-        private const string DisplayName = "WinFIMLog";
-        private const string Description = "A File Integrity Monitoring service that keeps track of file changes in specified folders.";
         private const string DefaultInstallFolderName = "WinFIMLog";
+        private const string Description = "A File Integrity Monitoring service that keeps track of file changes in specified folders.";
+        private const string DisplayName = "WinFIMLog";
 
         internal static bool TryHandleCommand(string[] args)
         {
@@ -27,21 +27,68 @@ namespace WinFIMLog
                 case "--install":
                     Install(args.Skip(1).ToArray());
                     return true;
+
                 case "uninstall":
                 case "-u":
                 case "--uninstall":
                     Uninstall(args.Skip(1).ToArray());
                     return true;
+
                 case "help":
                 case "-h":
                 case "--help":
                 case "/?":
                     WriteUsage();
                     return true;
+
                 default:
                     return false;
             }
         }
+
+        private static void CopyApplicationFiles(string sourceDirectory, string installDirectory, string sourceExecutable, string targetExecutable)
+        {
+            foreach (string file in Directory.EnumerateFiles(sourceDirectory))
+            {
+                string target = Path.Combine(installDirectory, Path.GetFileName(file));
+                if (string.Equals(file, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                File.Copy(file, target, overwrite: true);
+            }
+
+            if (!File.Exists(targetExecutable))
+            {
+                File.Copy(sourceExecutable, targetExecutable, overwrite: true);
+            }
+        }
+
+        private static string GetCurrentExecutablePath() =>
+            Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the current executable path.");
+
+        private static string GetDefaultInstallDirectory()
+        {
+            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            return Path.Combine(programFiles, DefaultInstallFolderName);
+        }
+
+        private static string? GetOption(string[] args, string optionName)
+        {
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (string.Equals(args[i], optionName, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    return args[i + 1];
+                }
+            }
+
+            return null;
+        }
+
+        private static bool HasOption(string[] args, string optionName) =>
+            args.Any(arg => string.Equals(arg, optionName, StringComparison.OrdinalIgnoreCase));
 
         private static void Install(string[] args)
         {
@@ -81,60 +128,12 @@ namespace WinFIMLog
             Console.WriteLine($"{ServiceName} installed to '{installDirectory}'.");
         }
 
-        private static void Uninstall(string[] args)
-        {
-            bool removeFiles = HasOption(args, "--remove-files");
-            string installDirectory = GetOption(args, "--install-dir") ?? GetDefaultInstallDirectory();
+        private static bool IsIgnorableStopFailure(string[] arguments, string output) =>
+            arguments.Length > 0 &&
+            string.Equals(arguments[0], "stop", StringComparison.OrdinalIgnoreCase) &&
+            (output.Contains("1060", StringComparison.OrdinalIgnoreCase) || output.Contains("1062", StringComparison.OrdinalIgnoreCase));
 
-            if (ServiceExists())
-            {
-                RunSc("stop", ServiceName);
-                string removalScript = Path.Combine(installDirectory, "uninstall-event-channels.ps1");
-                if (File.Exists(removalScript)) RunPowerShell(removalScript);
-                RunSc("delete", ServiceName);
-            }
-
-            if (removeFiles && Directory.Exists(installDirectory))
-            {
-                Directory.Delete(installDirectory, recursive: true);
-            }
-
-            Console.WriteLine($"{ServiceName} was removed.");
-        }
-
-        private static void CopyApplicationFiles(string sourceDirectory, string installDirectory, string sourceExecutable, string targetExecutable)
-        {
-            foreach (string file in Directory.EnumerateFiles(sourceDirectory))
-            {
-                string target = Path.Combine(installDirectory, Path.GetFileName(file));
-                if (string.Equals(file, target, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                File.Copy(file, target, overwrite: true);
-            }
-
-            if (!File.Exists(targetExecutable))
-            {
-                File.Copy(sourceExecutable, targetExecutable, overwrite: true);
-            }
-        }
-
-        private static bool ServiceExists()
-        {
-            ProcessResult result = RunProcess("sc.exe", "query", ServiceName);
-            return result.ExitCode == 0;
-        }
-
-        private static void RunSc(params string[] arguments)
-        {
-            ProcessResult result = RunProcess("sc.exe", arguments);
-            if (result.ExitCode != 0 && !IsIgnorableStopFailure(arguments, result.Output))
-            {
-                throw new InvalidOperationException($"sc.exe {string.Join(' ', arguments)} failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
-            }
-        }
+        private static string Quote(string value) => $"\"{value}\"";
 
         private static void RunPowerShell(string script)
         {
@@ -162,37 +161,41 @@ namespace WinFIMLog
             return new ProcessResult(process.ExitCode, output);
         }
 
-        private static bool IsIgnorableStopFailure(string[] arguments, string output) =>
-            arguments.Length > 0 &&
-            string.Equals(arguments[0], "stop", StringComparison.OrdinalIgnoreCase) &&
-            (output.Contains("1060", StringComparison.OrdinalIgnoreCase) || output.Contains("1062", StringComparison.OrdinalIgnoreCase));
-
-        private static string GetCurrentExecutablePath() =>
-            Environment.ProcessPath ?? throw new InvalidOperationException("Cannot determine the current executable path.");
-
-        private static string GetDefaultInstallDirectory()
+        private static void RunSc(params string[] arguments)
         {
-            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            return Path.Combine(programFiles, DefaultInstallFolderName);
+            ProcessResult result = RunProcess("sc.exe", arguments);
+            if (result.ExitCode != 0 && !IsIgnorableStopFailure(arguments, result.Output))
+            {
+                throw new InvalidOperationException($"sc.exe {string.Join(' ', arguments)} failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
+            }
         }
 
-        private static string? GetOption(string[] args, string optionName)
+        private static bool ServiceExists()
         {
-            for (int i = 0; i < args.Length; i++)
+            ProcessResult result = RunProcess("sc.exe", "query", ServiceName);
+            return result.ExitCode == 0;
+        }
+
+        private static void Uninstall(string[] args)
+        {
+            bool removeFiles = HasOption(args, "--remove-files");
+            string installDirectory = GetOption(args, "--install-dir") ?? GetDefaultInstallDirectory();
+
+            if (ServiceExists())
             {
-                if (string.Equals(args[i], optionName, StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
-                {
-                    return args[i + 1];
-                }
+                RunSc("stop", ServiceName);
+                string removalScript = Path.Combine(installDirectory, "uninstall-event-channels.ps1");
+                if (File.Exists(removalScript)) RunPowerShell(removalScript);
+                RunSc("delete", ServiceName);
             }
 
-            return null;
+            if (removeFiles && Directory.Exists(installDirectory))
+            {
+                Directory.Delete(installDirectory, recursive: true);
+            }
+
+            Console.WriteLine($"{ServiceName} was removed.");
         }
-
-        private static bool HasOption(string[] args, string optionName) =>
-            args.Any(arg => string.Equals(arg, optionName, StringComparison.OrdinalIgnoreCase));
-
-        private static string Quote(string value) => $"\"{value}\"";
 
         private static void WriteUsage()
         {

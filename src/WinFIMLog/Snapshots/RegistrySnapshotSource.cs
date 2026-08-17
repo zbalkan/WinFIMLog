@@ -15,6 +15,9 @@ namespace WinFIMLog.Snapshots
         public RegistrySnapshotSource(Func<string, bool>? isIncluded = null) =>
             this.isIncluded = isIncluded ?? (_ => true);
 
+        public static IReadOnlyList<string> ResolveRoots(IEnumerable<string> roots) =>
+            RemoveOverlappingRoots(ExpandCurrentUserRoots(roots));
+
         public IReadOnlyList<BaselineMember> Capture(IEnumerable<string> roots)
         {
             if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Registry snapshots require Windows.");
@@ -27,19 +30,6 @@ namespace WinFIMLog.Snapshots
             var members = new List<BaselineMember>();
             foreach (var root in RemoveOverlappingRoots(resolvedRoots)) CaptureRoot(root, members);
             return members;
-        }
-
-        public static IReadOnlyList<string> ResolveRoots(IEnumerable<string> roots) =>
-            RemoveOverlappingRoots(ExpandCurrentUserRoots(roots));
-
-        internal static IReadOnlyList<string> RemoveOverlappingRoots(IEnumerable<string> roots)
-        {
-            var normalised = roots.Select(root => root.TrimEnd('\\'))
-                .Where(root => root.Length > 0)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Order(StringComparer.OrdinalIgnoreCase).ToArray();
-            return normalised.Where(root => !normalised.Any(candidate => candidate.Length < root.Length &&
-                root.StartsWith(candidate + "\\", StringComparison.OrdinalIgnoreCase))).ToArray();
         }
 
         internal static IEnumerable<string> ExpandCurrentUserRoots(IEnumerable<string> roots)
@@ -60,6 +50,92 @@ namespace WinFIMLog.Snapshots
             }
         }
 
+        internal static string Identity(string path, SnapshotNodeType nodeType) =>
+            (nodeType == SnapshotNodeType.RegistryValue ? "VALUE|" : "KEY|") + path.ToUpperInvariant();
+
+        internal static IReadOnlyList<string> RemoveOverlappingRoots(IEnumerable<string> roots)
+        {
+            var normalised = roots.Select(root => root.TrimEnd('\\'))
+                .Where(root => root.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Order(StringComparer.OrdinalIgnoreCase).ToArray();
+            return normalised.Where(root => !normalised.Any(candidate => candidate.Length < root.Length &&
+                root.StartsWith(candidate + "\\", StringComparison.OrdinalIgnoreCase))).ToArray();
+        }
+
+        private static RegistryHive ParseHive(string hive) => hive.ToUpperInvariant() switch
+        {
+            "HKEY_LOCAL_MACHINE" => RegistryHive.LocalMachine,
+            "HKEY_CURRENT_USER" => RegistryHive.CurrentUser,
+            "HKEY_USERS" => RegistryHive.Users,
+            "HKEY_CLASSES_ROOT" => RegistryHive.ClassesRoot,
+            "HKEY_CURRENT_CONFIG" => RegistryHive.CurrentConfig,
+            _ => throw new ArgumentException($"Unsupported registry hive: {hive}")
+        };
+
+        private static string[] Safe(Func<string[]> action)
+        { try { return action(); } catch { return Array.Empty<string>(); } }
+
+        private static byte[]? Serialise(object? value) => value switch
+        { null => null, byte[] bytes => bytes, string[] strings => Encoding.UTF8.GetBytes(string.Join("\0", strings)), _ => Encoding.UTF8.GetBytes(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty) };
+
+        private static BaselineMember Unavailable(string path, EvidenceAvailability state) =>
+            Unavailable(path, SnapshotNodeType.RegistryKey, state);
+
+        private static BaselineMember Unavailable(string path, SnapshotNodeType nodeType, EvidenceAvailability state) => new()
+        {
+            Identity = Identity(path, nodeType),
+            Path = path,
+            NodeType = nodeType,
+            HashState = HashEvidenceState.NotApplicable,
+            AclState = state
+        };
+
+        private void CaptureKey(RegistryKey key, string path, List<BaselineMember> output)
+        {
+            if (!isIncluded(path)) return;
+            var keyMember = new BaselineMember
+            {
+                Identity = Identity(path, SnapshotNodeType.RegistryKey),
+                Path = path,
+                NodeType = SnapshotNodeType.RegistryKey,
+                HashState = HashEvidenceState.NotApplicable
+            };
+            try { keyMember.AclEvidence = key.GetACL(); keyMember.AclState = EvidenceAvailability.Available; }
+            catch (UnauthorizedAccessException) { keyMember.AclState = EvidenceAvailability.AccessDenied; }
+            catch { keyMember.AclState = EvidenceAvailability.Failed; }
+            output.Add(keyMember);
+
+            foreach (var valueName in Safe(() => key.GetValueNames()))
+            {
+                if (!isIncluded(path + "\\" + valueName)) continue;
+                try
+                {
+                    var value = key.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                    output.Add(new BaselineMember
+                    {
+                        Identity = Identity(path + "\\" + valueName, SnapshotNodeType.RegistryValue),
+                        Path = path + "\\" + valueName,
+                        NodeType = SnapshotNodeType.RegistryValue,
+                        HashState = HashEvidenceState.NotApplicable,
+                        AclState = keyMember.AclState,
+                        AclEvidence = keyMember.AclEvidence,
+                        RegistryValueKind = key.GetValueKind(valueName).ToString(),
+                        RegistryValueData = Serialise(value)
+                    });
+                }
+                catch (UnauthorizedAccessException) { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.AccessDenied)); }
+                catch { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.Failed)); }
+            }
+            foreach (var childName in Safe(() => key.GetSubKeyNames()))
+            {
+                if (!isIncluded(path + "\\" + childName)) continue;
+                try { using var child = key.OpenSubKey(childName, false); if (child is not null) CaptureKey(child, path + "\\" + childName, output); }
+                catch (UnauthorizedAccessException) { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.AccessDenied)); }
+                catch { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.Failed)); }
+            }
+        }
+
         private void CaptureRoot(string fullName, List<BaselineMember> output)
         {
             if (!isIncluded(fullName)) return;
@@ -75,54 +151,5 @@ namespace WinFIMLog.Snapshots
             catch (UnauthorizedAccessException) { output.Add(Unavailable(fullName, EvidenceAvailability.AccessDenied)); }
             catch { output.Add(Unavailable(fullName, EvidenceAvailability.Failed)); }
         }
-
-        private void CaptureKey(RegistryKey key, string path, List<BaselineMember> output)
-        {
-            if (!isIncluded(path)) return;
-            var keyMember = new BaselineMember { Identity = Identity(path, SnapshotNodeType.RegistryKey), Path = path,
-                NodeType = SnapshotNodeType.RegistryKey, HashState = HashEvidenceState.NotApplicable };
-            try { keyMember.AclEvidence = key.GetACL(); keyMember.AclState = EvidenceAvailability.Available; }
-            catch (UnauthorizedAccessException) { keyMember.AclState = EvidenceAvailability.AccessDenied; }
-            catch { keyMember.AclState = EvidenceAvailability.Failed; }
-            output.Add(keyMember);
-
-            foreach (var valueName in Safe(() => key.GetValueNames()))
-            {
-                if (!isIncluded(path + "\\" + valueName)) continue;
-                try
-                {
-                    var value = key.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-                    output.Add(new BaselineMember { Identity = Identity(path + "\\" + valueName, SnapshotNodeType.RegistryValue),
-                        Path = path + "\\" + valueName, NodeType = SnapshotNodeType.RegistryValue,
-                        HashState = HashEvidenceState.NotApplicable, AclState = keyMember.AclState,
-                        AclEvidence = keyMember.AclEvidence, RegistryValueKind = key.GetValueKind(valueName).ToString(),
-                        RegistryValueData = Serialise(value) });
-                }
-                catch (UnauthorizedAccessException) { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.AccessDenied)); }
-                catch { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.Failed)); }
-            }
-            foreach (var childName in Safe(() => key.GetSubKeyNames()))
-            {
-                if (!isIncluded(path + "\\" + childName)) continue;
-                try { using var child = key.OpenSubKey(childName, false); if (child is not null) CaptureKey(child, path + "\\" + childName, output); }
-                catch (UnauthorizedAccessException) { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.AccessDenied)); }
-                catch { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.Failed)); }
-            }
-        }
-
-        private static string[] Safe(Func<string[]> action) { try { return action(); } catch { return Array.Empty<string>(); } }
-        private static byte[]? Serialise(object? value) => value switch
-        { null => null, byte[] bytes => bytes, string[] strings => Encoding.UTF8.GetBytes(string.Join("\0", strings)), _ => Encoding.UTF8.GetBytes(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty) };
-        private static RegistryHive ParseHive(string hive) => hive.ToUpperInvariant() switch
-        { "HKEY_LOCAL_MACHINE" => RegistryHive.LocalMachine, "HKEY_CURRENT_USER" => RegistryHive.CurrentUser,
-          "HKEY_USERS" => RegistryHive.Users, "HKEY_CLASSES_ROOT" => RegistryHive.ClassesRoot,
-          "HKEY_CURRENT_CONFIG" => RegistryHive.CurrentConfig, _ => throw new ArgumentException($"Unsupported registry hive: {hive}") };
-        internal static string Identity(string path, SnapshotNodeType nodeType) =>
-            (nodeType == SnapshotNodeType.RegistryValue ? "VALUE|" : "KEY|") + path.ToUpperInvariant();
-        private static BaselineMember Unavailable(string path, EvidenceAvailability state) =>
-            Unavailable(path, SnapshotNodeType.RegistryKey, state);
-        private static BaselineMember Unavailable(string path, SnapshotNodeType nodeType, EvidenceAvailability state) => new()
-        { Identity = Identity(path, nodeType), Path = path, NodeType = nodeType,
-          HashState = HashEvidenceState.NotApplicable, AclState = state };
     }
 }

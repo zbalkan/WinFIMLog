@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Data;
-using WinFIMLog.Events;
 using WinFIMLog.Health;
 using WinFIMLog.Snapshots;
 
@@ -53,8 +52,13 @@ public sealed class SnapshotCoordinationTests
 
     private sealed class RecordingHealth : IHealthReporter
     {
-        public void CoverageGap(string source, string scope, string reason, long lostCount = 1) { }
-        public void SourceRecovered(string source, string scope, string action) { }
-        public void SinkFailure(string sink, string reason, int attempt) { }
+        public void CoverageGap(string source, string scope, string reason, long lostCount = 1)
+        { }
+
+        public void SinkFailure(string sink, string reason, int attempt)
+        { }
+
+        public void SourceRecovered(string source, string scope, string action)
+        { }
     }
 }

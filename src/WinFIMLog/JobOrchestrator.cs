@@ -1,30 +1,30 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using WinFIMLog.FIM;
-using WinFIMLog.Jobs;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using WinFIMLog.Health;
 using WinFIMLog.Configuration;
+using WinFIMLog.FIM;
+using WinFIMLog.Health;
+using WinFIMLog.Jobs;
 using WinFIMLog.Snapshots;
 
 namespace WinFIMLog
 {
     public partial class JobOrchestrator : BackgroundService
     {
+        private readonly FileSystemCaptureQueue _capture;
         private readonly FileSystemMonitorJob _fsMonitor;
 
+        private readonly IHealthReporter _health;
         private readonly ILogger<JobOrchestrator> _logger;
 
+        private readonly HealthMetrics _metrics;
+        private readonly object _registryLifecycleLock = new();
         private readonly RegistryMonitorJob _regMonitor;
 
         private readonly Settings _settings;
-        private readonly HealthMetrics _metrics;
-        private readonly IHealthReporter _health;
         private readonly ISnapshotCoordinator _snapshots;
-        private readonly FileSystemCaptureQueue _capture;
-        private readonly object _registryLifecycleLock = new();
         private CancellationTokenSource? _registryMonitorCancellation;
         private Task? _registryMonitorTask;
 
@@ -48,8 +48,6 @@ namespace WinFIMLog
                 fileSystemBaselineAvailability);
         }
 
-        protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
-
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             // Wait for both monitor sources to stop before closing admission. The enrichment
@@ -63,6 +61,8 @@ namespace WinFIMLog
                         "HostShutdownTimeout", _metrics.QueueDepth);
             }
         }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
 
         private async Task CleanupAsync(Task? fileSystemMonitorTask)
         {
@@ -129,6 +129,35 @@ namespace WinFIMLog
             }
         }
 
+        private async Task ReconfigureRegistryMonitorAsync(CancellationToken serviceToken)
+        {
+            if (_settings.EnableRegistryMonitoring) StartRegistryMonitor(serviceToken);
+            else await StopRegistryMonitorAsync();
+        }
+
+        private async Task RefreshScopeAsync(CancellationToken stoppingToken)
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(_settings.ScopeReresolutionInterval), stoppingToken);
+                try
+                {
+                    var result = _settings.Reload();
+                    if (!result.Changed) continue;
+                    _fsMonitor.Reconfigure();
+                    await ReconfigureRegistryMonitorAsync(stoppingToken);
+                    _health.ConfigurationChanged(result.PreviousHash, result.CurrentHash);
+                    _snapshots.RequestScopeSnapshot("Effective configuration changed");
+                }
+                catch (ConfigurationValidationException exception)
+                {
+                    // Keep the last valid scope active. A policy error must be visible but must
+                    // never silently replace or remove existing coverage.
+                    _health.CoverageGap("Configuration", _settings.ScopeHash, $"Rejected:{exception.Message}", 0);
+                }
+            }
+        }
+
         private async Task RunRegistryMonitorWithRecoveryAsync(CancellationToken stoppingToken)
         {
             var recovering = false;
@@ -186,35 +215,5 @@ namespace WinFIMLog
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
             finally { cancellation.Dispose(); }
         }
-
-        private async Task ReconfigureRegistryMonitorAsync(CancellationToken serviceToken)
-        {
-            if (_settings.EnableRegistryMonitoring) StartRegistryMonitor(serviceToken);
-            else await StopRegistryMonitorAsync();
-        }
-
-        private async Task RefreshScopeAsync(CancellationToken stoppingToken)
-        {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(_settings.ScopeReresolutionInterval), stoppingToken);
-                try
-                {
-                    var result = _settings.Reload();
-                    if (!result.Changed) continue;
-                    _fsMonitor.Reconfigure();
-                    await ReconfigureRegistryMonitorAsync(stoppingToken);
-                    _health.ConfigurationChanged(result.PreviousHash, result.CurrentHash);
-                    _snapshots.RequestScopeSnapshot("Effective configuration changed");
-                }
-                catch (ConfigurationValidationException exception)
-                {
-                    // Keep the last valid scope active. A policy error must be visible but must
-                    // never silently replace or remove existing coverage.
-                    _health.CoverageGap("Configuration", _settings.ScopeHash, $"Rejected:{exception.Message}", 0);
-                }
-            }
-        }
-
     }
 }

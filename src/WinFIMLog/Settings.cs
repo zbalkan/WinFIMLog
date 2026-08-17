@@ -6,109 +6,22 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
-using WinFIMLog.IO;
 using WinFIMLog.Configuration;
+using WinFIMLog.IO;
 
 namespace WinFIMLog
 {
     public sealed class Settings
     {
-        /// <summary>
-        ///     Path to LiteDB database file
-        /// </summary>
-        /// <exception cref="PlatformNotSupportedException">
-        /// </exception>
-        public string DatabasePath => $"{Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)}\\FIM\\fim.db";
-
-        /// <summary>
-        ///     Switch to enable/disable latest-state live projections. Tier 0 and the durable
-        ///     delivery outbox always require the local database.
-        ///     Default: true.
-        /// </summary>
-        public bool EnableLocalDatabase { get => ReadState().EnableLocalDatabase; private set => WriteState().EnableLocalDatabase = value; }
-
-        /// <summary>
-        ///     Switch to enable/disable Registry monitoring.
-        ///     Default: false.
-        /// </summary>
-        public bool EnableRegistryMonitoring { get => ReadState().EnableRegistryMonitoring; private set => WriteState().EnableRegistryMonitoring = value; }
-
-        /// <summary>
-        ///     File extensions to exclude from monitoring.
-        ///     Default: Empty list.
-        /// </summary>
-        public string[] ExcludedExtensions { get => (string[])ReadState().ExcludedExtensions.Clone(); private set => WriteState().ExcludedExtensions = value; }
-
-        /// <summary>
-        ///     Registry keys to exclude from monitoring.
-        ///     Default: Empty list.
-        /// </summary>
-        public string[] ExcludedKeys { get => (string[])ReadState().ExcludedKeys.Clone(); private set => WriteState().ExcludedKeys = value; }
-
-        /// <summary>
-        ///     Filesystem directories to exclude from monitoring. Wildcards for folder names are accepted.
-        ///     Default: Empty list.
-        /// </summary>
-        public string[] ExcludedPaths { get => (string[])ReadState().ExcludedPaths.Clone(); private set => WriteState().ExcludedPaths = value; }
-
-        /// <summary>
-        ///     Ignore caculating hashes of large files for memory consumption.
-        ///     Default: 1024 (1GB)
-        /// </summary>
-        public int HashLimitMB { get => ReadState().HashLimitMB; private set => WriteState().HashLimitMB = value; }
-
-        /// <summary>
-        ///     Interval in seconds to send an informational heartbeat log entry to allow monitoring
-        ///     of the service itself. It can be disabled by setting it 0.
-        ///     Default: 60
-        /// </summary>
-        public int HeartbeatInterval { get => ReadState().HeartbeatInterval; private set => WriteState().HeartbeatInterval = value; }
-
-        /// <summary>Maximum raw filesystem notifications held in memory.</summary>
-        public int CaptureQueueCapacity { get => ReadState().CaptureQueueCapacity; private set => WriteState().CaptureQueueCapacity = value; }
-
-        /// <summary>FileSystemWatcher native buffer size in KiB (8-64).</summary>
-        public int WatcherBufferSizeKB { get => ReadState().WatcherBufferSizeKB; private set => WriteState().WatcherBufferSizeKB = value; }
-
-        /// <summary>Seconds between wildcard scope re-resolution checks.</summary>
-        public int ScopeReresolutionInterval { get => ReadState().ScopeReresolutionInterval; private set => WriteState().ScopeReresolutionInterval = value; }
-
-        /// <summary>Seconds between authoritative filesystem snapshots (default: six hours).</summary>
-        public int FileSystemSnapshotInterval { get => ReadState().FileSystemSnapshotInterval; private set => WriteState().FileSystemSnapshotInterval = value; }
-
-        /// <summary>Seconds between authoritative registry snapshots (default: six hours).</summary>
-        public int RegistrySnapshotInterval { get => ReadState().RegistrySnapshotInterval; private set => WriteState().RegistrySnapshotInterval = value; }
-
-        /// <summary>SHA-256 identity of the canonical effective scope.</summary>
-        public string ScopeHash { get => ReadState().ScopeHash; private set => WriteState().ScopeHash = value; }
-
-        /// <summary>
-        ///     Registry keys to monitor.
-        ///     Default: Empty list.
-        /// </summary>
-        public string[] MonitoredKeys { get => (string[])ReadState().MonitoredKeys.Clone(); private set => WriteState().MonitoredKeys = value; }
-
-        /// <summary>
-        ///     Filesystem directories to monitor. Wildcards for folder names are accepted.
-        ///     Default: Empty list.
-        /// </summary>
-        public string[] MonitoredPaths { get => (string[])ReadState().MonitoredPaths.Clone(); private set => WriteState().MonitoredPaths = value; }
-
-        /// <summary>
-        ///     A flag that returns true if application loads the Settings successfully.
-        /// </summary>
-        public bool Success { get; }
-
         private const int DEFAULT_HASHLIMIT_MB = 1024;
 
         private const int DEFAULT_HEARTBEAT_INTERVAL = 60;
 
-        private EffectiveSettings current = new();
         private readonly AsyncLocal<EffectiveSettings?> building = new();
 
         private readonly object reloadLock = new();
 
-        public string? FailureReason { get; private set; }
+        private EffectiveSettings current = new();
 
         /// <summary>
         ///     Creates the application settings managed by the host's dependency injection container.
@@ -147,7 +60,95 @@ namespace WinFIMLog
             Success = true;
         }
 
-        internal void PublishForTest(EffectiveSettings next) => Volatile.Write(ref current, next);
+        /// <summary>Maximum raw filesystem notifications held in memory.</summary>
+        public int CaptureQueueCapacity { get => ReadState().CaptureQueueCapacity; private set => WriteState().CaptureQueueCapacity = value; }
+
+        /// <summary>
+        ///     Path to LiteDB database file
+        /// </summary>
+        /// <exception cref="PlatformNotSupportedException">
+        /// </exception>
+        public string DatabasePath => $"{Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)}\\FIM\\fim.db";
+
+        /// <summary>
+        ///     Switch to enable/disable latest-state live projections. Tier 0 and the durable
+        ///     delivery outbox always require the local database.
+        ///     Default: true.
+        /// </summary>
+        public bool EnableLocalDatabase { get => ReadState().EnableLocalDatabase; private set => WriteState().EnableLocalDatabase = value; }
+
+        /// <summary>
+        ///     Switch to enable/disable Registry monitoring.
+        ///     Default: false.
+        /// </summary>
+        public bool EnableRegistryMonitoring { get => ReadState().EnableRegistryMonitoring; private set => WriteState().EnableRegistryMonitoring = value; }
+
+        /// <summary>
+        ///     File extensions to exclude from monitoring.
+        ///     Default: Empty list.
+        /// </summary>
+        public string[] ExcludedExtensions { get => (string[])ReadState().ExcludedExtensions.Clone(); private set => WriteState().ExcludedExtensions = value; }
+
+        /// <summary>
+        ///     Registry keys to exclude from monitoring.
+        ///     Default: Empty list.
+        /// </summary>
+        public string[] ExcludedKeys { get => (string[])ReadState().ExcludedKeys.Clone(); private set => WriteState().ExcludedKeys = value; }
+
+        /// <summary>
+        ///     Filesystem directories to exclude from monitoring. Wildcards for folder names are accepted.
+        ///     Default: Empty list.
+        /// </summary>
+        public string[] ExcludedPaths { get => (string[])ReadState().ExcludedPaths.Clone(); private set => WriteState().ExcludedPaths = value; }
+
+        public string? FailureReason { get; private set; }
+
+        /// <summary>Seconds between authoritative filesystem snapshots (default: six hours).</summary>
+        public int FileSystemSnapshotInterval { get => ReadState().FileSystemSnapshotInterval; private set => WriteState().FileSystemSnapshotInterval = value; }
+
+        /// <summary>
+        ///     Ignore caculating hashes of large files for memory consumption.
+        ///     Default: 1024 (1GB)
+        /// </summary>
+        public int HashLimitMB { get => ReadState().HashLimitMB; private set => WriteState().HashLimitMB = value; }
+
+        /// <summary>
+        ///     Interval in seconds to send an informational heartbeat log entry to allow monitoring
+        ///     of the service itself. It can be disabled by setting it 0.
+        ///     Default: 60
+        /// </summary>
+        public int HeartbeatInterval { get => ReadState().HeartbeatInterval; private set => WriteState().HeartbeatInterval = value; }
+
+        /// <summary>
+        ///     Registry keys to monitor.
+        ///     Default: Empty list.
+        /// </summary>
+        public string[] MonitoredKeys { get => (string[])ReadState().MonitoredKeys.Clone(); private set => WriteState().MonitoredKeys = value; }
+
+        /// <summary>
+        ///     Filesystem directories to monitor. Wildcards for folder names are accepted.
+        ///     Default: Empty list.
+        /// </summary>
+        public string[] MonitoredPaths { get => (string[])ReadState().MonitoredPaths.Clone(); private set => WriteState().MonitoredPaths = value; }
+
+        /// <summary>Seconds between authoritative registry snapshots (default: six hours).</summary>
+        public int RegistrySnapshotInterval { get => ReadState().RegistrySnapshotInterval; private set => WriteState().RegistrySnapshotInterval = value; }
+
+        /// <summary>SHA-256 identity of the canonical effective scope.</summary>
+        public string ScopeHash { get => ReadState().ScopeHash; private set => WriteState().ScopeHash = value; }
+
+        /// <summary>Seconds between wildcard scope re-resolution checks.</summary>
+        public int ScopeReresolutionInterval { get => ReadState().ScopeReresolutionInterval; private set => WriteState().ScopeReresolutionInterval = value; }
+
+        /// <summary>
+        ///     A flag that returns true if application loads the Settings successfully.
+        /// </summary>
+        public bool Success { get; }
+
+        /// <summary>FileSystemWatcher native buffer size in KiB (8-64).</summary>
+        public int WatcherBufferSizeKB { get => ReadState().WatcherBufferSizeKB; private set => WriteState().WatcherBufferSizeKB = value; }
+
+        public EffectiveSettings Capture() => Volatile.Read(ref current);
 
         /// <summary>
         ///     Filters out the initial list
@@ -176,8 +177,6 @@ namespace WinFIMLog
 
             return matches.ToList();
         }
-
-        public EffectiveSettings Capture() => Volatile.Read(ref current);
 
         public bool IsMonitoredKey(string keyName) => Capture().IsMonitoredKey(keyName);
 
@@ -214,9 +213,6 @@ namespace WinFIMLog
             }
         }
 
-        private EffectiveSettings ReadState() => building.Value ?? Volatile.Read(ref current);
-        private EffectiveSettings WriteState() => building.Value ?? throw new InvalidOperationException("Settings can only be changed while building a generation.");
-
         internal static bool GenerationChanged(EffectiveSettings left, EffectiveSettings right) => !(
             left.EnableLocalDatabase == right.EnableLocalDatabase &&
             left.EnableRegistryMonitoring == right.EnableRegistryMonitoring &&
@@ -227,6 +223,16 @@ namespace WinFIMLog
             left.FileSystemSnapshotInterval == right.FileSystemSnapshotInterval &&
             left.RegistrySnapshotInterval == right.RegistrySnapshotInterval &&
             string.Equals(left.ScopeHash, right.ScopeHash, StringComparison.Ordinal));
+
+        internal void PublishForTest(EffectiveSettings next) => Volatile.Write(ref current, next);
+
+        private static int ReadPositiveInterval(string name, int defaultValue)
+        {
+            var value = Registry.ReadDwordValue(name);
+            if (value == -1) { Registry.WriteDwordValue(name, defaultValue); value = defaultValue; }
+            if (value < 60) throw new InvalidOperationException($"{name} must be at least 60 seconds.");
+            return value;
+        }
 
         private ParallelQuery<string> FilterMonitoredPaths(IEnumerable<string> paths) => from path in paths.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
                                                                                          where ReadState().MonitoredPathsPattern.IsMatch(path)
@@ -587,13 +593,8 @@ namespace WinFIMLog
             HashLimitMB = hashLimitMb;
         }
 
-        private static int ReadPositiveInterval(string name, int defaultValue)
-        {
-            var value = Registry.ReadDwordValue(name);
-            if (value == -1) { Registry.WriteDwordValue(name, defaultValue); value = defaultValue; }
-            if (value < 60) throw new InvalidOperationException($"{name} must be at least 60 seconds.");
-            return value;
-        }
+        private EffectiveSettings ReadState() => building.Value ?? Volatile.Read(ref current);
 
+        private EffectiveSettings WriteState() => building.Value ?? throw new InvalidOperationException("Settings can only be changed while building a generation.");
     }
 }

@@ -19,17 +19,17 @@ public sealed class EventIdProviderTests
     }
 
     [TestMethod]
+    public void Explicit_event_id_takes_precedence_over_error_fallback() =>
+        Assert.AreEqual((ushort)7791,
+            new EventIdProvider().ComputeEventId(LogLevel.Error, new EventId(7791), "message"));
+
+    [TestMethod]
     [DynamicData(nameof(Categories))]
     public void Maps_change_type_and_category_to_contract_id(string type, string category, ushort expected)
     {
         var state = new Dictionary<string, object?> { ["changeType"] = type, ["category"] = category };
         Assert.AreEqual(expected, new EventIdProvider().ComputeEventId(LogLevel.Information, default, state));
     }
-
-    [TestMethod]
-    public void Explicit_event_id_takes_precedence_over_error_fallback() =>
-        Assert.AreEqual((ushort)7791,
-            new EventIdProvider().ComputeEventId(LogLevel.Error, new EventId(7791), "message"));
 
     [TestMethod]
     public void Unclassified_error_uses_service_error_id() =>

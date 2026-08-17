@@ -39,8 +39,13 @@ namespace WinFIMLog.Configuration
             }
         }
 
+        private static void AddIfMissing(ICollection<string> values, string value)
+        {
+            if (!values.Contains(value, StringComparer.OrdinalIgnoreCase)) values.Add(value);
+        }
+
         private static string Canonicalise(string name, IEnumerable<string> values) => name + "=" +
-            string.Join("|", values.Where(value => !string.IsNullOrWhiteSpace(value))
+                    string.Join("|", values.Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value.Trim().TrimEnd('\\').ToUpperInvariant())
                 .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
 
@@ -49,11 +54,6 @@ namespace WinFIMLog.Configuration
             candidate = candidate.Trim().TrimEnd('\\');
             return protectedKey.Equals(candidate, StringComparison.OrdinalIgnoreCase) ||
                    protectedKey.StartsWith(candidate + "\\", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static void AddIfMissing(ICollection<string> values, string value)
-        {
-            if (!values.Contains(value, StringComparer.OrdinalIgnoreCase)) values.Add(value);
         }
     }
 }

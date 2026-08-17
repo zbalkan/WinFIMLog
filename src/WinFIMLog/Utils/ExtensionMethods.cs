@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Security.Principal;
-using System.Security;
-using System.Text;
-using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Security;
+using System.Security.Principal;
+using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace WinFIMLog.Utils
 {
@@ -18,6 +18,15 @@ namespace WinFIMLog.Utils
         private const int DesiredAccess = (int)(SecurityImpersonationLevel.TokenQuery |
                                                                               SecurityImpersonationLevel.TokenImpersonate |
                                                                               SecurityImpersonationLevel.TokenDuplicate);
+
+        [Flags]
+        internal enum SecurityImpersonationLevel
+        {
+            None = 0,
+            TokenDuplicate = 1 << 1,
+            TokenQuery = 1 << 3,
+            TokenImpersonate = 1 << 2
+        }
 
         public static void AddRange<T>(this ConcurrentBag<T> @this, IEnumerable<T> toAdd) => Parallel.ForEach(toAdd, @this.Add);
 
@@ -46,15 +55,6 @@ namespace WinFIMLog.Utils
                 ? throw new SecurityException($"Failed to access the token of the owner of {process.ProcessName}")
                 : hToken;
             return new WindowsIdentity(token);
-        }
-
-        [Flags]
-        internal enum SecurityImpersonationLevel
-        {
-            None = 0,
-            TokenDuplicate = 1 << 1,
-            TokenQuery = 1 << 3,
-            TokenImpersonate = 1 << 2
         }
     }
 }

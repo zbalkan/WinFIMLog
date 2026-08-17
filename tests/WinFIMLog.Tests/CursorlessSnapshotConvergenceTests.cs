@@ -8,6 +8,14 @@ namespace WinFIMLog.Tests;
 public sealed class CursorlessSnapshotConvergenceTests
 {
     [TestMethod]
+    public void Capture_rejects_a_scope_that_never_converges()
+    {
+        var pass = 0;
+        Assert.Throws<SnapshotUnstableException>(() => CursorlessSnapshotConvergence.Capture(
+            () => [Member("A", (++pass).ToString())]));
+    }
+
+    [TestMethod]
     public void Capture_requires_two_consecutive_equal_observations()
     {
         var observations = new Queue<IReadOnlyList<BaselineMember>>();
@@ -19,14 +27,6 @@ public sealed class CursorlessSnapshotConvergenceTests
 
         Assert.AreEqual(3, result.Passes);
         Assert.AreEqual("two", result.Members[0].ContentHash);
-    }
-
-    [TestMethod]
-    public void Capture_rejects_a_scope_that_never_converges()
-    {
-        var pass = 0;
-        Assert.Throws<SnapshotUnstableException>(() => CursorlessSnapshotConvergence.Capture(
-            () => [Member("A", (++pass).ToString())]));
     }
 
     private static BaselineMember Member(string identity, string hash) => new()

@@ -15,16 +15,6 @@ namespace WinFIMLog.Jobs
         private bool fileSystemOverdue;
         private bool registryOverdue;
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                Check(BaselineSource.FileSystem);
-                if (settings.EnableRegistryMonitoring) Check(BaselineSource.Registry);
-                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
-            }
-        }
-
         internal void Check(BaselineSource source)
         {
             var configuration = settings.Capture();
@@ -47,6 +37,16 @@ namespace WinFIMLog.Jobs
             {
                 reported = false;
                 health.SourceRecovered($"{source}Snapshot", configuration.ScopeHash, "BaselineCurrent");
+            }
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                Check(BaselineSource.FileSystem);
+                if (settings.EnableRegistryMonitoring) Check(BaselineSource.Registry);
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             }
         }
 

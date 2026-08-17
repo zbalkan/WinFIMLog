@@ -6,7 +6,8 @@ using System.Text.Json.Serialization;
 namespace WinFIMLog.Events
 {
     [JsonConverter(typeof(JsonStringEnumConverter<EventChannel>))]
-    public enum EventChannel { Operational, Baseline, Diagnostic }
+    public enum EventChannel
+    { Operational, Baseline, Diagnostic }
 
     /// <summary>The stable, machine-readable Phase 5 transport envelope.</summary>
     public sealed record EventContract(
@@ -46,5 +47,6 @@ namespace WinFIMLog.Events
     [JsonSerializable(typeof(bool))]
     [JsonSerializable(typeof(JsonElement))]
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-    internal partial class EventJsonContext : JsonSerializerContext { }
+    internal partial class EventJsonContext : JsonSerializerContext
+    { }
 }

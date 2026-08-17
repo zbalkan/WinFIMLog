@@ -26,6 +26,46 @@ namespace WinFIMLog.Snapshots
             return output;
         }
 
+        internal static string Normalise(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)).ToUpperInvariant();
+
+        private static void CaptureAcl(string path, BaselineMember member)
+        {
+            try { member.AclEvidence = path.GetACL(); member.AclState = EvidenceAvailability.Available; }
+            catch (UnauthorizedAccessException) { member.AclState = EvidenceAvailability.AccessDenied; }
+            catch (FileNotFoundException) { member.AclState = EvidenceAvailability.Vanished; }
+            catch { member.AclState = EvidenceAvailability.Failed; }
+        }
+
+        private static string[] EnumerateStreamNames(string path) =>
+            // The unnamed $DATA stream is represented by ContentHash. Named stream discovery is
+            // available on Windows through FindFirstStreamW; an empty array means none observed.
+            OperatingSystem.IsWindows() ? AlternateDataStreams.Enumerate(path) : Array.Empty<string>();
+
+        private static BaselineMember Unavailable(string path, EvidenceAvailability state) => new()
+        {
+            Identity = Normalise(path),
+            Path = Path.GetFullPath(path),
+            NodeType = SnapshotNodeType.File,
+            HashState = state == EvidenceAvailability.AccessDenied ? HashEvidenceState.AccessDenied : HashEvidenceState.Failed,
+            AclState = state
+        };
+
+        private void CaptureHash(string path, BaselineMember member)
+        {
+            try
+            {
+                if (new FileInfo(path).Length > hashSizeLimit)
+                { member.HashState = HashEvidenceState.SkippedBySizeCap; return; }
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                member.ContentHash = Convert.ToHexString(SHA256.HashData(stream));
+                member.HashState = HashEvidenceState.Hashed;
+            }
+            catch (UnauthorizedAccessException) { member.HashState = HashEvidenceState.AccessDenied; }
+            catch (FileNotFoundException) { member.HashState = HashEvidenceState.Vanished; }
+            catch (IOException) { member.HashState = HashEvidenceState.Locked; }
+            catch { member.HashState = HashEvidenceState.Failed; }
+        }
+
         private void CaptureNode(string path, List<BaselineMember> output)
         {
             // Excluded directories prune their entire subtree; capture and notification
@@ -42,7 +82,8 @@ namespace WinFIMLog.Snapshots
             var directory = attributes.HasFlag(FileAttributes.Directory);
             var member = new BaselineMember
             {
-                Identity = Normalise(path), Path = Path.GetFullPath(path),
+                Identity = Normalise(path),
+                Path = Path.GetFullPath(path),
                 NodeType = reparse ? SnapshotNodeType.ReparsePoint : directory ? SnapshotNodeType.Directory : SnapshotNodeType.File,
                 HashState = directory || reparse ? HashEvidenceState.NotApplicable : HashEvidenceState.Failed,
                 StreamNames = directory || reparse ? Array.Empty<string>() : EnumerateStreamNames(path),
@@ -65,41 +106,5 @@ namespace WinFIMLog.Snapshots
             catch (UnauthorizedAccessException) { member.AclState = EvidenceAvailability.AccessDenied; }
             catch (IOException) { member.AclState = EvidenceAvailability.Failed; }
         }
-
-        private void CaptureHash(string path, BaselineMember member)
-        {
-            try
-            {
-                if (new FileInfo(path).Length > hashSizeLimit)
-                { member.HashState = HashEvidenceState.SkippedBySizeCap; return; }
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                member.ContentHash = Convert.ToHexString(SHA256.HashData(stream));
-                member.HashState = HashEvidenceState.Hashed;
-            }
-            catch (UnauthorizedAccessException) { member.HashState = HashEvidenceState.AccessDenied; }
-            catch (FileNotFoundException) { member.HashState = HashEvidenceState.Vanished; }
-            catch (IOException) { member.HashState = HashEvidenceState.Locked; }
-            catch { member.HashState = HashEvidenceState.Failed; }
-        }
-
-        private static void CaptureAcl(string path, BaselineMember member)
-        {
-            try { member.AclEvidence = path.GetACL(); member.AclState = EvidenceAvailability.Available; }
-            catch (UnauthorizedAccessException) { member.AclState = EvidenceAvailability.AccessDenied; }
-            catch (FileNotFoundException) { member.AclState = EvidenceAvailability.Vanished; }
-            catch { member.AclState = EvidenceAvailability.Failed; }
-        }
-
-        private static string[] EnumerateStreamNames(string path) =>
-            // The unnamed $DATA stream is represented by ContentHash. Named stream discovery is
-            // available on Windows through FindFirstStreamW; an empty array means none observed.
-            OperatingSystem.IsWindows() ? AlternateDataStreams.Enumerate(path) : Array.Empty<string>();
-
-        private static BaselineMember Unavailable(string path, EvidenceAvailability state) => new()
-        { Identity = Normalise(path), Path = Path.GetFullPath(path), NodeType = SnapshotNodeType.File,
-          HashState = state == EvidenceAvailability.AccessDenied ? HashEvidenceState.AccessDenied : HashEvidenceState.Failed,
-          AclState = state };
-
-        internal static string Normalise(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)).ToUpperInvariant();
     }
 }

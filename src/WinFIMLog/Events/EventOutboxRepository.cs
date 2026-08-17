@@ -11,8 +11,40 @@ namespace WinFIMLog.Events
 
         public EventOutboxRepository(ILiteDbContext context) => this.context = context;
 
+        public DateTimeOffset? OldestPending => context.EventOutbox.Query()
+            .Where(x => x.DeliveredAt == null).OrderBy(x => x.CreatedAt).FirstOrDefault()?.CreatedAt;
+
+        public long PendingCount => context.EventOutbox.Count(x => x.DeliveredAt == null);
+
+        public int DeleteDeliveredBefore(DateTimeOffset cutoff)
+        {
+            var deleted = 0;
+            if (!context.ExecuteTransaction(() => deleted =
+                context.EventOutbox.DeleteMany(x => x.DeliveredAt != null && x.DeliveredAt < cutoff)))
+                throw new InvalidOperationException("Could not commit Event Log outbox retention.");
+            return deleted;
+        }
+
+        public void Delivered(EventOutboxRecord item)
+        {
+            item.DeliveryAttempts++;
+            item.DeliveredAt = DateTimeOffset.UtcNow;
+            item.LastError = null;
+            if (!context.ExecuteTransaction(() => context.EventOutbox.Update(item)))
+                throw new InvalidOperationException("Could not commit Event Log delivery acknowledgement.");
+        }
+
+        public void DiscardInvalid(EventOutboxRecord item, string reason)
+        {
+            item.DeliveryAttempts++;
+            item.DeliveredAt = DateTimeOffset.UtcNow;
+            item.LastError = reason;
+            if (!context.ExecuteTransaction(() => context.EventOutbox.Update(item)))
+                throw new InvalidOperationException("Could not commit invalid Event Log outbox record state.");
+        }
+
         public void Enqueue(EventContract record, bool error = false) =>
-            EnqueueBatch([(record, error)]);
+                                                    EnqueueBatch([(record, error)]);
 
         public void EnqueueBatch(IEnumerable<(EventContract Record, bool Error)> records, Action? projection = null)
         {
@@ -43,24 +75,6 @@ namespace WinFIMLog.Events
             })) throw new InvalidOperationException("The evidence/outbox transaction did not commit.");
         }
 
-        public IReadOnlyList<EventOutboxRecord> Ready(DateTimeOffset now, int limit = 200) =>
-            context.EventOutbox.Query()
-                .Where(x => x.DeliveredAt == null && x.NextAttemptAt <= now)
-                .OrderBy(x => x.CreatedAt).Limit(limit).ToList();
-
-        public long PendingCount => context.EventOutbox.Count(x => x.DeliveredAt == null);
-        public DateTimeOffset? OldestPending => context.EventOutbox.Query()
-            .Where(x => x.DeliveredAt == null).OrderBy(x => x.CreatedAt).FirstOrDefault()?.CreatedAt;
-
-        public void Delivered(EventOutboxRecord item)
-        {
-            item.DeliveryAttempts++;
-            item.DeliveredAt = DateTimeOffset.UtcNow;
-            item.LastError = null;
-            if (!context.ExecuteTransaction(() => context.EventOutbox.Update(item)))
-                throw new InvalidOperationException("Could not commit Event Log delivery acknowledgement.");
-        }
-
         public void Failed(EventOutboxRecord item, Exception exception)
         {
             item.DeliveryAttempts++;
@@ -71,22 +85,9 @@ namespace WinFIMLog.Events
                 throw new InvalidOperationException("Could not commit Event Log delivery failure state.");
         }
 
-        public void DiscardInvalid(EventOutboxRecord item, string reason)
-        {
-            item.DeliveryAttempts++;
-            item.DeliveredAt = DateTimeOffset.UtcNow;
-            item.LastError = reason;
-            if (!context.ExecuteTransaction(() => context.EventOutbox.Update(item)))
-                throw new InvalidOperationException("Could not commit invalid Event Log outbox record state.");
-        }
-
-        public int DeleteDeliveredBefore(DateTimeOffset cutoff)
-        {
-            var deleted = 0;
-            if (!context.ExecuteTransaction(() => deleted =
-                context.EventOutbox.DeleteMany(x => x.DeliveredAt != null && x.DeliveredAt < cutoff)))
-                throw new InvalidOperationException("Could not commit Event Log outbox retention.");
-            return deleted;
-        }
+        public IReadOnlyList<EventOutboxRecord> Ready(DateTimeOffset now, int limit = 200) =>
+                    context.EventOutbox.Query()
+                .Where(x => x.DeliveredAt == null && x.NextAttemptAt <= now)
+                .OrderBy(x => x.CreatedAt).Limit(limit).ToList();
     }
 }

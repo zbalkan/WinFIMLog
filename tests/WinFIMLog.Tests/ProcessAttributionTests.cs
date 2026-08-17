@@ -1,6 +1,7 @@
 using System;
-using WinFIMLog.FIM;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using WinFIMLog.FIM;
 
 namespace WinFIMLog.Tests;
 

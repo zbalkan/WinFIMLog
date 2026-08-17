@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.ComponentModel;
 
 namespace WinFIMLog.Snapshots
 {
@@ -17,6 +17,13 @@ namespace WinFIMLog.Snapshots
             resolvedKeys.Select(key => key.TrimEnd('\\').ToUpperInvariant())
                 .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase));
 
+        [DllImport("kernel32.dll", EntryPoint = "GetVolumeInformationW", SetLastError = true,
+            CharSet = CharSet.Unicode)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetVolumeInformation(string rootPathName, StringBuilder volumeNameBuffer,
+            int volumeNameSize, out uint volumeSerialNumber, out uint maximumComponentLength,
+            out uint fileSystemFlags, StringBuilder fileSystemNameBuffer, int fileSystemNameSize);
+
         private static string VolumeIdentity(string path)
         {
             var root = Path.GetPathRoot(Path.GetFullPath(path)) ?? path;
@@ -28,12 +35,5 @@ namespace WinFIMLog.Snapshots
                 throw new IOException($"Cannot identify volume '{root}'.", new Win32Exception(Marshal.GetLastWin32Error()));
             return $"{root}|{serial:X8}|{fileSystemName}";
         }
-
-        [DllImport("kernel32.dll", EntryPoint = "GetVolumeInformationW", SetLastError = true,
-            CharSet = CharSet.Unicode)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetVolumeInformation(string rootPathName, StringBuilder volumeNameBuffer,
-            int volumeNameSize, out uint volumeSerialNumber, out uint maximumComponentLength,
-            out uint fileSystemFlags, StringBuilder fileSystemNameBuffer, int fileSystemNameSize);
     }
 }

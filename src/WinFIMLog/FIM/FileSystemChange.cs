@@ -15,21 +15,10 @@ namespace WinFIMLog.FIM
 
         public string FullPath { get; set; }
 
-        public string PreviousHash { get; set; }
-
-        public ObjectType ObjectType { get; set; }
-
-        public string? OldPath { get; set; }
-
         public string? NewPath { get; set; }
-
-        public static string RetrievePreviousHash(string path, ILiteDbContext ctx)
-            => RetrievePreviousChange(path, ctx)?.CurrentHash ?? string.Empty;
-
-        public static FileSystemChange? RetrievePreviousChange(string path, ILiteDbContext ctx) => ctx.FileSystemChanges.Query()
-                      .Where(x => x.Entity == path)
-                      .OrderByDescending(c => c.DateTime)
-                      .FirstOrDefault();
+        public ObjectType ObjectType { get; set; }
+        public string? OldPath { get; set; }
+        public string PreviousHash { get; set; }
 
         /// <summary> Generates new file system change record from parameters </summary>
         /// <param name="path">The path to filekey</param>
@@ -79,15 +68,13 @@ namespace WinFIMLog.FIM
             return change;
         }
 
-        private static string GetACL(string path, ChangeCategory category)
-        {
-            if (category == ChangeCategory.Deleted)
-            {
-                return string.Empty;
-            }
+        public static FileSystemChange? RetrievePreviousChange(string path, ILiteDbContext ctx) => ctx.FileSystemChanges.Query()
+                      .Where(x => x.Entity == path)
+                      .OrderByDescending(c => c.DateTime)
+                      .FirstOrDefault();
 
-            return GetAclOrEmpty(path.GetACL);
-        }
+        public static string RetrievePreviousHash(string path, ILiteDbContext ctx)
+                                    => RetrievePreviousChange(path, ctx)?.CurrentHash ?? string.Empty;
 
         internal static string GetAclOrEmpty(Func<string> getAcl)
         {
@@ -128,36 +115,14 @@ namespace WinFIMLog.FIM
             }
         }
 
-        private static bool IsUnderSizeLimit(string path, int hashLimitMb)
+        private static string GetACL(string path, ChangeCategory category)
         {
-            try
+            if (category == ChangeCategory.Deleted)
             {
-                return new FileInfo(path).Length < hashLimitMb * 1024L * 1024L;
-            }
-            catch (FileNotFoundException)
-            {
-                // File is removed during recording.
-                // We cannot do anything here.
-                // No need to spam debug logs.
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex);
-                return false;
-            }
-        }
-
-        private static bool IsSymbolicLink(string path, FileAttributes attributes)
-        {
-            if (!attributes.HasFlag(FileAttributes.ReparsePoint))
-            {
-                return false;
+                return string.Empty;
             }
 
-            return attributes.HasFlag(FileAttributes.Directory)
-                ? new DirectoryInfo(path).LinkTarget != null
-                : new FileInfo(path).LinkTarget != null;
+            return GetAclOrEmpty(path.GetACL);
         }
 
         private static ObjectType GetObjectType(string path)
@@ -188,6 +153,38 @@ namespace WinFIMLog.FIM
             }
 
             return objectType;
+        }
+
+        private static bool IsSymbolicLink(string path, FileAttributes attributes)
+        {
+            if (!attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                return false;
+            }
+
+            return attributes.HasFlag(FileAttributes.Directory)
+                ? new DirectoryInfo(path).LinkTarget != null
+                : new FileInfo(path).LinkTarget != null;
+        }
+
+        private static bool IsUnderSizeLimit(string path, int hashLimitMb)
+        {
+            try
+            {
+                return new FileInfo(path).Length < hashLimitMb * 1024L * 1024L;
+            }
+            catch (FileNotFoundException)
+            {
+                // File is removed during recording.
+                // We cannot do anything here.
+                // No need to spam debug logs.
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex);
+                return false;
+            }
         }
     }
 }

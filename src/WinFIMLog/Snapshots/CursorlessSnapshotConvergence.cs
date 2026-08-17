@@ -4,6 +4,9 @@ using System.Linq;
 
 namespace WinFIMLog.Snapshots
 {
+    public sealed class SnapshotUnstableException(string message) : Exception(message)
+    { }
+
     internal static class CursorlessSnapshotConvergence
     {
         internal static (IReadOnlyList<BaselineMember> Members, int Passes) Capture(
@@ -29,6 +32,4 @@ namespace WinFIMLog.Snapshots
                 string.Equals(fingerprint, item.Fingerprint, StringComparison.Ordinal));
         }
     }
-
-    public sealed class SnapshotUnstableException(string message) : Exception(message) { }
 }

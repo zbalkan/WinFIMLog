@@ -11,9 +11,10 @@ namespace WinFIMLog.Utils
     /// </summary>
     internal static class LocalSidAccountResolver
     {
-        private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
         private static readonly ConcurrentDictionary<string, CacheEntry> Entries =
             new(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
         private static readonly object RefreshLock = new();
         private static DateTime _nextRefreshUtc;
 
@@ -42,6 +43,15 @@ namespace WinFIMLog.Utils
                 ? cached.AccountName
                 : null;
         }
+
+        [DllImport("secur32.dll")]
+        private static extern uint LsaEnumerateLogonSessions(out ulong logonSessionCount, out IntPtr logonSessionList);
+
+        [DllImport("secur32.dll")]
+        private static extern uint LsaFreeReturnBuffer(IntPtr buffer);
+
+        [DllImport("secur32.dll")]
+        private static extern uint LsaGetLogonSessionData(ref Luid logonId, out IntPtr ppLogonSessionData);
 
         private static void Refresh(DateTime now)
         {
@@ -96,13 +106,6 @@ namespace WinFIMLog.Utils
         private sealed record CacheEntry(string AccountName, DateTime ExpiresAt);
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct Luid
-        {
-            internal uint LowPart;
-            internal int HighPart;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
         private readonly struct LsaUnicodeString
         {
             private readonly ushort Length;
@@ -113,6 +116,13 @@ namespace WinFIMLog.Utils
                 Buffer == IntPtr.Zero || Length == 0
                     ? string.Empty
                     : Marshal.PtrToStringUni(Buffer, Length / sizeof(char)) ?? string.Empty;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Luid
+        {
+            internal uint LowPart;
+            internal int HighPart;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -131,14 +141,5 @@ namespace WinFIMLog.Utils
             internal LsaUnicodeString DnsDomainName;
             internal LsaUnicodeString Upn;
         }
-
-        [DllImport("secur32.dll")]
-        private static extern uint LsaEnumerateLogonSessions(out ulong logonSessionCount, out IntPtr logonSessionList);
-
-        [DllImport("secur32.dll")]
-        private static extern uint LsaGetLogonSessionData(ref Luid logonId, out IntPtr ppLogonSessionData);
-
-        [DllImport("secur32.dll")]
-        private static extern uint LsaFreeReturnBuffer(IntPtr buffer);
     }
 }

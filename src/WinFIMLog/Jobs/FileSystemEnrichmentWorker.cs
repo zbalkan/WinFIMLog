@@ -6,20 +6,19 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.Data;
 using WinFIMLog.FIM;
-using WinFIMLog.Health;
 
 namespace WinFIMLog.Jobs
 {
     internal sealed class FileSystemEnrichmentWorker : BackgroundService
     {
         private static readonly TimeSpan DuplicateWindow = TimeSpan.FromSeconds(5);
-        private readonly ConcurrentDictionary<string, (string Fingerprint, DateTime ExpiresUtc)> _recentChanges = new();
+        private readonly FileSystemEventAttributionMonitor _attribution;
         private readonly FileSystemCaptureQueue _capture;
         private readonly ILiteDbContext _context;
-        private readonly IBuffer<FileSystemChange> _output;
-        private readonly FileSystemEventAttributionMonitor _attribution;
-        private readonly Settings _settings;
         private readonly ILogger<FileSystemEnrichmentWorker> _logger;
+        private readonly IBuffer<FileSystemChange> _output;
+        private readonly ConcurrentDictionary<string, (string Fingerprint, DateTime ExpiresUtc)> _recentChanges = new();
+        private readonly Settings _settings;
 
         public FileSystemEnrichmentWorker(FileSystemCaptureQueue capture, ILiteDbContext context,
             IBuffer<FileSystemChange> output, Settings settings, ILogger<FileSystemEnrichmentWorker> logger)
@@ -30,6 +29,12 @@ namespace WinFIMLog.Jobs
             _settings = settings;
             _logger = logger;
             _attribution = new FileSystemEventAttributionMonitor(logger, settings);
+        }
+
+        public override void Dispose()
+        {
+            _attribution.Dispose();
+            base.Dispose();
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)
@@ -116,12 +121,6 @@ namespace WinFIMLog.Jobs
                 await _output.Add(change);
                 _recentChanges[raw.FullPath] = (fingerprint, now + DuplicateWindow);
             }
-        }
-
-        public override void Dispose()
-        {
-            _attribution.Dispose();
-            base.Dispose();
         }
     }
 }

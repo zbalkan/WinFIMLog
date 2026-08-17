@@ -10,29 +10,26 @@ namespace WinFIMLog.Tests;
 public sealed class RegistrySnapshotSourceTests
 {
     [TestMethod]
-    public void ResolveRoots_removes_duplicate_and_descendant_roots()
+    public void Capture_prunes_excluded_registry_subtrees()
     {
-        var roots = RegistrySnapshotSource.ResolveRoots([
-            @"HKEY_LOCAL_MACHINE\Software\Vendor\Product",
-            @"HKEY_LOCAL_MACHINE\Software",
-            @"hkey_local_machine\software\",
-            @"HKEY_USERS\S-1-5-18\Software"
-        ]);
+        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("Windows Registry required."); return; }
+        var path = $@"Software\WinFIMLogTests\{Guid.NewGuid():N}";
+        using (var root = Registry.CurrentUser.CreateSubKey(path))
+        {
+            root.SetValue("Included", 1);
+            using var excluded = root.CreateSubKey("Excluded");
+            excluded.SetValue("Hidden", 2);
+        }
+        try
+        {
+            var configuredRoot = @"HKEY_CURRENT_USER\" + path;
+            var members = new RegistrySnapshotSource(candidate =>
+                !candidate.Contains(@"\Excluded", StringComparison.OrdinalIgnoreCase)).Capture([configuredRoot]);
 
-        Assert.AreSequenceEqual([
-            @"HKEY_LOCAL_MACHINE\Software",
-            @"HKEY_USERS\S-1-5-18\Software"
-        ], roots);
-    }
-
-    [TestMethod]
-    public void Key_and_value_at_the_same_path_have_distinct_identities()
-    {
-        var path = @"HKEY_LOCAL_MACHINE\Software\Vendor\Name";
-
-        Assert.AreNotEqual(
-            RegistrySnapshotSource.Identity(path, SnapshotNodeType.RegistryKey),
-            RegistrySnapshotSource.Identity(path, SnapshotNodeType.RegistryValue));
+            Assert.Contains(member => member.Path.EndsWith(path + @"\Included", StringComparison.OrdinalIgnoreCase), members);
+            Assert.DoesNotContain(member => member.Path.Contains(@"\Excluded", StringComparison.OrdinalIgnoreCase), members);
+        }
+        finally { Registry.CurrentUser.DeleteSubKeyTree(path, false); }
     }
 
     [TestMethod]
@@ -61,25 +58,28 @@ public sealed class RegistrySnapshotSourceTests
     }
 
     [TestMethod]
-    public void Capture_prunes_excluded_registry_subtrees()
+    public void Key_and_value_at_the_same_path_have_distinct_identities()
     {
-        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("Windows Registry required."); return; }
-        var path = $@"Software\WinFIMLogTests\{Guid.NewGuid():N}";
-        using (var root = Registry.CurrentUser.CreateSubKey(path))
-        {
-            root.SetValue("Included", 1);
-            using var excluded = root.CreateSubKey("Excluded");
-            excluded.SetValue("Hidden", 2);
-        }
-        try
-        {
-            var configuredRoot = @"HKEY_CURRENT_USER\" + path;
-            var members = new RegistrySnapshotSource(candidate =>
-                !candidate.Contains(@"\Excluded", StringComparison.OrdinalIgnoreCase)).Capture([configuredRoot]);
+        var path = @"HKEY_LOCAL_MACHINE\Software\Vendor\Name";
 
-            Assert.Contains(member => member.Path.EndsWith(path + @"\Included", StringComparison.OrdinalIgnoreCase), members);
-            Assert.DoesNotContain(member => member.Path.Contains(@"\Excluded", StringComparison.OrdinalIgnoreCase), members);
-        }
-        finally { Registry.CurrentUser.DeleteSubKeyTree(path, false); }
+        Assert.AreNotEqual(
+            RegistrySnapshotSource.Identity(path, SnapshotNodeType.RegistryKey),
+            RegistrySnapshotSource.Identity(path, SnapshotNodeType.RegistryValue));
+    }
+
+    [TestMethod]
+    public void ResolveRoots_removes_duplicate_and_descendant_roots()
+    {
+        var roots = RegistrySnapshotSource.ResolveRoots([
+            @"HKEY_LOCAL_MACHINE\Software\Vendor\Product",
+            @"HKEY_LOCAL_MACHINE\Software",
+            @"hkey_local_machine\software\",
+            @"HKEY_USERS\S-1-5-18\Software"
+        ]);
+
+        Assert.AreSequenceEqual([
+            @"HKEY_LOCAL_MACHINE\Software",
+            @"HKEY_USERS\S-1-5-18\Software"
+        ], roots);
     }
 }

@@ -12,7 +12,8 @@ namespace WinFIMLog.Utils
         public ILogger CreateLogger(string categoryName) =>
             new EventIdEventLogLogger(sourceName, logName, eventIds, sourceLock);
 
-        public void Dispose() { }
+        public void Dispose()
+        { }
 
         private sealed class EventIdEventLogLogger(string sourceName, string logName,
             EventIdProvider eventIds, object sourceLock) : ILogger
@@ -34,6 +35,13 @@ namespace WinFIMLog.Utils
                     eventIds.ComputeEventId(logLevel, eventId, state));
             }
 
+            private static EventLogEntryType EntryType(LogLevel level) => level switch
+            {
+                LogLevel.Warning => EventLogEntryType.Warning,
+                LogLevel.Error or LogLevel.Critical => EventLogEntryType.Error,
+                _ => EventLogEntryType.Information
+            };
+
             private void EnsureSource()
             {
                 if (EventLog.SourceExists(sourceName)) return;
@@ -43,13 +51,6 @@ namespace WinFIMLog.Utils
                         EventLog.CreateEventSource(new EventSourceCreationData(sourceName, logName));
                 }
             }
-
-            private static EventLogEntryType EntryType(LogLevel level) => level switch
-            {
-                LogLevel.Warning => EventLogEntryType.Warning,
-                LogLevel.Error or LogLevel.Critical => EventLogEntryType.Error,
-                _ => EventLogEntryType.Information
-            };
         }
     }
 }

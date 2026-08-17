@@ -10,9 +10,10 @@ namespace WinFIMLog.Utils
     /// </summary>
     internal static class SidUserInfoCache
     {
-        private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
         private static readonly ConcurrentDictionary<string, CacheEntry> Entries =
             new(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
 
         internal static UserInformation Get(Process process)
         {

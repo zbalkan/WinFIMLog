@@ -4,28 +4,25 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using WinFIMLog.FIM;
 using WinFIMLog.Health;
 using WinFIMLog.Snapshots;
-using Microsoft.Extensions.Logging;
 
 namespace WinFIMLog.Jobs
 {
     internal partial class FileSystemMonitorJob : IMonitor
     {
-        private readonly ILogger _logger;
+        private readonly FileSystemBaselineAvailability _baselineAvailability;
         private readonly FileSystemCaptureQueue _capture;
         private readonly IHealthReporter _health;
-        private readonly ISnapshotCoordinator _snapshots;
-        private readonly FileSystemBaselineAvailability _baselineAvailability;
-
-        private readonly List<FileSystemWatcher> _watchers;
-        private readonly object _watcherLock = new();
-        private bool _stopping;
-
+        private readonly ILogger _logger;
         private readonly Settings _settings;
-
+        private readonly ISnapshotCoordinator _snapshots;
+        private readonly object _watcherLock = new();
+        private readonly List<FileSystemWatcher> _watchers;
         private bool _disposedValue;
+        private bool _stopping;
 
         public FileSystemMonitorJob(ILogger logger, FileSystemCaptureQueue capture, IHealthReporter health,
             Settings settings, ISnapshotCoordinator snapshots, FileSystemBaselineAvailability baselineAvailability)
@@ -37,34 +34,6 @@ namespace WinFIMLog.Jobs
             _settings = settings;
             _snapshots = snapshots;
             _baselineAvailability = baselineAvailability;
-        }
-
-        public async Task RunAsync(CancellationToken cancellationToken)
-        {
-            InvokeWatchers();
-            try
-            {
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // Normal source shutdown.
-            }
-            finally
-            {
-                Stop();
-            }
-        }
-
-        private void Stop()
-        {
-            lock (_watcherLock)
-            {
-                if (_stopping) return;
-                _stopping = true;
-                foreach (var watcher in _watchers) DisposeWatcher(watcher);
-                _watchers.Clear();
-            }
         }
 
         /// <summary>Applies watcher additions and removals for the newly resolved scope.</summary>
@@ -92,6 +61,67 @@ namespace WinFIMLog.Jobs
             }
         }
 
+        public async Task RunAsync(CancellationToken cancellationToken)
+        {
+            InvokeWatchers();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Normal source shutdown.
+            }
+            finally
+            {
+                Stop();
+            }
+        }
+
+        private static string? senderPath(EffectiveSettings configuration, string path) =>
+            Array.Find(configuration.MonitoredPaths, p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
+        private FileSystemWatcher CreateWatcher(string path, EffectiveSettings configuration)
+        {
+            var watcher = new FileSystemWatcher(path)
+            {
+                NotifyFilter = NotifyFilters.Attributes
+                                | NotifyFilters.CreationTime
+                                | NotifyFilters.DirectoryName
+                                | NotifyFilters.FileName
+
+                                // | NotifyFilters.LastAccess // This creates so much bloat.
+                                | NotifyFilters.LastWrite
+                                | NotifyFilters.Security
+                                | NotifyFilters.Size,
+                IncludeSubdirectories = true,
+                InternalBufferSize = configuration.WatcherBufferSizeKB * 1024,
+                Filter = string.Empty,
+                EnableRaisingEvents = false
+            };
+
+            watcher.Changed += OnChanged;
+            watcher.Renamed += OnRenamed;
+            watcher.Created += OnCreated;
+            watcher.Deleted += OnDeleted;
+
+            watcher.Error += OnError;
+
+            watcher.EnableRaisingEvents = true;
+            return watcher;
+        }
+
+        private void DisposeWatcher(FileSystemWatcher watcher)
+        {
+            watcher.EnableRaisingEvents = false;
+            watcher.Changed -= OnChanged;
+            watcher.Renamed -= OnRenamed;
+            watcher.Created -= OnCreated;
+            watcher.Deleted -= OnDeleted;
+            watcher.Error -= OnError;
+            watcher.Dispose();
+        }
+
         private void InvokeWatchers()
         {
             var configuration = _settings.Capture();
@@ -107,46 +137,7 @@ namespace WinFIMLog.Jobs
             }
         }
 
-        private FileSystemWatcher CreateWatcher(string path, EffectiveSettings configuration)
-        {
-            var watcher = new FileSystemWatcher(path)
-                {
-                    NotifyFilter = NotifyFilters.Attributes
-                                | NotifyFilters.CreationTime
-                                | NotifyFilters.DirectoryName
-                                | NotifyFilters.FileName
-
-                                // | NotifyFilters.LastAccess // This creates so much bloat.
-                                | NotifyFilters.LastWrite
-                                | NotifyFilters.Security
-                                | NotifyFilters.Size,
-                    IncludeSubdirectories = true,
-                    InternalBufferSize = configuration.WatcherBufferSizeKB * 1024,
-                    Filter = string.Empty,
-                    EnableRaisingEvents = false
-                };
-
-                watcher.Changed += OnChanged;
-                watcher.Renamed += OnRenamed;
-                watcher.Created += OnCreated;
-                watcher.Deleted += OnDeleted;
-
-                watcher.Error += OnError;
-
-            watcher.EnableRaisingEvents = true;
-            return watcher;
-        }
-
         private void OnChanged(object sender, FileSystemEventArgs e) => ProcessEvent(e.FullPath, ChangeCategory.Changed);
-
-        private void OnRenamed(object sender, RenamedEventArgs e)
-        {
-            var configuration = _settings.Capture();
-            if (!_baselineAvailability.IsEstablished(configuration) ||
-                (!configuration.IsMonitoredPath(e.FullPath) && !configuration.IsMonitoredPath(e.OldFullPath))) return;
-            _capture.TryAdmit(new RawFileSystemNotification(senderPath(configuration, e.FullPath) ?? senderPath(configuration, e.OldFullPath) ?? string.Empty,
-                e.FullPath, ChangeCategory.Changed, DateTimeOffset.UtcNow, e.OldFullPath, e.FullPath));
-        }
 
         private void OnCreated(object sender, FileSystemEventArgs e) => ProcessEvent(e.FullPath, ChangeCategory.Created);
 
@@ -183,15 +174,13 @@ namespace WinFIMLog.Jobs
             _health.SourceRecovered("FileSystemWatcher", scope, "WatcherRecreated;ReconciliationStarted");
         }
 
-        private void DisposeWatcher(FileSystemWatcher watcher)
+        private void OnRenamed(object sender, RenamedEventArgs e)
         {
-            watcher.EnableRaisingEvents = false;
-            watcher.Changed -= OnChanged;
-            watcher.Renamed -= OnRenamed;
-            watcher.Created -= OnCreated;
-            watcher.Deleted -= OnDeleted;
-            watcher.Error -= OnError;
-            watcher.Dispose();
+            var configuration = _settings.Capture();
+            if (!_baselineAvailability.IsEstablished(configuration) ||
+                (!configuration.IsMonitoredPath(e.FullPath) && !configuration.IsMonitoredPath(e.OldFullPath))) return;
+            _capture.TryAdmit(new RawFileSystemNotification(senderPath(configuration, e.FullPath) ?? senderPath(configuration, e.OldFullPath) ?? string.Empty,
+                e.FullPath, ChangeCategory.Changed, DateTimeOffset.UtcNow, e.OldFullPath, e.FullPath));
         }
 
         private void ProcessEvent(string path, ChangeCategory category)
@@ -206,8 +195,16 @@ namespace WinFIMLog.Jobs
                 (senderPath(configuration, path) ?? string.Empty), path, category, DateTimeOffset.UtcNow));
         }
 
-        private static string? senderPath(EffectiveSettings configuration, string path) =>
-            Array.Find(configuration.MonitoredPaths, p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+        private void Stop()
+        {
+            lock (_watcherLock)
+            {
+                if (_stopping) return;
+                _stopping = true;
+                foreach (var watcher in _watchers) DisposeWatcher(watcher);
+                _watchers.Clear();
+            }
+        }
 
         #region Dispose
 

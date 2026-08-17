@@ -1,34 +1,23 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
-using WinFIMLog.FIM;
 using LiteDB;
 using Microsoft.Extensions.Options;
-using WinFIMLog.Snapshots;
 using WinFIMLog.Events;
+using WinFIMLog.FIM;
+using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Data
 {
     public partial class LiteDbContext : ILiteDbContext
     {
-        public ILiteCollection<FileSystemChange> FileSystemChanges { get; }
-
-        public ILiteCollection<RegistryChange> RegistryChanges { get; }
-
-        public ILiteCollection<BaselineMetadata> Baselines { get; }
-        public ILiteCollection<BaselineMember> BaselineMembers { get; }
-        public ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
-        public ILiteCollection<EventOutboxRecord> EventOutbox { get; }
-
         /// <summary>
         ///     The default size is 80MB
         /// </summary>
         private const long InitialDatabaseSize = 80 * MB;
 
         private const long MB = 1024 * 1024;
-
         private readonly LiteDatabase _database;
         private readonly object writeLock = new();
-
         private bool disposedValue;
 
         /// <summary>
@@ -68,11 +57,39 @@ namespace WinFIMLog.Data
             EventOutbox.EnsureIndex(x => x.NextAttemptAt);
         }
 
+        public ILiteCollection<BaselineMember> BaselineMembers { get; }
+        public ILiteCollection<BaselineMetadata> Baselines { get; }
+        public ILiteCollection<EventOutboxRecord> EventOutbox { get; }
+        public ILiteCollection<FileSystemChange> FileSystemChanges { get; }
+
+        public ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
+        public ILiteCollection<RegistryChange> RegistryChanges { get; }
+
         #region Dispose
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
 
         public bool ExecuteTransaction(Action action)
         {
             lock (writeLock) return _database.BeginTrans() && Execute(action);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    _database.Dispose();
+                }
+
+                disposedValue = true;
+            }
         }
 
         private bool Execute(Action action)
@@ -86,26 +103,6 @@ namespace WinFIMLog.Data
             {
                 _database.Rollback();
                 throw;
-            }
-        }
-
-        public void Dispose()
-        {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
-
-        private void Dispose(bool disposing)
-        {
-            if (!disposedValue)
-            {
-                if (disposing)
-                {
-                    _database.Dispose();
-                }
-
-                disposedValue = true;
             }
         }
 

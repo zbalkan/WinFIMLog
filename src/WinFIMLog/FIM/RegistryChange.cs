@@ -2,26 +2,16 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
-using WinFIMLog.IO.Security;
-using WinFIMLog.Utils;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Win32;
 using NUlid;
+using WinFIMLog.IO.Security;
+using WinFIMLog.Utils;
 
 namespace WinFIMLog.FIM
 {
     public partial class RegistryChange : Change
     {
-        public string Hive { get; set; }
-
-        public string KeyName { get; set; }
-
-        public string? ValueData { get; set; }
-
-        public string? ValueName { get; set; }
-
-        public string EventName { get; set; }
-
         private readonly RegistryKey? _key;
 
         public RegistryChange(RegistryTraceData data, string fullName)
@@ -93,6 +83,17 @@ namespace WinFIMLog.FIM
 
             ACLs = _key?.GetACL() ?? string.Empty;
         }
+
+        public string EventName { get; set; }
+        public string Hive { get; set; }
+
+        public string KeyName { get; set; }
+
+        public string? ValueData { get; set; }
+
+        public string? ValueName { get; set; }
+
+        public override string ToString() => $"Timestamp: {DateTime:O}\nEvent Name: {EventName}\nChange Category: {ChangeCategory}\nEntity: {Entity}\nKey Name: {KeyName}\nValue Name: {ValueName}\nValue Data: {ValueData}\nProcess: {ProcessName} (PID: {ProcessID})\nUser Info: {Username} (SID: {UserSID})\nAttribution Status: {AttributionStatus}";
 
         private static RegistryHive ParseHive(string keyName)
         {
@@ -177,7 +178,5 @@ namespace WinFIMLog.FIM
             // Apply regex to strip the hive name and clean the full key path
             return StrippedKeyNameRegex().Replace(fullName, "$1");
         }
-
-        public override string ToString() => $"Timestamp: {DateTime:O}\nEvent Name: {EventName}\nChange Category: {ChangeCategory}\nEntity: {Entity}\nKey Name: {KeyName}\nValue Name: {ValueName}\nValue Data: {ValueData}\nProcess: {ProcessName} (PID: {ProcessID})\nUser Info: {Username} (SID: {UserSID})\nAttribution Status: {AttributionStatus}";
     }
 }

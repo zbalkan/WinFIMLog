@@ -13,7 +13,6 @@ namespace WinFIMLog.IO
 {
     public static partial class FileSystem
     {
-
         /// <summary>
         ///     Calculate <see cref="SHA256" /> digest of a file
         /// </summary>

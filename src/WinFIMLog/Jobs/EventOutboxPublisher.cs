@@ -13,15 +13,6 @@ namespace WinFIMLog.Jobs
         IEventRecordWriter writer,
         ILogger<EventOutboxPublisher> logger) : BackgroundService
     {
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                var worked = PublishReady();
-                if (!worked) await Task.Delay(TimeSpan.FromMilliseconds(250), stoppingToken);
-            }
-        }
-
         internal bool PublishReady()
         {
             var worked = false;
@@ -51,6 +42,15 @@ namespace WinFIMLog.Jobs
                 }
             }
             return worked;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var worked = PublishReady();
+                if (!worked) await Task.Delay(TimeSpan.FromMilliseconds(250), stoppingToken);
+            }
         }
     }
 }

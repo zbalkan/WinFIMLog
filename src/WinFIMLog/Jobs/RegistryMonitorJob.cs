@@ -4,16 +4,15 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using WinFIMLog.FIM;
-using WinFIMLog.Utils;
-using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ObjectPool;
-using NtKeywords = Microsoft.Diagnostics.Tracing.Parsers.KernelTraceEventParser.Keywords;
+using WinFIMLog.FIM;
 using WinFIMLog.Snapshots;
+using WinFIMLog.Utils;
+using NtKeywords = Microsoft.Diagnostics.Tracing.Parsers.KernelTraceEventParser.Keywords;
 
 namespace WinFIMLog.Jobs
 {
@@ -29,25 +28,20 @@ namespace WinFIMLog.Jobs
 
         private const NtKeywords TraceFlags = NtKeywords.Registry;
 
+        private readonly RegistryKcbCache _keyCache = new();
         private readonly ILogger _logger;
 
         private readonly IBuffer<RegistryChange> _messageStore;
 
         private readonly int _pid;
 
+        private readonly ObjectPool<StringBuilder> _sbPool = new DefaultObjectPoolProvider().CreateStringBuilderPool();
+        private readonly object _sessionLock = new();
         private readonly Settings _settings;
         private readonly ISnapshotCoordinator _snapshots;
-
-        private readonly ObjectPool<StringBuilder> _sbPool = new DefaultObjectPoolProvider().CreateStringBuilderPool();
-
-        private readonly object _sessionLock = new();
-
-        private readonly RegistryKcbCache _keyCache = new();
-
-        private TraceEventSession? _session;
-        private long _reportedEventsLost;
-
         private bool _disposedValue;
+        private long _reportedEventsLost;
+        private TraceEventSession? _session;
 
         public RegistryMonitorJob(ILogger logger, IBuffer<RegistryChange> regStore, Settings settings, ISnapshotCoordinator snapshots)
         {
@@ -93,6 +87,31 @@ namespace WinFIMLog.Jobs
             }
         }
 
+        /// <summary>
+        ///     Stop monitoring selected Registry keys
+        /// </summary>
+        /// <exception cref="AggregateException">
+        /// </exception>
+        private void CleanupExistingSession()
+        {
+            try
+            {
+                var activeSessions = TraceEventSession.GetActiveSessionNames();
+                if (activeSessions.Contains(ETWSessionName))
+                {
+                    using var session = new TraceEventSession(ETWSessionName, TraceEventSessionOptions.Attach)
+                    {
+                        StopOnDispose = true
+                    };
+                    _logger.LogInformation("Cleaned up lingering ETW session 'RegistryWatcher' from a previous run.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error while checking or cleaning up lingering ETW session.");
+            }
+        }
+
         private TraceEventSession CreateSession()
         {
             var session = new TraceEventSession(ETWSessionName)
@@ -125,50 +144,8 @@ namespace WinFIMLog.Jobs
             }
         }
 
-        private void UpdateCache(RegistryTraceData data) =>
-            _keyCache.Update(data.KeyHandle, data.KeyName);
-
         private void DeleteCache(RegistryTraceData data) =>
             _keyCache.Remove(data.KeyHandle);
-
-        private void ReportEventLoss(TraceEventSession session)
-        {
-            var total = session.Source.EventsLost;
-            var previous = Interlocked.Exchange(ref _reportedEventsLost, total);
-            if (total > previous)
-            {
-                // Loss can include a KCB delete. Discard potentially stale handle bindings;
-                // the snapshot requested below is the authoritative recovery path.
-                _keyCache.Clear();
-                _logger.LogError(7791, "COVERAGE GAP Source=RegistryETW Scope=ConfiguredRegistryKeys Reason=EventsLost LostCount={LostCount}", total - previous);
-                _snapshots.RequestRegistrySnapshot("Registry ETW events lost", "ConfiguredRegistryKeys");
-            }
-        }
-
-        /// <summary>
-        ///     Stop monitoring selected Registry keys
-        /// </summary>
-        /// <exception cref="AggregateException">
-        /// </exception>
-        private void CleanupExistingSession()
-        {
-            try
-            {
-                var activeSessions = TraceEventSession.GetActiveSessionNames();
-                if (activeSessions.Contains(ETWSessionName))
-                {
-                    using var session = new TraceEventSession(ETWSessionName, TraceEventSessionOptions.Attach)
-                    {
-                        StopOnDispose = true
-                    };
-                    _logger.LogInformation("Cleaned up lingering ETW session 'RegistryWatcher' from a previous run.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error while checking or cleaning up lingering ETW session.");
-            }
-        }
 
         private string GetFullKeyName(ulong keyHandle, string eventKeyName, string eventValueName)
         {
@@ -239,6 +216,23 @@ namespace WinFIMLog.Jobs
                 ex.Log(_logger);
             }
         }
+
+        private void ReportEventLoss(TraceEventSession session)
+        {
+            var total = session.Source.EventsLost;
+            var previous = Interlocked.Exchange(ref _reportedEventsLost, total);
+            if (total > previous)
+            {
+                // Loss can include a KCB delete. Discard potentially stale handle bindings;
+                // the snapshot requested below is the authoritative recovery path.
+                _keyCache.Clear();
+                _logger.LogError(7791, "COVERAGE GAP Source=RegistryETW Scope=ConfiguredRegistryKeys Reason=EventsLost LostCount={LostCount}", total - previous);
+                _snapshots.RequestRegistrySnapshot("Registry ETW events lost", "ConfiguredRegistryKeys");
+            }
+        }
+
+        private void UpdateCache(RegistryTraceData data) =>
+                                                    _keyCache.Update(data.KeyHandle, data.KeyName);
 
         #region Regex
 

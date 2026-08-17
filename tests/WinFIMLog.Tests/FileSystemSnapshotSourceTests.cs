@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Snapshots;
 
@@ -10,49 +10,6 @@ namespace WinFIMLog.Tests;
 [TestClass]
 public sealed class FileSystemSnapshotSourceTests
 {
-    [TestMethod]
-    public void Capture_RecordsDirectoriesFilesAndHashEvidenceSeparately()
-    {
-        var root = Directory.CreateTempSubdirectory("winfimlog-snapshot-");
-        try
-        {
-            var file = Path.Combine(root.FullName, "evidence.txt");
-            File.WriteAllText(file, "persistent evidence");
-            var members = new FileSystemSnapshotSource(1).Capture([root.FullName]);
-
-            Assert.HasCount(2, members);
-            Assert.AreEqual(SnapshotNodeType.Directory, members.Single(x => x.Path == root.FullName).NodeType);
-            var evidence = members.Single(x => x.Path == file);
-            Assert.AreEqual(SnapshotNodeType.File, evidence.NodeType);
-            Assert.AreEqual(HashEvidenceState.Hashed, evidence.HashState);
-            Assert.IsFalse(string.IsNullOrWhiteSpace(evidence.ContentHash));
-        }
-        finally { root.Delete(true); }
-    }
-
-    [TestMethod]
-    public void Capture_RecordsSizeCapAsEvidenceRatherThanEmptyHash()
-    {
-        var root = Directory.CreateTempSubdirectory("winfimlog-snapshot-");
-        try
-        {
-            var file = Path.Combine(root.FullName, "large.bin");
-            File.WriteAllBytes(file, [1]);
-            var evidence = new FileSystemSnapshotSource(0).Capture([root.FullName]).Single(x => x.Path == file);
-            Assert.AreEqual(HashEvidenceState.SkippedBySizeCap, evidence.HashState);
-            Assert.IsNull(evidence.ContentHash);
-        }
-        finally { root.Delete(true); }
-    }
-
-    [TestMethod]
-    public void Fingerprint_distinguishes_node_attribute_evidence()
-    {
-        var ordinary = new BaselineMember { Identity = "a", IsSparse = false };
-        var sparse = new BaselineMember { Identity = "a", IsSparse = true };
-        Assert.AreNotEqual(ordinary.Fingerprint, sparse.Fingerprint);
-    }
-
     [TestMethod]
     public void Capture_applies_exclusions_and_prunes_excluded_directories()
     {
@@ -104,6 +61,49 @@ public sealed class FileSystemSnapshotSourceTests
             Assert.DoesNotContain(x => x.Path.EndsWith("outside.txt", StringComparison.Ordinal), members);
         }
         finally { root.Delete(true); target.Delete(true); }
+    }
+
+    [TestMethod]
+    public void Capture_RecordsDirectoriesFilesAndHashEvidenceSeparately()
+    {
+        var root = Directory.CreateTempSubdirectory("winfimlog-snapshot-");
+        try
+        {
+            var file = Path.Combine(root.FullName, "evidence.txt");
+            File.WriteAllText(file, "persistent evidence");
+            var members = new FileSystemSnapshotSource(1).Capture([root.FullName]);
+
+            Assert.HasCount(2, members);
+            Assert.AreEqual(SnapshotNodeType.Directory, members.Single(x => x.Path == root.FullName).NodeType);
+            var evidence = members.Single(x => x.Path == file);
+            Assert.AreEqual(SnapshotNodeType.File, evidence.NodeType);
+            Assert.AreEqual(HashEvidenceState.Hashed, evidence.HashState);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(evidence.ContentHash));
+        }
+        finally { root.Delete(true); }
+    }
+
+    [TestMethod]
+    public void Capture_RecordsSizeCapAsEvidenceRatherThanEmptyHash()
+    {
+        var root = Directory.CreateTempSubdirectory("winfimlog-snapshot-");
+        try
+        {
+            var file = Path.Combine(root.FullName, "large.bin");
+            File.WriteAllBytes(file, [1]);
+            var evidence = new FileSystemSnapshotSource(0).Capture([root.FullName]).Single(x => x.Path == file);
+            Assert.AreEqual(HashEvidenceState.SkippedBySizeCap, evidence.HashState);
+            Assert.IsNull(evidence.ContentHash);
+        }
+        finally { root.Delete(true); }
+    }
+
+    [TestMethod]
+    public void Fingerprint_distinguishes_node_attribute_evidence()
+    {
+        var ordinary = new BaselineMember { Identity = "a", IsSparse = false };
+        var sparse = new BaselineMember { Identity = "a", IsSparse = true };
+        Assert.AreNotEqual(ordinary.Fingerprint, sparse.Fingerprint);
     }
 
     [TestMethod]

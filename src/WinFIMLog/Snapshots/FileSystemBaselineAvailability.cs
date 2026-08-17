@@ -10,8 +10,8 @@ namespace WinFIMLog.Snapshots
     {
         private readonly BaselineRepository repository;
         private readonly object sync = new();
-        private string establishedScope = string.Empty;
         private string establishedIdentity = string.Empty;
+        private string establishedScope = string.Empty;
 
         public FileSystemBaselineAvailability(BaselineRepository repository, Settings settings)
         {

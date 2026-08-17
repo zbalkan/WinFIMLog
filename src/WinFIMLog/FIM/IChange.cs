@@ -14,36 +14,21 @@ namespace WinFIMLog.FIM
     {
         string ACLs { get; set; }
 
-        AttributionStatus AttributionStatus { get; set; }
-
-        string AttributionMethod { get; set; }
-
         string AttributionConfidence { get; set; }
-
-        DateTimeOffset? AttributionSourceTimestamp { get; set; }
-
+        string AttributionMethod { get; set; }
         string? AttributionMissingReason { get; set; }
-
-        ulong? ProcessSequenceNumber { get; set; }
-
+        DateTimeOffset? AttributionSourceTimestamp { get; set; }
+        AttributionStatus AttributionStatus { get; set; }
         ChangeCategory ChangeCategory { get; set; }
-
         ConfigChangeType ConfigChangeType { get; set; }
-
         DateTime DateTime { get; set; }
-
         string Entity { get; set; }
-
         string Id { get; set; }
-
         int? ProcessID { get; set; }
-
         string? ProcessName { get; set; }
-
-        string SourceComputer { get; set; }
-
+        ulong? ProcessSequenceNumber { get; set; }
         string ScopeHash { get; set; }
-
+        string SourceComputer { get; set; }
         string? Username { get; set; }
 
         string? UserSID { get; set; }

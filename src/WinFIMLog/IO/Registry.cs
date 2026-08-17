@@ -1,10 +1,6 @@
 ﻿using System;
 using System.Linq;
-using WinFIMLog.FIM;
-using WinFIMLog.IO.Security;
-using WinFIMLog.Utils;
 using Microsoft.Win32;
-using NUlid;
 using WinFIMLog.Configuration;
 
 namespace WinFIMLog.IO
@@ -14,6 +10,9 @@ namespace WinFIMLog.IO
     /// </summary>
     internal static class Registry
     {
+        private const string LegacyPreferenceKeyName = @"SOFTWARE\WinFIMLog";
+        private const string PolicyKeyName = @"SOFTWARE\Policies\WinFIMLog";
+        private const string PreferenceKeyName = @"SOFTWARE\WinFIMLog";
         public static RegistryHive Hive => RegistryHive.LocalMachine;
 
         /// <summary>
@@ -28,20 +27,6 @@ namespace WinFIMLog.IO
         public static RegistryKey Root => Microsoft.Win32.Registry.LocalMachine.CreateSubKey(PreferenceKeyName, true);
 
         public static string RootName => Root.Name.Substring(Root.Name.IndexOf('\\') + 1);
-
-        private const string PreferenceKeyName = @"SOFTWARE\WinFIMLog";
-        private const string PolicyKeyName = @"SOFTWARE\Policies\WinFIMLog";
-        private const string LegacyPreferenceKeyName = @"SOFTWARE\WinFIMLog";
-
-        private static object? ReadEffectiveValue(string value)
-        {
-            using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, false);
-            using var legacy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(LegacyPreferenceKeyName, false);
-            return ConfigurationPrecedence.Resolve(
-                policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
-                Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
-                legacy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames));
-        }
 
         public static bool EffectiveValueExists(string value)
         {
@@ -171,6 +156,16 @@ namespace WinFIMLog.IO
             ArgumentNullException.ThrowIfNull(valueData);
 
             Root.SetValue(value, valueData);
+        }
+
+        private static object? ReadEffectiveValue(string value)
+        {
+            using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, false);
+            using var legacy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(LegacyPreferenceKeyName, false);
+            return ConfigurationPrecedence.Resolve(
+                policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
+                Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
+                legacy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames));
         }
     }
 }

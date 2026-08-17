@@ -34,6 +34,14 @@ namespace WinFIMLog.Attribution
             finally { AuditFree(buffer); }
         }
 
+        [DllImport("advapi32.dll")]
+        private static extern void AuditFree(IntPtr buffer);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool AuditQuerySystemPolicy([In] Guid[] subCategoryGuids,
+            uint policyCount, out IntPtr auditPolicy);
+
         [StructLayout(LayoutKind.Sequential)]
         private struct AuditPolicyInformation
         {
@@ -41,13 +49,5 @@ namespace WinFIMLog.Attribution
             public uint AuditingInformation;
             public Guid AuditCategoryGuid;
         }
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool AuditQuerySystemPolicy([In] Guid[] subCategoryGuids,
-            uint policyCount, out IntPtr auditPolicy);
-
-        [DllImport("advapi32.dll")]
-        private static extern void AuditFree(IntPtr buffer);
     }
 }

@@ -61,6 +61,54 @@ namespace WinFIMLog.IO.Security
         /// </exception>
         public static string GetACL(this RegistryKey key) => ToJson(new AccessControlList().OfRegistryKey(key));
 
+        internal static string AccountNameOrSid(
+            string identityValue,
+            Func<IdentityReference> translate,
+            Func<string, string?>? localLookup = null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(identityValue);
+            ArgumentNullException.ThrowIfNull(translate);
+
+            var localAccount = localLookup?.Invoke(identityValue);
+            if (!string.IsNullOrWhiteSpace(localAccount))
+            {
+                return localAccount;
+            }
+
+            try
+            {
+                return translate() is NTAccount account
+                    ? account.Value
+                    : identityValue;
+            }
+            catch (IdentityNotMappedException ex)
+            {
+                Debug.WriteLine(ex);
+                return identityValue;
+            }
+            catch (Win32Exception ex)
+            {
+                // Domain identities cannot always be resolved (for example, while a laptop is
+                // offline or its domain trust is unavailable). The SID still identifies the
+                // principal and allows ACL collection to continue without losing the value.
+                Debug.WriteLine(ex);
+                return identityValue;
+            }
+        }
+
+        /// <summary>
+        ///     Resolve an identity to its account name, falling back to its stable SID when Windows
+        ///     cannot contact the account's domain or does not know the identity.
+        /// </summary>
+        private static string AccountNameOrSid(IdentityReference identity)
+        {
+            ArgumentNullException.ThrowIfNull(identity);
+            return AccountNameOrSid(
+                identity.Value,
+                () => identity.Translate(typeof(NTAccount)),
+                LocalSidAccountResolver.Resolve);
+        }
+
         private static IEnumerable<string> ListFlags<T>(this T value) where T : struct, Enum
         {
             // Check that this is really a "flags" enum:
@@ -200,54 +248,6 @@ namespace WinFIMLog.IO.Security
             {
                 Debug.WriteLine(ex);
                 return string.Empty;
-            }
-        }
-
-        /// <summary>
-        ///     Resolve an identity to its account name, falling back to its stable SID when Windows
-        ///     cannot contact the account's domain or does not know the identity.
-        /// </summary>
-        private static string AccountNameOrSid(IdentityReference identity)
-        {
-            ArgumentNullException.ThrowIfNull(identity);
-            return AccountNameOrSid(
-                identity.Value,
-                () => identity.Translate(typeof(NTAccount)),
-                LocalSidAccountResolver.Resolve);
-        }
-
-        internal static string AccountNameOrSid(
-            string identityValue,
-            Func<IdentityReference> translate,
-            Func<string, string?>? localLookup = null)
-        {
-            ArgumentException.ThrowIfNullOrEmpty(identityValue);
-            ArgumentNullException.ThrowIfNull(translate);
-
-            var localAccount = localLookup?.Invoke(identityValue);
-            if (!string.IsNullOrWhiteSpace(localAccount))
-            {
-                return localAccount;
-            }
-
-            try
-            {
-                return translate() is NTAccount account
-                    ? account.Value
-                    : identityValue;
-            }
-            catch (IdentityNotMappedException ex)
-            {
-                Debug.WriteLine(ex);
-                return identityValue;
-            }
-            catch (Win32Exception ex)
-            {
-                // Domain identities cannot always be resolved (for example, while a laptop is
-                // offline or its domain trust is unavailable). The SID still identifies the
-                // principal and allows ACL collection to continue without losing the value.
-                Debug.WriteLine(ex);
-                return identityValue;
             }
         }
 

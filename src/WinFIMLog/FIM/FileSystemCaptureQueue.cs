@@ -10,10 +10,10 @@ namespace WinFIMLog.FIM
 {
     public sealed class FileSystemCaptureQueue
     {
-        private readonly Channel<RawFileSystemNotification> _channel;
         private readonly ConcurrentQueue<DateTimeOffset> _ages = new();
-        private readonly HealthMetrics _metrics;
+        private readonly Channel<RawFileSystemNotification> _channel;
         private readonly IHealthReporter _health;
+        private readonly HealthMetrics _metrics;
 
         public FileSystemCaptureQueue(Settings settings, HealthMetrics metrics, IHealthReporter health)
             : this(settings.CaptureQueueCapacity, metrics, health) { }
@@ -32,6 +32,22 @@ namespace WinFIMLog.FIM
             });
         }
 
+        public void Complete(bool succeeded)
+        {
+            _ages.TryDequeue(out _);
+            _metrics.SetOldest(_ages.TryPeek(out var oldest) ? oldest : null);
+            if (succeeded) _metrics.Completed(); else _metrics.Failed();
+        }
+
+        /// <summary>Stops admission after all watcher producers have stopped.</summary>
+        public void CompleteWriter() => _channel.Writer.TryComplete();
+
+        public IAsyncEnumerable<RawFileSystemNotification> ReadAllAsync() =>
+            _channel.Reader.ReadAllAsync();
+
+        public ValueTask<RawFileSystemNotification> ReadAsync(CancellationToken cancellationToken) =>
+            _channel.Reader.ReadAsync(cancellationToken);
+
         public bool TryAdmit(RawFileSystemNotification notification)
         {
             if (_channel.Writer.TryWrite(notification))
@@ -44,22 +60,6 @@ namespace WinFIMLog.FIM
             _metrics.DroppedItem();
             _health.CoverageGap("FileSystemWatcher", notification.Scope, "CaptureQueueFull");
             return false;
-        }
-
-        /// <summary>Stops admission after all watcher producers have stopped.</summary>
-        public void CompleteWriter() => _channel.Writer.TryComplete();
-
-        public IAsyncEnumerable<RawFileSystemNotification> ReadAllAsync() =>
-            _channel.Reader.ReadAllAsync();
-
-        public ValueTask<RawFileSystemNotification> ReadAsync(CancellationToken cancellationToken) =>
-            _channel.Reader.ReadAsync(cancellationToken);
-
-        public void Complete(bool succeeded)
-        {
-            _ages.TryDequeue(out _);
-            _metrics.SetOldest(_ages.TryPeek(out var oldest) ? oldest : null);
-            if (succeeded) _metrics.Completed(); else _metrics.Failed();
         }
     }
 }

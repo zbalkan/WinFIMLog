@@ -13,16 +13,16 @@ namespace WinFIMLog.FIM
 
         public bool RundownComplete { get; private set; }
 
-        public void Record(ProcessInstanceEvidence evidence) =>
-            instances[(evidence.ProcessId, evidence.ProcessSequenceNumber)] = evidence;
-
-        public bool TryResolve(int processId, ulong processSequenceNumber, out ProcessInstanceEvidence evidence) =>
-            instances.TryGetValue((processId, processSequenceNumber), out evidence!);
-
         public void End(int processId, ulong processSequenceNumber) =>
             instances.TryRemove((processId, processSequenceNumber), out _);
 
         public void MarkRundownComplete() => RundownComplete = true;
+
+        public void Record(ProcessInstanceEvidence evidence) =>
+                            instances[(evidence.ProcessId, evidence.ProcessSequenceNumber)] = evidence;
+
+        public bool TryResolve(int processId, ulong processSequenceNumber, out ProcessInstanceEvidence evidence) =>
+            instances.TryGetValue((processId, processSequenceNumber), out evidence!);
     }
 
     public sealed record ProcessInstanceEvidence(

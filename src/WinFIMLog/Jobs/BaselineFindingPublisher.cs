@@ -15,14 +15,6 @@ namespace WinFIMLog.Jobs
         ILocalEventSink eventSink,
         ILogger<BaselineFindingPublisher> logger) : BackgroundService
     {
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                if (!PublishPending()) await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken);
-            }
-        }
-
         internal bool PublishPending()
         {
             var worked = false;
@@ -53,6 +45,14 @@ namespace WinFIMLog.Jobs
                 }
             }
             return worked;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                if (!PublishPending()) await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken);
+            }
         }
     }
 }

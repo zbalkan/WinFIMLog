@@ -63,6 +63,15 @@ namespace WinFIMLog.Events
                 throw new InvalidOperationException("Could not commit Event Log delivery failure state.");
         }
 
+        public void DiscardInvalid(EventOutboxRecord item, string reason)
+        {
+            item.DeliveryAttempts++;
+            item.DeliveredAt = DateTimeOffset.UtcNow;
+            item.LastError = reason;
+            if (!context.ExecuteTransaction(() => context.EventOutbox.Update(item)))
+                throw new InvalidOperationException("Could not commit invalid Event Log outbox record state.");
+        }
+
         public int DeleteDeliveredBefore(DateTimeOffset cutoff)
         {
             var deleted = 0;

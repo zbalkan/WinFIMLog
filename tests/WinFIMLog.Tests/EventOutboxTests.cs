@@ -96,6 +96,28 @@ public sealed class EventOutboxTests
     }
 
     [TestMethod]
+    public void Empty_payload_is_discarded_instead_of_retried_forever()
+    {
+        context.EventOutbox.Insert(new EventOutboxRecord
+        {
+            Id = "empty",
+            Payload = string.Empty,
+            CreatedAt = DateTimeOffset.UtcNow,
+            NextAttemptAt = DateTimeOffset.MinValue
+        });
+        var publisher = new EventOutboxPublisher(outbox, new FailOnceWriter(),
+            NullLogger<EventOutboxPublisher>.Instance);
+
+        Assert.IsTrue(publisher.PublishReady());
+
+        var discarded = context.EventOutbox.FindById(new BsonValue("empty"));
+        Assert.IsNotNull(discarded.DeliveredAt);
+        Assert.AreEqual(1, discarded.DeliveryAttempts);
+        Assert.AreEqual("EmptyPayload", discarded.LastError);
+        Assert.IsFalse(publisher.PublishReady());
+    }
+
+    [TestMethod]
     public async Task Live_outbox_admission_progresses_during_chunked_baseline_staging()
     {
         var repository = new BaselineRepository(context);

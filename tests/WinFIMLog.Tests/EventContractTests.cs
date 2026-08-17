@@ -47,7 +47,8 @@ public sealed class EventContractTests
                 ["double"] = 1.5D,
                 ["int"] = 7,
                 ["ushort"] = (ushort)7790,
-                ["ulong"] = 123UL
+                ["ulong"] = 123UL,
+                ["bool"] = true
             });
 
         using var json = JsonDocument.Parse(record.ToJson());
@@ -57,6 +58,7 @@ public sealed class EventContractTests
         Assert.AreEqual(7, fields.GetProperty("int").GetInt32());
         Assert.AreEqual(7790, fields.GetProperty("ushort").GetUInt16());
         Assert.AreEqual(123UL, fields.GetProperty("ulong").GetUInt64());
+        Assert.IsTrue(fields.GetProperty("bool").GetBoolean());
     }
 
     [TestMethod]

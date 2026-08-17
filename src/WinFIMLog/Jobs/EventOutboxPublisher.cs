@@ -29,6 +29,14 @@ namespace WinFIMLog.Jobs
             foreach (var item in outbox.Ready(DateTimeOffset.UtcNow))
             {
                 worked = true;
+                if (string.IsNullOrWhiteSpace(item.Payload))
+                {
+                    outbox.DiscardInvalid(item, "EmptyPayload");
+                    logger.LogError(
+                        "Event outbox record {RecordId} has an empty payload and was discarded",
+                        item.Id);
+                    continue;
+                }
                 try
                 {
                     var record = JsonSerializer.Deserialize(item.Payload, EventJsonContext.Default.EventContract)

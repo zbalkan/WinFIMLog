@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security;
 using System.Text;
 using Microsoft.Win32;
 using WinFIMLog.IO.Security;
@@ -104,7 +105,7 @@ namespace WinFIMLog.Snapshots
                 HashState = HashEvidenceState.NotApplicable
             };
             try { keyMember.AclEvidence = key.GetACL(); keyMember.AclState = EvidenceAvailability.Available; }
-            catch (UnauthorizedAccessException) { keyMember.AclState = EvidenceAvailability.AccessDenied; }
+            catch (Exception exception) when (IsAccessDenied(exception)) { keyMember.AclState = EvidenceAvailability.AccessDenied; }
             catch { keyMember.AclState = EvidenceAvailability.Failed; }
             output.Add(keyMember);
 
@@ -126,14 +127,14 @@ namespace WinFIMLog.Snapshots
                         RegistryValueData = Serialise(value)
                     });
                 }
-                catch (UnauthorizedAccessException) { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.AccessDenied)); }
+                catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.AccessDenied)); }
                 catch { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.Failed)); }
             }
             foreach (var childName in Safe(() => key.GetSubKeyNames()))
             {
                 if (!isIncluded(path + "\\" + childName)) continue;
                 try { using var child = key.OpenSubKey(childName, false); if (child is not null) CaptureKey(child, path + "\\" + childName, output); }
-                catch (UnauthorizedAccessException) { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.AccessDenied)); }
+                catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.AccessDenied)); }
                 catch { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.Failed)); }
             }
         }
@@ -150,8 +151,11 @@ namespace WinFIMLog.Snapshots
                 using var key = hive.OpenSubKey(subKey, false);
                 if (key is not null) CaptureKey(key, fullName.TrimEnd('\\'), output);
             }
-            catch (UnauthorizedAccessException) { output.Add(Unavailable(fullName, EvidenceAvailability.AccessDenied)); }
+            catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(fullName, EvidenceAvailability.AccessDenied)); }
             catch { output.Add(Unavailable(fullName, EvidenceAvailability.Failed)); }
         }
+
+        internal static bool IsAccessDenied(Exception exception) =>
+            exception is UnauthorizedAccessException or SecurityException;
     }
 }

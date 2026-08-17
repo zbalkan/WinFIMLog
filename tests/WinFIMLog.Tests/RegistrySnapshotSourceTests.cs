@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Security;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Win32;
 using WinFIMLog.Snapshots;
@@ -81,5 +82,13 @@ public sealed class RegistrySnapshotSourceTests
             @"HKEY_LOCAL_MACHINE\Software",
             @"HKEY_USERS\S-1-5-18\Software"
         ], roots);
+    }
+
+    [TestMethod]
+    public void Registry_security_exceptions_are_classified_as_access_denied()
+    {
+        Assert.IsTrue(RegistrySnapshotSource.IsAccessDenied(new UnauthorizedAccessException()));
+        Assert.IsTrue(RegistrySnapshotSource.IsAccessDenied(new SecurityException()));
+        Assert.IsFalse(RegistrySnapshotSource.IsAccessDenied(new InvalidOperationException()));
     }
 }

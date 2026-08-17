@@ -9,7 +9,10 @@ Filesystem finding fields include `attributionStatus`, `attributionMethod`, `att
 
 Phase 5 records are UTF-8 JSON objects in one of the `WinFIMLog-Operational`,
 `WinFIMLog-Baseline`, or opt-in `WinFIMLog-Diagnostic` Windows Event Logs. The
-rendered Event Viewer message is **not** the interface. Every envelope contains:
+JSON object is the machine-readable Event Log message used by SIEM collectors; it is
+not a separate JSON export, file, or storage format. Durable records remain native
+LiteDB documents until delivery. The rendered Event Viewer message is **not** the
+interface. Every envelope contains:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|

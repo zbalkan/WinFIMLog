@@ -63,6 +63,20 @@ public sealed class EventOutboxTests
     }
 
     [TestMethod]
+    public void Outbox_persists_native_contract_fields_in_LiteDB()
+    {
+        outbox.Enqueue(Record("native"));
+
+        var stored = context.EventOutbox.FindById(new BsonValue("native"));
+        Assert.AreEqual(EventContract.CurrentSchemaVersion, stored.SchemaVersion);
+        Assert.AreEqual((ushort)7777, stored.EventId);
+        Assert.AreEqual("FileSystemFinding", stored.RecordType);
+        Assert.AreEqual("scope", stored.ScopeHash);
+        Assert.AreEqual("C:\\evidence.txt", stored.Fields["path"]);
+        Assert.AreEqual(EventChannel.Operational, stored.Channel);
+    }
+
+    [TestMethod]
     public void Failed_delivery_replays_the_same_stable_record_id()
     {
         outbox.Enqueue(Record("stable"));
@@ -97,12 +111,12 @@ public sealed class EventOutboxTests
     }
 
     [TestMethod]
-    public void Empty_payload_is_discarded_instead_of_retried_forever()
+    public void Empty_record_type_is_discarded_instead_of_retried_forever()
     {
         context.EventOutbox.Insert(new EventOutboxRecord
         {
             Id = "empty",
-            Payload = string.Empty,
+            RecordType = string.Empty,
             CreatedAt = DateTimeOffset.UtcNow,
             NextAttemptAt = DateTimeOffset.MinValue
         });
@@ -114,7 +128,7 @@ public sealed class EventOutboxTests
         var discarded = context.EventOutbox.FindById(new BsonValue("empty"));
         Assert.IsNotNull(discarded.DeliveredAt);
         Assert.AreEqual(1, discarded.DeliveryAttempts);
-        Assert.AreEqual("EmptyPayload", discarded.LastError);
+        Assert.AreEqual("EmptyRecordType", discarded.LastError);
         Assert.AreSequenceEqual([LogLevel.Warning], logger.Levels);
         Assert.IsFalse(publisher.PublishReady());
     }
@@ -154,7 +168,6 @@ public sealed class EventOutboxTests
         public void Write(EventContract record, bool error = false)
         {
             RecordIds.Add(record.RecordId);
-            _ = record.ToJson();
             if (fail) { fail = false; throw new IOException("fault injection"); }
         }
     }

@@ -1,5 +1,4 @@
 using System;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -29,18 +28,17 @@ namespace WinFIMLog.Jobs
             foreach (var item in outbox.Ready(DateTimeOffset.UtcNow))
             {
                 worked = true;
-                if (string.IsNullOrWhiteSpace(item.Payload))
+                if (string.IsNullOrWhiteSpace(item.RecordType))
                 {
-                    outbox.DiscardInvalid(item, "EmptyPayload");
+                    outbox.DiscardInvalid(item, "EmptyRecordType");
                     logger.LogWarning(
-                        "Event outbox record {RecordId} has an empty payload and was discarded",
+                        "Event outbox record {RecordId} has an empty record type and was discarded",
                         item.Id);
                     continue;
                 }
                 try
                 {
-                    var record = JsonSerializer.Deserialize(item.Payload, EventJsonContext.Default.EventContract)
-                        ?? throw new InvalidOperationException("Outbox payload did not contain an event contract.");
+                    var record = item.ToEventContract();
                     writer.Write(record, item.Error);
                     outbox.Delivered(item);
                 }

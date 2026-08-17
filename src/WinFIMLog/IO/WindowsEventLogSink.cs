@@ -13,7 +13,7 @@ namespace WinFIMLog.IO
                 EventChannel.Diagnostic => "WinFIMLog-Diagnostic",
                 _ => "WinFIMLog-Operational"
             };
-            EventLog.WriteEntry(source, record.ToJson(),
+            EventLog.WriteEntry(source, record.FormatEventLogMessage(),
                 error ? EventLogEntryType.Error : EventLogEntryType.Information, record.EventId);
         }
     }

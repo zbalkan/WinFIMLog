@@ -21,7 +21,8 @@ namespace WinFIMLog.Events
     {
         public const int CurrentSchemaVersion = 1;
 
-        public string ToJson() => JsonSerializer.Serialize(this, EventJsonContext.Default.EventContract);
+        internal string FormatEventLogMessage() =>
+            JsonSerializer.Serialize(this, EventJsonContext.Default.EventContract);
 
         public static EventContract Create(ushort eventId, string recordType, string recordId,
             string scopeHash, IReadOnlyDictionary<string, object?> fields,

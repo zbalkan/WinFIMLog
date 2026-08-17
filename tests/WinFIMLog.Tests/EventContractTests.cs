@@ -22,7 +22,7 @@ public sealed class EventContractTests
         var record = EventContract.Create((ushort)eventId, type, "01TEST", "sha256:test",
             new Dictionary<string, object?> { ["category"] = "Changed", ["optional"] = null }, channel);
 
-        using var json = JsonDocument.Parse(record.ToJson());
+        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
         Assert.AreEqual(EventContract.CurrentSchemaVersion, json.RootElement.GetProperty("schemaVersion").GetInt32());
         Assert.AreEqual(eventId, json.RootElement.GetProperty("eventId").GetInt32());
         Assert.AreEqual(type, json.RootElement.GetProperty("recordType").GetString());
@@ -51,7 +51,7 @@ public sealed class EventContractTests
                 ["bool"] = true
             });
 
-        using var json = JsonDocument.Parse(record.ToJson());
+        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
         var fields = json.RootElement.GetProperty("fields");
         Assert.AreEqual(42L, fields.GetProperty("long").GetInt64());
         Assert.AreEqual(1.5D, fields.GetProperty("double").GetDouble());
@@ -79,7 +79,7 @@ public sealed class EventContractTests
         var fields = new Dictionary<string, object?>();
         foreach (var name in names) fields[name] = name.EndsWith("At", StringComparison.Ordinal) ? DateTimeOffset.UtcNow : "value";
         var record = EventContract.Create(7790, recordType, "record", "scope", fields);
-        using var json = JsonDocument.Parse(record.ToJson());
+        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
         foreach (var name in names)
             Assert.IsTrue(json.RootElement.GetProperty("fields").TryGetProperty(name, out _), $"{recordType}.{name} is absent");
     }

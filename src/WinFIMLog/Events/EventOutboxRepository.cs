@@ -28,7 +28,13 @@ namespace WinFIMLog.Events
                     context.EventOutbox.Insert(new EventOutboxRecord
                     {
                         Id = item.Record.RecordId,
-                        Payload = item.Record.ToJson(),
+                        SchemaVersion = item.Record.SchemaVersion,
+                        EventId = item.Record.EventId,
+                        RecordType = item.Record.RecordType,
+                        OccurredAt = item.Record.OccurredAt,
+                        ScopeHash = item.Record.ScopeHash,
+                        Fields = new Dictionary<string, object?>(item.Record.Fields),
+                        Channel = item.Record.Channel,
                         Error = item.Error,
                         CreatedAt = DateTimeOffset.UtcNow,
                         NextAttemptAt = DateTimeOffset.MinValue

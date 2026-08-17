@@ -14,18 +14,18 @@ collector availability, and forwarded-log retention are operated downstream. Ale
 event 7790 is missing for more than twice the configured heartbeat interval and monitor
 Event Log service/channel errors.
 
-Use a source-initiated WEF subscription selecting `WinFIMLog-Operational` and
-`WinFIMLog-Baseline`. Diagnostic forwarding is opt-in. A minimal XPath selector is:
+Use a source-initiated WEF subscription selecting `WinFIM-Operational` and
+`WinFIM-Baseline`. Diagnostic forwarding is opt-in. A minimal XPath selector is:
 
 ```xml
-<QueryList><Query Id="0"><Select Path="WinFIMLog-Operational">*</Select>
-<Select Path="WinFIMLog-Baseline">*</Select></Query></QueryList>
+<QueryList><Query Id="0"><Select Path="WinFIM-Operational">*</Select>
+<Select Path="WinFIM-Baseline">*</Select></Query></QueryList>
 ```
 
 Configure the subscription for normal delivery (or minimise latency where attribution
 latency is operationally important), Kerberos mutual authentication, and a collector
 whose computer account is authorised by policy. Validate channel ACLs using
-`wevtutil gl WinFIMLog-Operational` and test both an Event Log Readers member and an
+`wevtutil gl WinFIM-Operational` and test both an Event Log Readers member and an
 unprivileged account.
 
 ## Parsing and queries

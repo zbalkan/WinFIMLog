@@ -7,8 +7,8 @@
 
 Filesystem finding fields include `attributionStatus`, `attributionMethod`, `attributionConfidence`, `attributionSourceTimestamp`, `attributionMissingReason`, and `processSequenceNumber`. These fields are optional evidence and do not affect whether a finding is emitted. Their meanings and trust boundaries are defined in [Attribution](0009-attribution-evidence-boundary.md).
 
-Phase 5 records are UTF-8 JSON objects in one of the `WinFIMLog-Operational`,
-`WinFIMLog-Baseline`, or opt-in `WinFIMLog-Diagnostic` Windows Event Logs. The
+Phase 5 records are UTF-8 JSON objects in one of the `WinFIM-Operational`,
+`WinFIM-Baseline`, or opt-in `WinFIM-Diagnostic` Windows Event Logs. The
 JSON object is the machine-readable Event Log message used by SIEM collectors; it is
 not a separate JSON export, file, or storage format. Durable records remain native
 LiteDB documents until delivery. The rendered Event Viewer message is **not** the
@@ -66,4 +66,4 @@ unsupported claim of stable rename continuity.
 
 ## Release-gate smoke check
 
-Run [`scripts/phase1-smoke-test.ps1`](../../scripts/phase1-smoke-test.ps1) from an elevated PowerShell prompt on the minimum supported Windows host after installing and starting the service. The script creates, changes, and removes a file, writes a value under the current user's Run key, then reads matching `WinFIMLog-Operational` records. It fails unless IDs 7776, 7777, 7778, and 7787 are observed. The minimum-host workflow runs this operational release gate and retains all dedicated-channel exports.
+Run [`scripts/phase1-smoke-test.ps1`](../../scripts/phase1-smoke-test.ps1) from an elevated PowerShell prompt on the minimum supported Windows host after installing and starting the service. The script creates, changes, and removes a file, writes a value under the current user's Run key, then reads matching `WinFIM-Operational` records. It fails unless IDs 7776, 7777, 7778, and 7787 are observed. The minimum-host workflow runs this operational release gate and retains all dedicated-channel exports.

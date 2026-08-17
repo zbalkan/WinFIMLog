@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
-$expected = 'WinFIMLog-Operational','WinFIMLog-Baseline','WinFIMLog-Diagnostic'
+$expected = 'WinFIM-Operational','WinFIM-Baseline','WinFIM-Diagnostic'
 foreach ($name in $expected) {
     $configuration = & wevtutil.exe gl $name
     if ($LASTEXITCODE -or $configuration -notmatch 'enabled: true') { throw "$name is unavailable" }
@@ -11,7 +11,7 @@ foreach ($name in $expected) {
     }
 }
 
-$heartbeat = Get-WinEvent -FilterHashtable @{ LogName='WinFIMLog-Operational'; ProviderName='WinFIMLog-Operational'; Id=7790 } -MaxEvents 1
+$heartbeat = Get-WinEvent -FilterHashtable @{ LogName='WinFIM-Operational'; ProviderName='WinFIM-Operational'; Id=7790 } -MaxEvents 1
 $record = $heartbeat.Message | ConvertFrom-Json
 if ($record.schemaVersion -ne 1 -or $record.recordType -ne 'Health') { throw 'Heartbeat is not a version-1 structured Health record.' }
 foreach ($field in 'queueDepth','oldestItemAgeMs','accepted','processed','dropped','enrichmentFailures') {

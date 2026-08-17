@@ -44,15 +44,15 @@ jobs:
         shell: pwsh
         run: |
           wevtutil epl Application "$env:RUNNER_TEMP\WinFIMLog-Application.evtx" /ow:true
-          wevtutil epl WinFIMLog-Operational "$env:RUNNER_TEMP\WinFIMLog-Operational.evtx" /ow:true
-          wevtutil epl WinFIMLog-Baseline "$env:RUNNER_TEMP\WinFIMLog-Baseline.evtx" /ow:true
-          wevtutil epl WinFIMLog-Diagnostic "$env:RUNNER_TEMP\WinFIMLog-Diagnostic.evtx" /ow:true
+          wevtutil epl WinFIM-Operational "$env:RUNNER_TEMP\WinFIM-Operational.evtx" /ow:true
+          wevtutil epl WinFIM-Baseline "$env:RUNNER_TEMP\WinFIM-Baseline.evtx" /ow:true
+          wevtutil epl WinFIM-Diagnostic "$env:RUNNER_TEMP\WinFIM-Diagnostic.evtx" /ow:true
       - name: Clean uninstall gate
         if: always()
         shell: pwsh
         run: |
           ./publish/WinFIMLog.exe uninstall
-          foreach ($log in 'WinFIMLog-Operational','WinFIMLog-Baseline','WinFIMLog-Diagnostic') {
+          foreach ($log in 'WinFIM-Operational','WinFIM-Baseline','WinFIM-Diagnostic') {
             if ((wevtutil el) -contains $log) { throw "$log remains after uninstall" }
           }
       - uses: actions/upload-artifact@v7

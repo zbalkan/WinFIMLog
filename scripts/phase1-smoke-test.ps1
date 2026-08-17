@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
-$source = 'WinFIMLog-Operational'
+$source = 'WinFIM-Operational'
 $start = Get-Date
 $policy = 'HKLM:\SOFTWARE\Policies\WinFIMLog'
 $preference = 'HKLM:\SOFTWARE\WinFIMLog'
@@ -25,7 +25,7 @@ $writer = Start-Process reg.exe -ArgumentList @('add', $nativeRun, '/v', $name, 
 if ($writer.ExitCode -ne 0) { throw "Short-lived registry writer exited with $($writer.ExitCode)." }
 Start-Sleep -Seconds 3
 Remove-ItemProperty -Path $run -Name $name -ErrorAction SilentlyContinue
-$events = Get-WinEvent -FilterHashtable @{ LogName='WinFIMLog-Operational'; ProviderName=$source; StartTime=$start } |
+$events = Get-WinEvent -FilterHashtable @{ LogName='WinFIM-Operational'; ProviderName=$source; StartTime=$start } |
   Where-Object Id -in 7776,7777,7778,7787
 $events | Select-Object TimeCreated, Id, Message | Format-Table -Wrap
 $found = @($events.Id | Sort-Object -Unique)

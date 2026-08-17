@@ -37,7 +37,7 @@ Set-Content -LiteralPath $offlineFile -Value 'created while WinFIMLog was stoppe
 $restart = Get-Date
 Start-Service $ServiceName
 $finding = Wait-WinFIMLogEvent $restart { $_.Id -eq 7795 -and $_.Message -like "*$offlineFile*" } `
-    'event 7795 for the offline persistent change' 'WinFIMLog-Baseline' 'WinFIMLog-Baseline'
+    'event 7795 for the offline persistent change' 'WinFIM-Baseline' 'WinFIM-Baseline'
 $finding | Select-Object TimeCreated, Id, Message | Format-List
 
 # Database deletion must build a complete baseline regardless of the legacy flag.

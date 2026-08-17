@@ -9,9 +9,9 @@ namespace WinFIMLog.IO
         {
             var source = record.Channel switch
             {
-                EventChannel.Baseline => "WinFIMLog-Baseline",
-                EventChannel.Diagnostic => "WinFIMLog-Diagnostic",
-                _ => "WinFIMLog-Operational"
+                EventChannel.Baseline => "WinFIM-Baseline",
+                EventChannel.Diagnostic => "WinFIM-Diagnostic",
+                _ => "WinFIM-Operational"
             };
             EventLog.WriteEntry(source, record.FormatEventLogMessage(),
                 error ? EventLogEntryType.Error : EventLogEntryType.Information, record.EventId);

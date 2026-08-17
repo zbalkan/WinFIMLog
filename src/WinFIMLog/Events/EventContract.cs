@@ -45,6 +45,8 @@ namespace WinFIMLog.Events
     [JsonSerializable(typeof(ushort))]
     [JsonSerializable(typeof(ulong))]
     [JsonSerializable(typeof(bool))]
+    [JsonSerializable(typeof(DateTime))]
+    [JsonSerializable(typeof(DateTimeOffset))]
     [JsonSerializable(typeof(JsonElement))]
     [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
     internal partial class EventJsonContext : JsonSerializerContext;

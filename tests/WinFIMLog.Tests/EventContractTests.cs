@@ -54,6 +54,24 @@ public sealed class EventContractTests
     }
 
     [TestMethod]
+    public void Fields_support_boxed_timestamp_types_used_by_event_producers()
+    {
+        var dateTime = new DateTime(2026, 8, 17, 12, 34, 56, DateTimeKind.Utc);
+        var dateTimeOffset = new DateTimeOffset(2026, 8, 17, 12, 34, 56, TimeSpan.Zero);
+        var record = EventContract.Create(7795, "BaselineFinding", "01TEST", "sha256:test",
+            new Dictionary<string, object?>
+            {
+                ["dateTime"] = dateTime,
+                ["dateTimeOffset"] = dateTimeOffset
+            });
+
+        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
+        var fields = json.RootElement.GetProperty("fields");
+        Assert.AreEqual(dateTime, fields.GetProperty("dateTime").GetDateTime());
+        Assert.AreEqual(dateTimeOffset, fields.GetProperty("dateTimeOffset").GetDateTimeOffset());
+    }
+
+    [TestMethod]
     [DataRow(7776, "FileSystemFinding", EventChannel.Operational)]
     [DataRow(7787, "RegistryFinding", EventChannel.Operational)]
     [DataRow(7795, "BaselineFinding", EventChannel.Baseline)]

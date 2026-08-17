@@ -16,7 +16,9 @@ namespace WinFIMLog.Events
 
         public void EnqueueBatch(IEnumerable<(EventContract Record, bool Error)> records, Action? projection = null)
         {
-            var materialised = records.ToList();
+            // Most callers already build a list. Reuse it instead of duplicating the batch and
+            // briefly retaining two arrays containing the same records.
+            var materialised = records as IReadOnlyList<(EventContract Record, bool Error)> ?? records.ToList();
             if (!context.ExecuteTransaction(() =>
             {
                 projection?.Invoke();

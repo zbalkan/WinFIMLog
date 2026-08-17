@@ -111,7 +111,7 @@ namespace WinFIMLog
 
                 try
                 {
-                    var records = new List<(EventContract Record, bool Error)>();
+                    var records = new List<(EventContract Record, bool Error)>(fsChanges.Count);
                     foreach (var change in fsChanges)
                     {
                         if (change.ChangeCategory != ChangeCategory.Discovery)
@@ -137,8 +137,7 @@ namespace WinFIMLog
                     {
                         if (_settings.EnableLocalDatabase)
                         {
-                            foreach (var change in fsChanges.GroupBy(x => x.Entity, StringComparer.OrdinalIgnoreCase)
-                                .Select(group => group.OrderByDescending(x => x.DateTime).First()))
+                            foreach (var change in LatestByEntity(fsChanges))
                             {
                                 foreach (var previous in _ctx.FileSystemChanges.FindAll()
                                     .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase)).ToList())
@@ -189,7 +188,7 @@ namespace WinFIMLog
                 var regChanges = _regStore.Take(regCount);
                 try
                 {
-                    var records = new List<(EventContract Record, bool Error)>();
+                    var records = new List<(EventContract Record, bool Error)>(regChanges.Count);
                     foreach (var change in regChanges)
                     {
                         var id = change.ChangeCategory switch
@@ -210,8 +209,7 @@ namespace WinFIMLog
                     {
                         if (_settings.EnableLocalDatabase)
                         {
-                            foreach (var change in regChanges.GroupBy(x => x.Entity, StringComparer.OrdinalIgnoreCase)
-                                .Select(group => group.OrderByDescending(x => x.DateTime).First()))
+                            foreach (var change in LatestByEntity(regChanges))
                             {
                                 foreach (var previous in _ctx.RegistryChanges.FindAll()
                                     .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase)).ToList())
@@ -232,6 +230,20 @@ namespace WinFIMLog
             }
 
             return false;
+        }
+
+        private static Dictionary<string, T>.ValueCollection LatestByEntity<T>(List<T> changes) where T : IChange
+        {
+            // GroupBy + OrderBy creates a grouping and a sort buffer for every entity. A single
+            // dictionary keeps only one reference per entity and performs no per-group sorting.
+            var latest = new Dictionary<string, T>(changes.Count, StringComparer.OrdinalIgnoreCase);
+            foreach (var change in changes)
+            {
+                if (!latest.TryGetValue(change.Entity, out var current) || change.DateTime > current.DateTime)
+                    latest[change.Entity] = change;
+            }
+
+            return latest.Values;
         }
     }
 }

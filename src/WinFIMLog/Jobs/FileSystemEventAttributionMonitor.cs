@@ -63,7 +63,7 @@ namespace WinFIMLog.Jobs
             }
 
             _attributions.TryRemove(path, out _);
-            attribution = null!;
+            attribution = default;
             return false;
         }
 
@@ -153,27 +153,17 @@ namespace WinFIMLog.Jobs
                 return;
             }
 
-            var attribution = new Attribution
-            {
-                ProcessID = data.ProcessID,
-                ProcessName = data.ProcessName ?? string.Empty,
-                ProcessSequenceNumber = sequence,
-                RecordedAt = DateTime.UtcNow,
-                SourceTimestamp = new DateTimeOffset(data.TimeStamp),
-                Status = AttributionStatus.Unavailable,
-                MissingReason = "ProcessInstanceNotFound"
-            };
-
             if (_processes.TryResolve(data.ProcessID, sequence.Value, out var processEvidence))
             {
-                attribution.ProcessName = processEvidence.ProcessName;
-                attribution.Username = processEvidence.Username;
-                attribution.UserSID = processEvidence.UserSid;
-                attribution.Status = AttributionStatus.Attributed;
-                attribution.MissingReason = null;
+                _attributions[path] = new Attribution(data.ProcessID, sequence,
+                    processEvidence.ProcessName, DateTime.UtcNow, new DateTimeOffset(data.TimeStamp),
+                    processEvidence.Username, processEvidence.UserSid, AttributionStatus.Attributed, null);
+                return;
             }
 
-            _attributions[path] = attribution;
+            _attributions[path] = new Attribution(data.ProcessID, sequence,
+                data.ProcessName ?? string.Empty, DateTime.UtcNow, new DateTimeOffset(data.TimeStamp),
+                null, null, AttributionStatus.Unavailable, "ProcessInstanceNotFound");
         }
 
         private void RecordProcess(ProcessTraceData data)
@@ -223,26 +213,26 @@ namespace WinFIMLog.Jobs
             _started.Dispose();
         }
 
-        internal sealed class Attribution
+        // TraceEventSource is already a synchronous, forward-only stream. Keeping its small
+        // projection as a value in the coalescing dictionary avoids allocating one wrapper object
+        // per FileIO event; adding a Channel/IAsyncEnumerable stage would instead retain events
+        // and allocate queue nodes or async state while providing no additional backpressure to ETW.
+        internal readonly record struct Attribution(
+            int ProcessID,
+            ulong? ProcessSequenceNumber,
+            string ProcessName,
+            DateTime RecordedAt,
+            DateTimeOffset SourceTimestamp,
+            string? Username,
+            string? UserSID,
+            AttributionStatus Status,
+            string? MissingReason)
         {
-            internal int ProcessID { get; init; }
-            internal ulong? ProcessSequenceNumber { get; init; }
-            internal string ProcessName { get; set; } = string.Empty;
-            internal DateTime RecordedAt { get; init; }
-            internal DateTimeOffset SourceTimestamp { get; init; }
-            internal string? Username { get; set; }
-            internal string? UserSID { get; set; }
-            internal AttributionStatus Status { get; set; }
-            internal string? MissingReason { get; set; }
-
-            internal static Attribution Missing(int processId, DateTime timestamp, string reason) => new()
-            {
-                ProcessID = processId,
-                RecordedAt = DateTime.UtcNow,
-                SourceTimestamp = new DateTimeOffset(timestamp),
-                Status = reason == "ProcessRundownMissing" ? AttributionStatus.RundownMissing : AttributionStatus.Unavailable,
-                MissingReason = reason
-            };
+            internal static Attribution Missing(int processId, DateTime timestamp, string reason) =>
+                new(processId, null, string.Empty, DateTime.UtcNow, new DateTimeOffset(timestamp),
+                    null, null,
+                    reason == "ProcessRundownMissing" ? AttributionStatus.RundownMissing : AttributionStatus.Unavailable,
+                    reason);
         }
     }
 }

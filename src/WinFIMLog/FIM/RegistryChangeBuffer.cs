@@ -21,7 +21,7 @@ namespace WinFIMLog.FIM
         {
             ArgumentNullException.ThrowIfNull(change);
 
-            store.AddOrUpdate(change.Id, change, (_, _) => change);
+            store[change.Id] = change;
             return Task.CompletedTask;
         }
 
@@ -29,7 +29,10 @@ namespace WinFIMLog.FIM
         {
             ArgumentNullException.ThrowIfNull(changes);
 
-            Parallel.ForEach(changes, change => store.AddOrUpdate(change.Id, change, (_, _) => change));
+            // These batches are small and ConcurrentDictionary already synchronizes writes.
+            // Avoid Parallel.ForEach's partitioning, work items, and delegates on this hot path.
+            foreach (var change in changes)
+                store[change.Id] = change;
 
             return Task.CompletedTask;
         }
@@ -40,15 +43,15 @@ namespace WinFIMLog.FIM
 
         public List<RegistryChange> Take(int count)
         {
-            var result = new List<RegistryChange>();
+            var result = new List<RegistryChange>(Math.Min(count, store.Count));
             var counter = 0;
-            foreach (var key in store.Keys)
+            foreach (var item in store)
             {
                 if (counter == count)
                 {
                     break;
                 }
-                store.TryRemove(key, out var message);
+                store.TryRemove(item.Key, out var message);
                 if (message != null) { result.Add(message); }
 
                 counter++;
@@ -59,10 +62,10 @@ namespace WinFIMLog.FIM
 
         public List<RegistryChange> TakeAll()
         {
-            var result = new List<RegistryChange>();
-            foreach (var key in store.Keys)
+            var result = new List<RegistryChange>(store.Count);
+            foreach (var item in store)
             {
-                store.TryRemove(key, out var message);
+                store.TryRemove(item.Key, out var message);
                 if (message != null) { result.Add(message); }
             }
 

@@ -67,6 +67,8 @@ public sealed class OptionalAttributionTests
     public void File_attribution_uses_one_stable_etw_session_and_recognizes_legacy_names()
     {
         Assert.AreEqual("WinFIMLog-FileIO", FileSystemEventAttributionMonitor.SessionName);
+        Assert.IsTrue(typeof(FileSystemEventAttributionMonitor.Attribution).IsValueType,
+            "The ETW hot path must not allocate an attribution wrapper for every event.");
         Assert.IsTrue(FileSystemEventAttributionMonitor.IsLegacySessionName("WinFIMLog-FileIO-1234"));
         Assert.IsFalse(FileSystemEventAttributionMonitor.IsLegacySessionName("WinFIMLog-FileIO"));
         Assert.IsFalse(FileSystemEventAttributionMonitor.IsLegacySessionName("WinFIMLog-FileIO-other"));

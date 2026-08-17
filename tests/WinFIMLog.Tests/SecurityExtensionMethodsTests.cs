@@ -82,5 +82,30 @@ namespace WinFIMLog.Tests
 
             Assert.AreEqual(acl, result);
         }
+
+        [TestMethod]
+        public void AclStringPoolReusesEqualPayloads()
+        {
+            var pool = new AclStringPool();
+            var first = new string("{\"Owner\":\"CONTOSO\\\\Alice\"}".ToCharArray());
+            var duplicate = new string(first.ToCharArray());
+
+            var canonical = pool.GetOrAdd(first);
+            var reused = pool.GetOrAdd(duplicate);
+
+            Assert.AreSame(canonical, reused);
+        }
+
+        [TestMethod]
+        public void AclStringPoolDoesNotGrowPastCapacity()
+        {
+            var pool = new AclStringPool(1);
+            var first = pool.GetOrAdd(new string('a', 2));
+            var uncached = pool.GetOrAdd(new string('b', 2));
+            var secondUncached = pool.GetOrAdd(new string('b', 2));
+
+            Assert.AreSame(first, pool.GetOrAdd(new string('a', 2)));
+            Assert.AreNotSame(uncached, secondUncached);
+        }
     }
 }

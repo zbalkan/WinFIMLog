@@ -17,6 +17,8 @@ namespace WinFIMLog.IO.Security
     /// </summary>
     public static class ExtensionMethods
     {
+        private static readonly AclStringPool AclStrings = new();
+
         /// <summary>
         ///     Get custom formatted ACL
         /// </summary>
@@ -260,7 +262,8 @@ namespace WinFIMLog.IO.Security
                 return string.Empty;
             }
 
-            return JsonSerializer.Serialize(ac, AclJsonSerializerContext.Default.AccessControlList);
+            var json = JsonSerializer.Serialize(ac, AclJsonSerializerContext.Default.AccessControlList);
+            return AclStrings.GetOrAdd(json);
         }
     }
 }

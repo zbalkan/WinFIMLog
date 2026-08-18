@@ -14,6 +14,9 @@ namespace WinFIMLog.FIM
     {
         private readonly RegistryKey? _key;
 
+        internal RegistryChange()
+        { }
+
         public RegistryChange(RegistryTraceData data, string fullName)
         {
             Id = Ulid.NewUlid().ToString();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -12,6 +13,7 @@ namespace WinFIMLog.Jobs
     internal sealed class FileSystemEnrichmentWorker : BackgroundService
     {
         private static readonly TimeSpan DuplicateWindow = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan NormalizationWindow = TimeSpan.FromMilliseconds(75);
         private readonly FileSystemEventAttributionMonitor _attribution;
         private readonly FileSystemCaptureQueue _capture;
         private readonly ILiteDbContext _context;
@@ -45,28 +47,45 @@ namespace WinFIMLog.Jobs
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Cancellation stops producers first. Channel completion, not cancellation,
-            // is the acknowledgement that every admitted raw item has been observed.
-            await foreach (var raw in _capture.ReadAllAsync())
+            // A watcher notification means the namespace change occurred; it does not mean the
+            // originating DELETE-capable handle has closed. Use a small, bounded window to fold
+            // the accompanying Changed burst into the logical create/rename rather than waiting
+            // (potentially forever) for the handle to close.
+            while (await _capture.WaitToReadAsync())
             {
-                var succeeded = false;
-                try
+                var pending = new List<RawFileSystemNotification>();
+                while (_capture.TryRead(out var raw))
                 {
-                    await EnrichAsync(raw, CancellationToken.None);
-                    succeeded = true;
+                    pending.Add(raw);
                 }
-                catch (Exception exception)
+
+                await Task.Delay(NormalizationWindow, CancellationToken.None);
+                while (_capture.TryRead(out var raw))
                 {
-                    _logger.LogError(exception, "Could not enrich filesystem notification for {Path}", raw.FullPath);
+                    pending.Add(raw);
                 }
-                finally { _capture.Complete(succeeded); }
+
+                var succeeded = true;
+                foreach (var raw in FileSystemNotificationWindow.Normalize(pending))
+                {
+                    try { await EnrichAsync(raw, CancellationToken.None); }
+                    catch (Exception exception)
+                    {
+                        succeeded = false;
+                        _logger.LogError(exception, "Could not enrich filesystem notification for {Path}", raw.FullPath);
+                    }
+                }
+                for (var index = 0; index < pending.Count; index++) _capture.Complete(succeeded);
             }
         }
 
         private async Task EnrichAsync(RawFileSystemNotification raw, CancellationToken cancellationToken)
         {
             var configuration = _settings.Capture();
-            var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, configuration.HashLimitMB, configuration.ScopeHash);
+            // Retain the namespace observation even if a short-lived object has vanished before
+            // enrichment. Basic watcher notifications cannot recover its metadata after the fact.
+            var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, configuration.HashLimitMB,
+                configuration.ScopeHash, retainMissing: true);
             if (change == null)
             {
                 return;
@@ -106,8 +125,11 @@ namespace WinFIMLog.Jobs
             FileSystemChange? previous = null;
             if (configuration.EnableLocalDatabase)
             {
-                previous = FileSystemChange.RetrievePreviousChange(raw.FullPath, _context);
-                change.PreviousHash = previous?.CurrentHash ?? string.Empty;
+                // A rename's previous projection lives under the old path. Looking up only the
+                // destination would lose prior hash/ACL evidence and could suppress the rename
+                // when the content itself did not change.
+                previous = FileSystemChange.RetrievePreviousChange(raw.OldPath ?? raw.FullPath, _context);
+                ApplyPreviousEvidence(change, previous);
             }
 
             var fingerprint = $"{change.ChangeCategory}\0{change.ObjectType}\0{change.CurrentHash}\0{change.ACLs}";
@@ -119,7 +141,8 @@ namespace WinFIMLog.Jobs
                 _recentChanges.TryRemove(change.FullPath, out _);
             }
 
-            var changed = change.ChangeCategory is ChangeCategory.Created or ChangeCategory.Deleted || previous == null ||
+            var changed = change.ChangeCategory is ChangeCategory.Created or ChangeCategory.Deleted ||
+                raw.OldPath is not null || previous == null ||
                 change.ObjectType != previous.ObjectType ||
                 !string.Equals(change.CurrentHash, previous.CurrentHash, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(change.ACLs, previous.ACLs, StringComparison.Ordinal);
@@ -127,6 +150,19 @@ namespace WinFIMLog.Jobs
             {
                 await _output.Add(change);
                 _recentChanges[raw.FullPath] = (fingerprint, now + DuplicateWindow);
+            }
+        }
+
+        internal static void ApplyPreviousEvidence(FileSystemChange change, FileSystemChange? previous)
+        {
+            change.PreviousHash = previous?.CurrentHash ?? string.Empty;
+            change.PreviousACL = previous?.ACLs ?? string.Empty;
+            change.PreviousSizeBytes = previous?.CurrentSizeBytes;
+            if (change.ChangeCategory == ChangeCategory.Deleted && previous is not null)
+            {
+                // Basic watcher removal notifications carry only the name. Recover directory
+                // listing evidence from the projection built while the object still existed.
+                change.ObjectType = previous.ObjectType;
             }
         }
     }

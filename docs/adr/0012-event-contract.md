@@ -50,14 +50,71 @@ The WinFIMLog channels use the following stable ID allocation.
 | 7796 | Information | Reserved legacy burst aggregation summary (not emitted) |
 | 7797 | Information | Optional native Security-audit attribution evidence |
 
-Filesystem fields are `category`, `path`, `oldPath`, `newPath`, `currentHash`,
-`previousHash`, `objectType`, `attributionStatus`, `processId`, `processName`,
+Filesystem fields are `category`, `operation`, `path`, `oldPath`, `newPath`, `currentHash`,
+`previousHash`, `currentSizeBytes`, `previousSizeBytes`, `currentAcl`, `previousAcl`, `objectType`,
+`renameCorrelationMethod`, `renameCorrelationConfidence`, `attributionStatus`, `processId`, `processName`,
 `userSid`, and `username`. Registry fields are `category`, `key`, `hive`,
-`valueName`, `valueData` and the same attribution fields. Baseline fields are
+`valueName`, `valueData`, `currentAcl`, `previousAcl` and the same attribution fields. Baseline fields are
 `baselineId`, `source`, `change`, `identity`, `oldPath`, `newPath`, and
 `detectedAt`. Health, gap and configuration records additionally use the fields
 defined in [ADR-0013](0013-health-and-coverage-contract.md). Event 7796 remains schema-compatible for
 older consumers but local aggregation is no longer emitted.
+
+`operation` is `Created`, `Modified`, or `Deleted`. A same-volume rename or move
+reported by `FileSystemWatcher` is `RenamedOrMoved` and carries both `oldPath` and
+`newPath` under event 7777. Windows exposes a copied destination only as a creation,
+so a copy is truthfully emitted as event 7776/`Created`; no unsupported source-path
+claim is inferred. Moves that cross watcher or volume boundaries can likewise appear
+as a deletion plus a creation. ACL-only notifications are findings when the captured
+ACL differs and carry both current and previously projected ACL evidence when the
+local projection is enabled.
+
+`ReadDirectoryChangesW`-style notifications are namespace notifications, not a
+signal that the application which made the change has closed its handle. The live
+pipeline therefore uses a bounded 75 ms normalization window to fold redundant
+`Changed` notifications into a preceding create or rename, then performs enrichment.
+It never waits for handle closure, which can be delayed indefinitely. Content reads
+open with `FileShare.ReadWrite | FileShare.Delete`, allowing them to coexist with the
+DELETE access used by Windows rename operations. A genuinely incompatible sharing
+mode can still make hash evidence temporarily unavailable; the finding is retained
+with empty evidence rather than delaying or dropping the namespace observation.
+
+The basic watcher removal notification contains only a path. When local projection
+is enabled, deletion event 7778 recovers the last observed object type, logical size,
+hash, and ACL from that projection; without it, unavailable evidence remains null or
+empty rather than being guessed. An add/change for an object that vanishes before
+enrichment is still emitted with `Unknown`/unavailable evidence, preserving the
+namespace observation despite the unavoidable basic-watcher metadata race.
+`ReadDirectoryChangesExW` extended removal metadata and file IDs are not currently
+available through the managed `System.IO.FileSystemWatcher` source. On Windows, that
+type [calls `ReadDirectoryChangesW`](https://github.com/dotnet/dotnet/blob/c76d92abc5c643acc63895c14640bdc1eb515ef1/src/runtime/src/libraries/System.IO.FileSystem.Watcher/src/System/IO/FileSystemWatcher.Windows.cs#L142-L151)
+and [assumes adjacent old/new records in one returned buffer](https://github.com/dotnet/dotnet/blob/c76d92abc5c643acc63895c14640bdc1eb515ef1/src/runtime/src/libraries/System.IO.FileSystem.Watcher/src/System/IO/FileSystemWatcher.Windows.cs#L247-L304)
+when it constructs `RenamedEventArgs`. Consequently, a complete pair is explicitly
+reported as `RuntimeAdjacentBufferPair` with `Low` confidence, not as file-ID-confirmed
+identity. If the runtime surfaces only the old half, WinFIMLog records a deletion; if
+it surfaces only the new half, WinFIMLog records a creation. It never invents the
+missing path. The similarly named Roslyn language-server type is only an LSP protocol
+data contract and is not the filesystem notification implementation.
+
+The [VS Code Windows watcher](https://github.com/microsoft/vscode-filewatcher-windows/blob/main/FileWatcher/FileWatcher.cs#L64-L85)
+likewise wraps `System.IO.FileSystemWatcher` and maps a rename to creation and deletion
+according to which paths are inside its watched root.
+WinFIMLog follows that boundary rule: a move out of effective scope is a deletion, a
+move into scope is a creation, and paths outside effective scope are not included in
+the event. It retains a qualified rename only when both paths are monitored.
+
+FileWatcherEx adds a [50 ms *quiet-period* processor](https://github.com/d2phap/FileWatcherEx/blob/main/Source/D2Phap.FileWatcherEx/Helpers/EventProcessor.cs#L8-L71)
+and [final-state-oriented normalization rules](https://github.com/d2phap/FileWatcherEx/blob/main/Source/D2Phap.FileWatcherEx/Helpers/EventNormalizer.cs#L14-L79)
+such as suppressing create-then-delete and merging rename chains. Those rules are
+appropriate for UI cache invalidation but not for integrity evidence: WinFIMLog keeps
+create/delete and each namespace transition. Its 75 ms window is a fixed upper bound,
+not a quiet period that can be extended indefinitely by a busy directory, and only
+folds redundant `Changed` noise into the associated observation.
+
+The watcher cannot identify a read as a copy-out operation because reads need not
+change directory-listing metadata. It also cannot prove that a newly created file is
+a copy merely because its hash matches another file. WinFIMLog therefore reports only
+the observable destination creation and makes no copy-source or copy-out claim.
 
 Baseline finding 7795 contains `baselineId`, `source`, `scopeHash`, `change`,
 `identity`, `oldPath`, `newPath`, and `detectedAt`. With path identity, a rename
@@ -66,4 +123,4 @@ unsupported claim of stable rename continuity.
 
 ## Release-gate smoke check
 
-Run [`scripts/phase1-smoke-test.ps1`](../../scripts/phase1-smoke-test.ps1) from an elevated PowerShell prompt on the minimum supported Windows host after installing and starting the service. The script creates, changes, and removes a file, writes a value under the current user's Run key, then reads matching `WinFIM-Operational` records. It fails unless IDs 7776, 7777, 7778, and 7787 are observed. The minimum-host workflow runs this operational release gate and retains all dedicated-channel exports.
+Run [`scripts/phase1-smoke-test.ps1`](../../scripts/phase1-smoke-test.ps1) from an elevated PowerShell prompt on the minimum supported Windows host after installing and starting the service. The script creates, changes, copies, renames, changes the ACL of, and removes files, then creates, modifies, and removes Registry data under the current user's Run key. It reads matching `WinFIM-Operational` records and fails unless IDs 7776, 7777, 7778, 7786, 7787, and 7788 are observed with the expected complex-operation evidence. The minimum-host workflow runs this operational release gate and retains all dedicated-channel exports.

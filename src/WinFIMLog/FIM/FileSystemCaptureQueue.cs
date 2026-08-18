@@ -55,6 +55,12 @@ namespace WinFIMLog.FIM
         public ValueTask<RawFileSystemNotification> ReadAsync(CancellationToken cancellationToken) =>
             _channel.Reader.ReadAsync(cancellationToken);
 
+        internal bool TryRead(out RawFileSystemNotification notification) =>
+            _channel.Reader.TryRead(out notification);
+
+        internal ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken = default) =>
+            _channel.Reader.WaitToReadAsync(cancellationToken);
+
         public bool TryAdmit(RawFileSystemNotification notification)
         {
             if (_channel.Writer.TryWrite(notification))

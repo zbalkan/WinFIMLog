@@ -19,8 +19,8 @@ public sealed class EventContractTests
     [TestMethod]
     public void Every_record_type_has_its_required_machine_readable_fields()
     {
-        AssertFields("FileSystemFinding", "category", "path", "objectType", "attributionStatus");
-        AssertFields("RegistryFinding", "category", "key", "hive", "attributionStatus");
+        AssertFields("FileSystemFinding", "category", "operation", "path", "currentSizeBytes", "previousSizeBytes", "currentAcl", "previousAcl", "objectType", "renameCorrelationMethod", "renameCorrelationConfidence", "attributionStatus");
+        AssertFields("RegistryFinding", "category", "operation", "key", "hive", "currentAcl", "previousAcl", "attributionStatus");
         AssertFields("BaselineFinding", "baselineId", "source", "change", "identity", "detectedAt");
         AssertFields("CoverageGap", "source", "scope", "reason", "lostCount");
         AssertFields("Health", "queueDepth", "oldestItemAgeMs", "accepted", "processed", "dropped", "enrichmentFailures");
@@ -63,7 +63,7 @@ public sealed class EventContractTests
             {
                 ["dateTime"] = dateTime,
                 ["dateTimeOffset"] = dateTimeOffset
-            });
+            }, EventChannel.Baseline);
 
         using var json = JsonDocument.Parse(record.FormatEventLogMessage());
         var fields = json.RootElement.GetProperty("fields");
@@ -100,7 +100,19 @@ public sealed class EventContractTests
             fields[name] = name.EndsWith("At", StringComparison.Ordinal) ? DateTimeOffset.UtcNow : "value";
         }
 
-        var record = EventContract.Create(7790, recordType, "record", "scope", fields);
+        var (eventId, channel) = recordType switch
+        {
+            "FileSystemFinding" => ((ushort)7777, EventChannel.Operational),
+            "RegistryFinding" => ((ushort)7787, EventChannel.Operational),
+            "BaselineFinding" => ((ushort)7795, EventChannel.Baseline),
+            "CoverageGap" => ((ushort)7791, EventChannel.Operational),
+            "Health" => ((ushort)7790, EventChannel.Operational),
+            "ConfigurationChanged" => ((ushort)7794, EventChannel.Operational),
+            "Aggregation" => ((ushort)7796, EventChannel.Operational),
+            "SecurityAuditAttribution" => ((ushort)7797, EventChannel.Diagnostic),
+            _ => throw new AssertFailedException($"No event allocation for {recordType}")
+        };
+        var record = EventContract.Create(eventId, recordType, "record", "scope", fields, channel);
         using var json = JsonDocument.Parse(record.FormatEventLogMessage());
         foreach (var name in names)
         {

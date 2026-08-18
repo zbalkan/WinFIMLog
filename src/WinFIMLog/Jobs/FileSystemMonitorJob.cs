@@ -205,14 +205,49 @@ namespace WinFIMLog.Jobs
         private void OnRenamed(object sender, RenamedEventArgs e)
         {
             var configuration = _settings.Capture();
-            if (!_baselineAvailability.IsEstablished(configuration) ||
-                (!configuration.IsMonitoredPath(e.FullPath) && !configuration.IsMonitoredPath(e.OldFullPath)))
+            // FileSystemWatcher pairs OLD_NAME/NEW_NAME records only when they are adjacent in
+            // one ReadDirectoryChangesW buffer. It can surface an incomplete RenamedEventArgs.
+            var oldPath = string.IsNullOrEmpty(e.OldName) ? null : e.OldFullPath;
+            var newPath = string.IsNullOrEmpty(e.Name) ? null : e.FullPath;
+            if (!_baselineAvailability.IsEstablished(configuration))
             {
                 return;
             }
 
-            _capture.TryAdmit(new RawFileSystemNotification(SenderPath(configuration, e.FullPath) ?? SenderPath(configuration, e.OldFullPath) ?? string.Empty,
-                e.FullPath, ChangeCategory.Changed, DateTimeOffset.UtcNow, e.OldFullPath, e.FullPath));
+            var scope = (newPath is not null ? SenderPath(configuration, newPath) : null) ??
+                (oldPath is not null ? SenderPath(configuration, oldPath) : null) ?? string.Empty;
+            var notification = NormalizeRenameForScope(scope, oldPath, newPath,
+                configuration.IsMonitoredPath, DateTimeOffset.UtcNow);
+            if (notification is { } value)
+            {
+                _capture.TryAdmit(value);
+            }
+        }
+
+        internal static RawFileSystemNotification? NormalizeRenameForScope(string scope,
+            string? oldPath, string? newPath, Func<string, bool> isMonitored,
+            DateTimeOffset capturedAt) => NormalizeRename(scope,
+                oldPath is not null && isMonitored(oldPath) ? oldPath : null,
+                newPath is not null && isMonitored(newPath) ? newPath : null,
+                capturedAt);
+
+        internal static RawFileSystemNotification? NormalizeRename(string scope, string? oldPath,
+            string? newPath, DateTimeOffset capturedAt)
+        {
+            if (oldPath is not null && newPath is not null)
+            {
+                return new(scope, newPath, ChangeCategory.Changed, capturedAt, oldPath, newPath);
+            }
+
+            // Do not invent the missing half. An unmatched old name is an observable removal;
+            // an unmatched new name is an observable addition.
+            if (oldPath is not null)
+            {
+                return new(scope, oldPath, ChangeCategory.Deleted, capturedAt);
+            }
+            return newPath is not null
+                ? new(scope, newPath, ChangeCategory.Created, capturedAt)
+                : null;
         }
 
         private void ProcessEvent(string path, ChangeCategory category)

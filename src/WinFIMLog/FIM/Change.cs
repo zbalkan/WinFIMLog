@@ -6,6 +6,9 @@ namespace WinFIMLog.FIM
     {
         public string ACLs { get; set; }
 
+        /// <summary>ACL evidence from the previously projected state, when available.</summary>
+        public string PreviousACL { get; set; } = string.Empty;
+
         /// <summary>Consumer-facing confidence in the optional attribution.</summary>
         public string AttributionConfidence { get; set; } = "None";
 

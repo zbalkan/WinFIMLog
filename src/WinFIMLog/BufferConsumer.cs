@@ -125,35 +125,7 @@ namespace WinFIMLog
                     {
                         if (change.ChangeCategory != ChangeCategory.Discovery)
                         {
-                            var id = change.ChangeCategory switch
-                            {
-                                ChangeCategory.Created => (ushort)7776,
-                                ChangeCategory.Changed => (ushort)7777,
-                                ChangeCategory.Deleted => (ushort)7778,
-                                _ => (ushort)7780
-                            };
-                            var record = EventContract.Create(id, "FileSystemFinding", change.Id,
-                                change.ScopeHash, new Dictionary<string, object?>
-                                {
-                                    ["category"] = change.ChangeCategory.ToString(),
-                                    ["path"] = change.Entity,
-                                    ["oldPath"] = change.OldPath,
-                                    ["newPath"] = change.NewPath,
-                                    ["currentHash"] = change.CurrentHash,
-                                    ["previousHash"] = change.PreviousHash,
-                                    ["objectType"] = change.ObjectType.ToString(),
-                                    ["attributionStatus"] = change.AttributionStatus.ToString(),
-                                    ["attributionMethod"] = change.AttributionMethod,
-                                    ["attributionConfidence"] = change.AttributionConfidence,
-                                    ["attributionSourceTimestamp"] = change.AttributionSourceTimestamp,
-                                    ["attributionMissingReason"] = change.AttributionMissingReason,
-                                    ["processSequenceNumber"] = change.ProcessSequenceNumber,
-                                    ["processId"] = change.ProcessID,
-                                    ["processName"] = change.ProcessName,
-                                    ["userSid"] = change.UserSID,
-                                    ["username"] = change.Username
-                                });
-                            records.Add((record, false));
+                            records.Add((FindingEventFactory.FileSystem(change), false));
                         }
                     }
                     Retry(() => _outbox.EnqueueBatch(records, () =>
@@ -163,7 +135,9 @@ namespace WinFIMLog
                             foreach (var change in LatestByEntity(fsChanges))
                             {
                                 foreach (var previous in _ctx.FileSystemChanges.FindAll()
-                                    .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase)).ToList())
+                                    .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase) ||
+                                        (change.OldPath is not null && string.Equals(x.Entity, change.OldPath,
+                                            StringComparison.OrdinalIgnoreCase))).ToList())
                                 {
                                     _ctx.FileSystemChanges.Delete(previous.Id);
                                 }
@@ -199,32 +173,13 @@ namespace WinFIMLog
                     var records = new List<(EventContract Record, bool Error)>(regChanges.Count);
                     foreach (var change in regChanges)
                     {
-                        var id = change.ChangeCategory switch
+                        if (_settings.EnableLocalDatabase)
                         {
-                            ChangeCategory.Created => (ushort)7786,
-                            ChangeCategory.Changed => (ushort)7787,
-                            ChangeCategory.Deleted => (ushort)7788,
-                            _ => (ushort)7780
-                        };
-                        var record = EventContract.Create(id, "RegistryFinding", change.Id,
-                            change.ScopeHash, new Dictionary<string, object?>
-                            {
-                                ["category"] = change.ChangeCategory.ToString(),
-                                ["key"] = change.Entity,
-                                ["hive"] = change.Hive,
-                                ["valueName"] = change.ValueName,
-                                ["valueData"] = change.ValueData,
-                                ["attributionStatus"] = change.AttributionStatus.ToString(),
-                                ["attributionMethod"] = change.AttributionMethod,
-                                ["attributionConfidence"] = change.AttributionConfidence,
-                                ["attributionSourceTimestamp"] = change.AttributionSourceTimestamp,
-                                ["attributionMissingReason"] = change.AttributionMissingReason,
-                                ["processId"] = change.ProcessID,
-                                ["processName"] = change.ProcessName,
-                                ["userSid"] = change.UserSID,
-                                ["username"] = change.Username
-                            });
-                        records.Add((record, false));
+                            change.PreviousACL = _ctx.RegistryChanges.FindAll()
+                                .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase))
+                                .OrderByDescending(x => x.DateTime).FirstOrDefault()?.ACLs ?? string.Empty;
+                        }
+                        records.Add((FindingEventFactory.Registry(change), false));
                     }
                     Retry(() => _outbox.EnqueueBatch(records, () =>
                     {

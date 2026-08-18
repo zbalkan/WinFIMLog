@@ -27,9 +27,12 @@ namespace WinFIMLog.Events
 
         public static EventContract Create(ushort eventId, string recordType, string recordId,
             string scopeHash, IReadOnlyDictionary<string, object?> fields,
-            EventChannel channel = EventChannel.Operational) =>
-            new(CurrentSchemaVersion, eventId, recordType, DateTimeOffset.UtcNow, recordId,
+            EventChannel channel = EventChannel.Operational)
+        {
+            EventIdCatalog.Validate(eventId, recordType, channel);
+            return new(CurrentSchemaVersion, eventId, recordType, DateTimeOffset.UtcNow, recordId,
                 scopeHash, fields, channel);
+        }
 
         public static bool IsSupported(int schemaVersion) => schemaVersion == CurrentSchemaVersion;
     }

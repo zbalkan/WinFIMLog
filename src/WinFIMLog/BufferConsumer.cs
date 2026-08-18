@@ -51,7 +51,7 @@ namespace WinFIMLog
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Initiated Persistence Worker");
+            _logger.LogInformation("Initiated Service");
             try
             {
                 while (!stoppingToken.IsCancellationRequested)
@@ -63,11 +63,16 @@ namespace WinFIMLog
                             await Task.Delay(TimeSpan.FromMilliseconds(100), stoppingToken);
                         }
                     }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        _logger.LogInformation("Service halt requested; ending processing loop.");
+                        break;
+                    }
                     catch (Exception exception)
                     {
                         // ProcessChanges has already returned the batch to its buffer. Keep the
                         // hosted worker alive so a transient disk/database outage can recover.
-                        _health.SinkFailure("PersistenceWorker", exception.GetType().Name, 4);
+                        _health.SinkFailure("Service", exception.GetType().Name, 4);
                         await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
                     }
                 }
@@ -86,11 +91,11 @@ namespace WinFIMLog
                 }
                 catch (Exception exception)
                 {
-                    _health.CoverageGap("PersistenceWorker", _settings.ScopeHash,
+                    _health.CoverageGap("Service", _settings.ScopeHash,
                         $"ShutdownDrainFailed:{exception.GetType().Name}");
                 }
 
-                _logger.LogInformation("Persistence worker stopped after draining its buffers");
+                _logger.LogInformation("Service stopped after draining its buffers");
             }
         }
 

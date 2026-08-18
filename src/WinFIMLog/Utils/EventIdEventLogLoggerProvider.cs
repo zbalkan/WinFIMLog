@@ -15,6 +15,9 @@ namespace WinFIMLog.Utils
         public void Dispose()
         { }
 
+        internal static LogLevel EffectiveLogLevel(LogLevel logLevel, Exception? exception) =>
+            exception is OperationCanceledException ? LogLevel.Information : logLevel;
+
         private sealed class EventIdEventLogLogger(string sourceName, string logName,
             EventIdProvider eventIds, object sourceLock) : ILogger
         {
@@ -30,15 +33,19 @@ namespace WinFIMLog.Utils
                     return;
                 }
 
-                var message = formatter(state, exception);
-                if (exception != null)
+                var effectiveLogLevel = EventIdEventLogLoggerProvider.EffectiveLogLevel(logLevel, exception);
+                var isLifecycleCancellation = exception is OperationCanceledException;
+                var message = isLifecycleCancellation
+                    ? $"Lifecycle cancellation observed: {exception!.Message}"
+                    : formatter(state, exception);
+                if (exception != null && !isLifecycleCancellation)
                 {
                     message = $"{message}{Environment.NewLine}{exception}";
                 }
 
                 EnsureSource();
-                EventLog.WriteEntry(sourceName, message, EntryType(logLevel),
-                    eventIds.ComputeEventId(logLevel, eventId, state));
+                EventLog.WriteEntry(sourceName, message, EntryType(effectiveLogLevel),
+                    eventIds.ComputeEventId(effectiveLogLevel, eventId, state));
             }
 
             private static EventLogEntryType EntryType(LogLevel level) => level switch

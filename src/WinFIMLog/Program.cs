@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -24,7 +26,17 @@ namespace WinFIMLog
                 return;
             }
 
-            CreateHostBuilder(args).Build().Run();
+            using var host = CreateHostBuilder(args).Build();
+            try
+            {
+                host.Run();
+            }
+            catch (OperationCanceledException exception)
+            {
+                host.Services.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger(typeof(Program).FullName!)
+                    .LogInformation(exception, "Host lifetime cancelled; shutdown completed normally.");
+            }
         }
 
         private static IHostBuilder CreateHostBuilder(string[] args) =>

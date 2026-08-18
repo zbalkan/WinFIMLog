@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Utils;
@@ -40,4 +42,16 @@ public sealed class EventIdProviderTests
     public void Unclassified_information_uses_default_id() =>
         Assert.AreEqual((ushort)7780,
             new EventIdProvider().ComputeEventId(LogLevel.Information, default, "message"));
+
+    [TestMethod]
+    public void Task_cancellation_is_emitted_at_information_level() =>
+        Assert.AreEqual(LogLevel.Information,
+            EventIdEventLogLoggerProvider.EffectiveLogLevel(LogLevel.Error,
+                new TaskCanceledException()));
+
+    [TestMethod]
+    public void Non_cancellation_preserves_its_original_level() =>
+        Assert.AreEqual(LogLevel.Error,
+            EventIdEventLogLoggerProvider.EffectiveLogLevel(LogLevel.Error,
+                new InvalidOperationException()));
 }

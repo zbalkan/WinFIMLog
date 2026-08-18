@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
-$expected = 'WinFIM-Operational','WinFIM-Baseline','WinFIM-Diagnostic'
+$expected = 'WinFIMLog'
 foreach ($name in $expected) {
     $configuration = & wevtutil.exe gl $name
     if ($LASTEXITCODE -or $configuration -notmatch 'enabled: true') { throw "$name is unavailable" }
@@ -11,10 +11,10 @@ foreach ($name in $expected) {
     }
 }
 
-$heartbeat = Get-WinEvent -FilterHashtable @{ LogName='WinFIM-Operational'; ProviderName='WinFIM-Operational'; Id=7790 } -MaxEvents 1
+$heartbeat = Get-WinEvent -FilterHashtable @{ LogName='WinFIMLog'; ProviderName='WinFIMLog'; Id=7790 } -MaxEvents 1
 $record = $heartbeat.Message | ConvertFrom-Json
 if ($record.schemaVersion -ne 1 -or $record.recordType -ne 'Health') { throw 'Heartbeat is not a version-1 structured Health record.' }
 foreach ($field in 'queueDepth','oldestItemAgeMs','accepted','processed','dropped','enrichmentFailures') {
     if ($null -eq $record.fields.$field) { throw "Heartbeat field '$field' is absent." }
 }
-Write-Host 'Phase 5 channel installation and service-SID ACL checks passed.'
+Write-Host 'Phase 5 WinFIMLog Event Log and service-SID ACL checks passed.'

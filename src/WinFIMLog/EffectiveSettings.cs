@@ -27,13 +27,14 @@ namespace WinFIMLog
         internal RegistryScopeMatcher RegistryScopeMatcher { get; set; } = null!;
         internal int RegistrySnapshotInterval { get; set; } = 21600;
         internal string ScopeHash { get; set; } = string.Empty;
-        internal int ScopeReresolutionInterval { get; set; } = 300;
+        internal int ScopeReresolutionInterval { get; set; } = 30;
         internal int WatcherBufferSizeKB { get; set; } = 64;
 
         public bool IsMonitoredKey(string keyName) => RegistryScopeMatcher.IsMatch(keyName);
 
-        public bool IsMonitoredPath(string path) => MonitoredPathsPattern.IsMatch(path) &&
-                    !(ExcludedPathsPattern?.IsMatch(path) ?? false) &&
+        public bool IsMonitoredPath(string path) =>
+            PathScopeMatcher.IsWithinAny(MonitoredPaths, path) &&
+            !PathScopeMatcher.IsWithinAny(ExcludedPaths, path) &&
             !(ExcludedExtensionsPattern?.IsMatch(path) ?? false);
     }
 }

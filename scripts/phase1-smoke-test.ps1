@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
-$source = 'WinFIM-Operational'
+$source = 'WinFIMLog'
 $start = Get-Date
 $policy = 'HKLM:\SOFTWARE\Policies\WinFIMLog'
 $preference = 'HKLM:\SOFTWARE\WinFIMLog'
@@ -43,7 +43,7 @@ Start-Sleep -Milliseconds 750
 if ($LASTEXITCODE) { throw "Registry key deletion exited with $LASTEXITCODE." }
 Start-Sleep -Seconds 3
 Remove-ItemProperty -Path $run -Name $name -ErrorAction SilentlyContinue
-$events = Get-WinEvent -FilterHashtable @{ LogName='WinFIM-Operational'; ProviderName=$source; StartTime=$start } |
+$events = Get-WinEvent -FilterHashtable @{ LogName='WinFIMLog'; ProviderName=$source; StartTime=$start } |
   Where-Object Id -in 7776,7777,7778,7786,7787,7788
 $events | Select-Object TimeCreated, Id, Message | Format-Table -Wrap
 $found = @($events.Id | Sort-Object -Unique)

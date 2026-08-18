@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,14 +11,12 @@ namespace WinFIMLog.Jobs
 {
     internal sealed class FileSystemEnrichmentWorker : BackgroundService
     {
-        private static readonly TimeSpan DuplicateWindow = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan NormalizationWindow = TimeSpan.FromMilliseconds(75);
         private readonly FileSystemEventAttributionMonitor _attribution;
         private readonly FileSystemCaptureQueue _capture;
         private readonly ILiteDbContext _context;
         private readonly ILogger<FileSystemEnrichmentWorker> _logger;
         private readonly IBuffer<FileSystemChange> _output;
-        private readonly ConcurrentDictionary<string, (string Fingerprint, DateTime ExpiresUtc)> _recentChanges = new();
         private readonly Settings _settings;
 
         public FileSystemEnrichmentWorker(FileSystemCaptureQueue capture, ILiteDbContext context,
@@ -132,25 +129,10 @@ namespace WinFIMLog.Jobs
                 ApplyPreviousEvidence(change, previous);
             }
 
-            var fingerprint = $"{change.ChangeCategory}\0{change.ObjectType}\0{change.CurrentHash}\0{change.ACLs}";
-            var now = DateTime.UtcNow;
-            var duplicate = _recentChanges.TryGetValue(change.FullPath, out var cached) &&
-                cached.ExpiresUtc > now && cached.Fingerprint == fingerprint;
-            if (cached.ExpiresUtc <= now)
-            {
-                _recentChanges.TryRemove(change.FullPath, out _);
-            }
-
-            var changed = change.ChangeCategory is ChangeCategory.Created or ChangeCategory.Deleted ||
-                raw.OldPath is not null || previous == null ||
-                change.ObjectType != previous.ObjectType ||
-                !string.Equals(change.CurrentHash, previous.CurrentHash, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(change.ACLs, previous.ACLs, StringComparison.Ordinal);
-            if (changed && !duplicate)
-            {
-                await _output.Add(change);
-                _recentChanges[raw.FullPath] = (fingerprint, now + DuplicateWindow);
-            }
+            // The normalization window already folds duplicate native notifications for one
+            // logical operation. An admitted notification is integrity evidence even when its
+            // final hash, size, and ACL match the latest-state projection.
+            await _output.Add(change);
         }
 
         internal static void ApplyPreviousEvidence(FileSystemChange change, FileSystemChange? previous)

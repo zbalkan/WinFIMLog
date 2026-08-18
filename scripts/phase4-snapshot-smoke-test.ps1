@@ -14,7 +14,7 @@ $root = (Get-ItemProperty $scopeConfiguration -Name MonitoredPaths).MonitoredPat
 if (-not $root) { throw 'No concrete monitored root is available for the Phase 4 check.' }
 
 function Wait-WinFIMLogEvent([datetime]$after, [scriptblock]$predicate, [string]$description,
-    [string]$logName = 'Application', [string]$providerName = 'WinFIMLog') {
+    [string]$logName = 'WinFIMLog', [string]$providerName = 'WinFIMLog') {
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     do {
         $event = Get-WinEvent -FilterHashtable @{ LogName=$logName; ProviderName=$providerName; StartTime=$after } -ErrorAction SilentlyContinue |
@@ -37,7 +37,7 @@ Set-Content -LiteralPath $offlineFile -Value 'created while WinFIMLog was stoppe
 $restart = Get-Date
 Start-Service $ServiceName
 $finding = Wait-WinFIMLogEvent $restart { $_.Id -eq 7795 -and $_.Message -like "*$offlineFile*" } `
-    'event 7795 for the offline persistent change' 'WinFIM-Baseline' 'WinFIM-Baseline'
+    'event 7795 for the offline persistent change' 'WinFIMLog' 'WinFIMLog'
 $finding | Select-Object TimeCreated, Id, Message | Format-List
 
 # Database deletion must build a complete baseline regardless of the legacy flag.

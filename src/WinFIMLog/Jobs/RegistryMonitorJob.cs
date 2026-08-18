@@ -8,7 +8,6 @@ using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.ObjectPool;
 using WinFIMLog.FIM;
 using WinFIMLog.Snapshots;
 using WinFIMLog.Utils;
@@ -35,7 +34,6 @@ namespace WinFIMLog.Jobs
 
         private readonly int _pid;
 
-        private readonly ObjectPool<StringBuilder> _sbPool = new DefaultObjectPoolProvider().CreateStringBuilderPool();
         private readonly Lock _sessionLock = new();
         private readonly Settings _settings;
         private readonly ISnapshotCoordinator _snapshots;
@@ -147,47 +145,36 @@ namespace WinFIMLog.Jobs
         private void DeleteCache(RegistryTraceData data) =>
             _keyCache.Remove(data.KeyHandle);
 
-        private string GetFullKeyName(ulong keyHandle, string eventKeyName, string eventValueName)
+        private string GetFullKeyName(ulong keyHandle, string eventKeyName, string eventValueName) =>
+            CombineFullKeyName(keyHandle != 0 && _keyCache.TryGet(keyHandle, out var keyName) ? keyName : null,
+                eventKeyName, eventValueName);
+
+        internal static string CombineFullKeyName(string? cachedKeyName, string? eventKeyName,
+            string? eventValueName)
         {
-            if (string.IsNullOrWhiteSpace(eventKeyName) && string.IsNullOrWhiteSpace(eventValueName))
-            {
-                return string.Empty;
-            }
-
-            var fullNameBuilder = _sbPool.Get();
-
-            if (keyHandle != 0 && _keyCache.TryGet(keyHandle, out var keyName))
-            {
-                fullNameBuilder.Append(keyName);
-            }
-
-            if (!string.IsNullOrWhiteSpace(eventKeyName))
-            {
-                if (fullNameBuilder.Length > 0)
-                {
-                    fullNameBuilder.Append('\\');
-                }
-
-                fullNameBuilder.Append(eventKeyName);
-            }
-
-            if (!string.IsNullOrWhiteSpace(eventValueName))
-            {
-                if (fullNameBuilder.Length > 0)
-                {
-                    fullNameBuilder.Append('\\');
-                }
-
-                fullNameBuilder.Append(eventValueName);
-            }
+            var fullNameBuilder = new StringBuilder();
+            AppendSegment(fullNameBuilder, cachedKeyName);
+            AppendSegment(fullNameBuilder, eventKeyName);
+            AppendSegment(fullNameBuilder, eventValueName);
 
             var fullName = fullNameBuilder.ToString();
-            _sbPool.Return(fullNameBuilder);
-
             fullName = RegistryMachineRegex().Replace(fullName, "HKEY_LOCAL_MACHINE");
-            fullName = RegistryUserRegex().Replace(fullName, "HKEY_USERS");
+            return RegistryUserRegex().Replace(fullName, "HKEY_USERS");
+        }
 
-            return fullName;
+        private static void AppendSegment(StringBuilder builder, string? segment)
+        {
+            if (string.IsNullOrWhiteSpace(segment))
+            {
+                return;
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.Append('\\');
+            }
+
+            builder.Append(segment);
         }
 
         private bool IsMonitoredEvent(EffectiveSettings configuration, string keyName, int pid)

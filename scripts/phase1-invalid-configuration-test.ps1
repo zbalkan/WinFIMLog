@@ -13,7 +13,7 @@ try {
     try { Start-Service $ServiceName -ErrorAction Stop } catch { }
     Start-Sleep -Seconds 5
     if ((Get-Service $ServiceName).Status -eq 'Running') { throw 'Service started with invalid configuration.' }
-    $diagnostic = Get-WinEvent -FilterHashtable @{ LogName='Application'; ProviderName='WinFIMLog'; StartTime=$start } -ErrorAction SilentlyContinue |
+    $diagnostic = Get-WinEvent -FilterHashtable @{ LogName='WinFIMLog'; ProviderName='WinFIMLog'; StartTime=$start } -ErrorAction SilentlyContinue |
         Where-Object { $_.Message -like "*$invalid*" } | Select-Object -First 1
     if (-not $diagnostic) { throw "Startup rejection did not name invalid value '$invalid'." }
     $diagnostic | Select-Object TimeCreated, Id, Message | Format-List

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using WinFIMLog.Configuration;
 using WinFIMLog.FIM;
 using WinFIMLog.Health;
 using WinFIMLog.Snapshots;
@@ -13,7 +14,6 @@ namespace WinFIMLog.Jobs
 {
     internal partial class FileSystemMonitorJob : IMonitor
     {
-        private readonly FileSystemBaselineAvailability _baselineAvailability;
         private readonly FileSystemCaptureQueue _capture;
         private readonly IHealthReporter _health;
         private readonly ILogger _logger;
@@ -25,7 +25,7 @@ namespace WinFIMLog.Jobs
         private bool _stopping;
 
         public FileSystemMonitorJob(ILogger logger, FileSystemCaptureQueue capture, IHealthReporter health,
-            Settings settings, ISnapshotCoordinator snapshots, FileSystemBaselineAvailability baselineAvailability)
+            Settings settings, ISnapshotCoordinator snapshots)
         {
             _logger = logger;
             _watchers = [];
@@ -33,7 +33,6 @@ namespace WinFIMLog.Jobs
             _health = health;
             _settings = settings;
             _snapshots = snapshots;
-            _baselineAvailability = baselineAvailability;
         }
 
         /// <summary>Applies watcher additions and removals for the newly resolved scope.</summary>
@@ -45,7 +44,6 @@ namespace WinFIMLog.Jobs
         public void Reconfigure()
         {
             var configuration = _settings.Capture();
-            _baselineAvailability.Refresh(configuration);
             var desired = new HashSet<string>(configuration.MonitoredPaths, StringComparer.OrdinalIgnoreCase);
             lock (_watcherLock)
             {
@@ -110,7 +108,7 @@ namespace WinFIMLog.Jobs
         }
 
         private static string? SenderPath(EffectiveSettings configuration, string path) =>
-            Array.Find(configuration.MonitoredPaths, p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+            Array.Find(configuration.MonitoredPaths, root => PathScopeMatcher.IsWithin(root, path));
 
         private FileSystemWatcher CreateWatcher(string path, EffectiveSettings configuration)
         {
@@ -232,11 +230,6 @@ namespace WinFIMLog.Jobs
             // one ReadDirectoryChangesW buffer. It can surface an incomplete RenamedEventArgs.
             var oldPath = string.IsNullOrEmpty(e.OldName) ? null : e.OldFullPath;
             var newPath = string.IsNullOrEmpty(e.Name) ? null : e.FullPath;
-            if (!_baselineAvailability.IsEstablished(configuration))
-            {
-                return;
-            }
-
             var scope = (newPath is not null ? SenderPath(configuration, newPath) : null) ??
                 (oldPath is not null ? SenderPath(configuration, oldPath) : null) ?? string.Empty;
             var notification = NormalizeRenameForScope(scope, oldPath, newPath,
@@ -276,7 +269,7 @@ namespace WinFIMLog.Jobs
         private void ProcessEvent(string path, ChangeCategory category)
         {
             var configuration = _settings.Capture();
-            if (!configuration.IsMonitoredPath(path) || !_baselineAvailability.IsEstablished(configuration))
+            if (!configuration.IsMonitoredPath(path))
             {
                 return;
             }

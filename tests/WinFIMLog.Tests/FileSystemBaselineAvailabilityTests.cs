@@ -11,7 +11,7 @@ namespace WinFIMLog.Tests;
 public sealed class FileSystemBaselineAvailabilityTests
 {
     [TestMethod]
-    public void Notifications_are_suppressed_only_until_the_first_baseline_completes()
+    public void Availability_is_false_until_the_first_baseline_completes()
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"winfimlog-baseline-availability-{Guid.NewGuid():N}.db");
         using var context = new LiteDbContext(Options.Create(new LiteDbOptions { DatabasePath = databasePath }));
@@ -37,7 +37,7 @@ public sealed class FileSystemBaselineAvailabilityTests
                 SourceIdentityProvider.FileSystem(configuration.MonitoredPaths));
             availability.Refresh(configuration);
             Assert.IsTrue(availability.IsEstablished(configuration),
-                "A subsequent scan must not suppress watcher notifications while it is running.");
+                "A subsequent scan must retain the last completed baseline availability.");
         }
         finally
         {

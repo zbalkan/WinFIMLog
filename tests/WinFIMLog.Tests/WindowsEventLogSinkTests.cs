@@ -11,11 +11,11 @@ namespace WinFIMLog.Tests;
 public sealed class WindowsEventLogSinkTests
 {
     [TestMethod]
-    [DataRow(7777, "FileSystemFinding", EventChannel.Operational, "WinFIM-Operational", EventLogEntryType.Information)]
-    [DataRow(7791, "CoverageGap", EventChannel.Operational, "WinFIM-Operational", EventLogEntryType.Error)]
-    [DataRow(7794, "ConfigurationChanged", EventChannel.Operational, "WinFIM-Operational", EventLogEntryType.Warning)]
-    [DataRow(7795, "BaselineFinding", EventChannel.Baseline, "WinFIM-Baseline", EventLogEntryType.Warning)]
-    [DataRow(7797, "SecurityAuditAttribution", EventChannel.Diagnostic, "WinFIM-Diagnostic", EventLogEntryType.Information)]
+    [DataRow(7777, "FileSystemFinding", EventChannel.Operational, "WinFIMLog", EventLogEntryType.Information)]
+    [DataRow(7791, "CoverageGap", EventChannel.Operational, "WinFIMLog", EventLogEntryType.Error)]
+    [DataRow(7794, "ConfigurationChanged", EventChannel.Operational, "WinFIMLog", EventLogEntryType.Warning)]
+    [DataRow(7795, "BaselineFinding", EventChannel.Baseline, "WinFIMLog", EventLogEntryType.Warning)]
+    [DataRow(7797, "SecurityAuditAttribution", EventChannel.Diagnostic, "WinFIMLog", EventLogEntryType.Information)]
     public void Writes_json_to_the_selected_event_log_with_the_allocated_id_and_level(
         int eventId, string recordType, EventChannel channel, string expectedSource, EventLogEntryType expectedLevel)
     {
@@ -36,6 +36,38 @@ public sealed class WindowsEventLogSinkTests
         using var json = JsonDocument.Parse(message!);
         Assert.AreEqual(eventId, json.RootElement.GetProperty("eventId").GetInt32());
         Assert.AreEqual(recordType, json.RootElement.GetProperty("recordType").GetString());
+    }
+
+    [TestMethod]
+    public void Missing_source_is_created_for_the_selected_event_log_before_writing()
+    {
+        var exists = false;
+        string? createdSource = null;
+        string? createdLog = null;
+        var sink = new WindowsEventLogSink((_, _, _, _) => { }, _ => exists,
+            _ => exists ? createdLog : null,
+            (source, logName) =>
+            {
+                createdSource = source;
+                createdLog = logName;
+                exists = true;
+            });
+
+        sink.Write(EventContract.Create(7777, "FileSystemFinding", "record", "scope",
+            new Dictionary<string, object?>()));
+
+        Assert.AreEqual("WinFIMLog", createdSource);
+        Assert.AreEqual("WinFIMLog", createdLog);
+    }
+
+    [TestMethod]
+    public void Source_registered_to_another_event_log_is_rejected_before_writing()
+    {
+        var sink = new WindowsEventLogSink((_, _, _, _) => { }, _ => true,
+            _ => "Application", (_, _) => { });
+
+        Assert.Throws<System.InvalidOperationException>(() => sink.Write(EventContract.Create(7777,
+            "FileSystemFinding", "record", "scope", new Dictionary<string, object?>())));
     }
 
     [TestMethod]

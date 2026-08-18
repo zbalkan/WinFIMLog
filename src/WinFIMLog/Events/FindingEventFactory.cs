@@ -69,6 +69,8 @@ namespace WinFIMLog.Events
                     ["hive"] = change.Hive,
                     ["valueName"] = change.ValueName,
                     ["valueData"] = change.ValueData,
+                    ["evidenceStatus"] = change.EvidenceStatus,
+                    ["evidenceMissingReason"] = change.EvidenceMissingReason,
                     ["currentAcl"] = change.ACLs,
                     ["previousAcl"] = change.PreviousACL,
                     ["attributionStatus"] = change.AttributionStatus.ToString(),

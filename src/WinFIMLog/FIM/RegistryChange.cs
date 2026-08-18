@@ -12,8 +12,6 @@ namespace WinFIMLog.FIM
 {
     public partial class RegistryChange : Change
     {
-        private readonly RegistryKey? _key;
-
         internal RegistryChange()
         { }
 
@@ -28,46 +26,55 @@ namespace WinFIMLog.FIM
             SourceComputer = Environment.MachineName;
             DateTime = data.TimeStamp;
             KeyName = data.KeyName;
-
-            switch ((RegistryEventCategory)(int)data.Opcode)
-            {
-                case RegistryEventCategory.Create:
-                    ChangeCategory = ChangeCategory.Created;
-                    break;
-
-                case RegistryEventCategory.SetValue:
-                case RegistryEventCategory.SetInformation:
-                    ChangeCategory = ChangeCategory.Changed;
-                    break;
-
-                case RegistryEventCategory.Delete:
-                case RegistryEventCategory.DeleteValue:
-                    ChangeCategory = ChangeCategory.Deleted;
-                    break;
-            }
-
+            ChangeCategory = Category((RegistryEventCategory)(int)data.Opcode);
             Entity = fullName;
 
             var hive = ParseHive(fullName);
-
             Hive = Enum.GetName(hive) ?? string.Empty;
+            CaptureEvidence(hive, fullName);
+            CaptureAttribution(data);
+        }
 
-            using (var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Default))
+        /// <summary>Availability of optional live registry metadata for this already observed ETW event.</summary>
+        public string EvidenceStatus { get; set; } = "Available";
+
+        /// <summary>Machine-readable reason why live registry metadata is incomplete.</summary>
+        public string? EvidenceMissingReason { get; set; }
+
+        public string EventName { get; set; }
+
+        public string Hive { get; set; }
+
+        public string KeyName { get; set; }
+
+        public string? ValueData { get; set; }
+
+        public string? ValueName { get; set; }
+
+        public override string ToString() => $"Timestamp: {DateTime:O}\nEvent Name: {EventName}\nChange Category: {ChangeCategory}\nEntity: {Entity}\nKey Name: {KeyName}\nValue Name: {ValueName}\nValue Data: {ValueData}\nProcess: {ProcessName} (PID: {ProcessID})\nUser Info: {Username} (SID: {UserSID})\nAttribution Status: {AttributionStatus}\nEvidence Status: {EvidenceStatus}";
+
+        internal static (string Value, string? MissingReason) GetEvidenceOrEmpty(Func<string> collect)
+        {
+            try
             {
-                _key = baseKey.OpenSubKey(StripFullName(fullName, ValueName), false);
-                if (_key != null)
-                {
-                    if (KeyName?.Length == 0)
-                    {
-                        KeyName = _key.Name;
-                    }
-                    if (ChangeCategory != ChangeCategory.Deleted)
-                    {
-                        ValueData = ExtractValueData();
-                    }
-                }
+                return (collect(), null);
             }
+            catch (Exception exception)
+            {
+                return (string.Empty, exception.GetType().Name);
+            }
+        }
 
+        private static ChangeCategory Category(RegistryEventCategory category) => category switch
+        {
+            RegistryEventCategory.Create => ChangeCategory.Created,
+            RegistryEventCategory.SetValue or RegistryEventCategory.SetInformation => ChangeCategory.Changed,
+            RegistryEventCategory.Delete or RegistryEventCategory.DeleteValue => ChangeCategory.Deleted,
+            _ => ChangeCategory.Changed
+        };
+
+        private void CaptureAttribution(RegistryTraceData data)
+        {
             var attribution = ProcessAttribution.Resolve(data.ProcessID, data.ProcessName, processId =>
             {
                 using var process = Process.GetProcessById(processId);
@@ -83,104 +90,131 @@ namespace WinFIMLog.FIM
             ProcessName = attribution.ProcessName;
             Username = attribution.Username;
             UserSID = attribution.UserSid;
-
-            ACLs = _key?.GetACL() ?? string.Empty;
         }
 
-        public string EventName { get; set; }
-        public string Hive { get; set; }
-
-        public string KeyName { get; set; }
-
-        public string? ValueData { get; set; }
-
-        public string? ValueName { get; set; }
-
-        public override string ToString() => $"Timestamp: {DateTime:O}\nEvent Name: {EventName}\nChange Category: {ChangeCategory}\nEntity: {Entity}\nKey Name: {KeyName}\nValue Name: {ValueName}\nValue Data: {ValueData}\nProcess: {ProcessName} (PID: {ProcessID})\nUser Info: {Username} (SID: {UserSID})\nAttribution Status: {AttributionStatus}";
-
-        private static RegistryHive ParseHive(string keyName)
+        private void CaptureEvidence(RegistryHive hive, string fullName)
         {
-            if (keyName.Contains("HKEY_LOCAL_MACHINE"))
+            try
             {
-                return RegistryHive.LocalMachine;
-            }
+                using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Default);
+                using var key = baseKey.OpenSubKey(StripFullName(fullName, ValueName ?? string.Empty), false);
+                if (key is null)
+                {
+                    MarkEvidenceUnavailable("KeyNotAvailable");
+                    return;
+                }
 
-            if (keyName.Contains("HKEY_CURRENT_USER"))
-            {
-                return RegistryHive.CurrentUser;
-            }
+                if (KeyName?.Length == 0)
+                {
+                    KeyName = key.Name;
+                }
+                if (ChangeCategory != ChangeCategory.Deleted)
+                {
+                    ValueData = ExtractValueData(key);
+                }
 
-            if (keyName.Contains("HKEY_CURRENT_CONFIG"))
-            {
-                return RegistryHive.CurrentConfig;
+                var acl = GetEvidenceOrEmpty(key.GetACL);
+                ACLs = acl.Value;
+                if (acl.MissingReason is not null)
+                {
+                    MarkEvidencePartial(acl.MissingReason);
+                }
             }
-
-            if (keyName.Contains("HKEY_CLASSES_ROOT"))
+            catch (Exception exception)
             {
-                return RegistryHive.ClassesRoot;
-            }
-            else
-            {
-                return RegistryHive.Users;
+                MarkEvidenceUnavailable(exception.GetType().Name);
             }
         }
 
-        [GeneratedRegex(@"^[^\\]+\\(.+?)(\\)?$")]
-        private static partial Regex StrippedKeyNameRegex();
-
-        private string? ExtractValueData()
+        private string? ExtractValueData(RegistryKey key)
         {
             if (string.IsNullOrEmpty(ValueName))
             {
                 return null;
             }
 
-            var o = _key!.GetValue(ValueName);
-            string? result = null;
-            if (o != null && !string.IsNullOrEmpty(o.ToString()))
+            try
             {
-                switch (_key.GetValueKind(ValueName))
+                var value = key.GetValue(ValueName);
+                if (value is null || string.IsNullOrEmpty(value.ToString()))
                 {
-                    case RegistryValueKind.DWord:
-                        result = Convert.ToString((int)o);
-                        break;
-
-                    case RegistryValueKind.QWord:
-                        result = Convert.ToString((long)o);
-                        break;
-
-                    case RegistryValueKind.String:
-                    case RegistryValueKind.ExpandString:
-                        result = o!.ToString();
-                        break;
-
-                    case RegistryValueKind.Binary:
-                        result = string.Join(" ", ((byte[])o).Select(b => $"{b:x2}"));
-                        break;
-
-                    case RegistryValueKind.MultiString:
-                        result = string.Join(" ", (string[])o);
-                        break;
+                    return null;
                 }
+
+                return key.GetValueKind(ValueName) switch
+                {
+                    RegistryValueKind.DWord => Convert.ToString((int)value),
+                    RegistryValueKind.QWord => Convert.ToString((long)value),
+                    RegistryValueKind.String or RegistryValueKind.ExpandString => value.ToString(),
+                    RegistryValueKind.Binary => string.Join(" ", ((byte[])value).Select(item => $"{item:x2}")),
+                    RegistryValueKind.MultiString => string.Join(" ", (string[])value),
+                    _ => value.ToString()
+                };
             }
-            return result;
+            catch (Exception exception)
+            {
+                MarkEvidencePartial(exception.GetType().Name);
+                return null;
+            }
         }
 
-        private string StripFullName(string fullName, string valueName)
+        private void MarkEvidencePartial(string reason)
+        {
+            if (EvidenceStatus == "Available")
+            {
+                EvidenceStatus = "Partial";
+            }
+
+            EvidenceMissingReason ??= reason;
+        }
+
+        private void MarkEvidenceUnavailable(string reason)
+        {
+            EvidenceStatus = "Unavailable";
+            EvidenceMissingReason ??= reason;
+        }
+
+        private static RegistryHive ParseHive(string keyName)
+        {
+            if (keyName.Contains("HKEY_LOCAL_MACHINE", StringComparison.OrdinalIgnoreCase))
+            {
+                return RegistryHive.LocalMachine;
+            }
+
+            if (keyName.Contains("HKEY_CURRENT_USER", StringComparison.OrdinalIgnoreCase))
+            {
+                return RegistryHive.CurrentUser;
+            }
+
+            if (keyName.Contains("HKEY_CURRENT_CONFIG", StringComparison.OrdinalIgnoreCase))
+            {
+                return RegistryHive.CurrentConfig;
+            }
+
+            if (keyName.Contains("HKEY_CLASSES_ROOT", StringComparison.OrdinalIgnoreCase))
+            {
+                return RegistryHive.ClassesRoot;
+            }
+
+            return RegistryHive.Users;
+        }
+
+        [GeneratedRegex(@"^[^\\]+\\(.+?)(\\)?$")]
+        private static partial Regex StrippedKeyNameRegex();
+
+        private static string StripFullName(string fullName, string valueName)
         {
             if (string.IsNullOrEmpty(fullName))
             {
                 return string.Empty;
             }
 
-            // Remove the ValueName if provided
             if (!string.IsNullOrEmpty(valueName))
             {
                 var valuePattern = $@"\\{Regex.Escape(valueName)}$";
-                fullName = Regex.Replace(fullName, valuePattern, string.Empty); // Remove ValueName
+                fullName = Regex.Replace(fullName, valuePattern, string.Empty);
             }
 
-            // Apply regex to strip the hive name and clean the full key path
             return StrippedKeyNameRegex().Replace(fullName, "$1");
         }
     }

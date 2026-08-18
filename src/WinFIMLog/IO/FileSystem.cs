@@ -7,21 +7,19 @@ using System.IO.Filesystem.Ntfs;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using Microsoft.Win32;
+using MicrosoftRegistry = Microsoft.Win32.Registry;
 using WinFIMLog.Utils;
 
 namespace WinFIMLog.IO
 {
     public static partial class FileSystem
     {
-        /// <summary>
-        ///     Calculate <see cref="SHA256" /> digest of a file
-        /// </summary>
-        /// <param name="path">
-        ///     Full pathof the file
-        /// </param>
-        /// <returns>
-        ///     <see cref="SHA256" /> digest converted into <see cref="string" />
-        /// </returns>
+        private const string DownloadsFolderId = "{374DE290-123F-4565-9164-39C4925E467B}";
+        private const string ProfileListPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList";
+        private const string UserShellFoldersPath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
+
+        /// <summary>Calculate <see cref="SHA256" /> digest of a file.</summary>
         public static string CalculateFileHash(string path)
         {
             var digest = string.Empty;
@@ -38,36 +36,21 @@ namespace WinFIMLog.IO
                 }
                 catch (UnauthorizedAccessException ex)
                 {
-                    // Access denied
                     Debug.WriteLine(ex);
                 }
                 catch (IOException ex)
                 {
-                    // File is locked by another process
                     Debug.WriteLine(ex);
                 }
                 catch (Exception ex)
                 {
-                    // Any other exception
-                    // Here for creating breakpoints for separate cases.
                     Debug.WriteLine(ex);
                 }
             }
             return digest;
         }
 
-        /// <summary>
-        ///     Reads file list fron NTFS indexes
-        /// </summary>
-        /// <returns>
-        ///     List of all files
-        /// </returns>
-        /// <exception cref="IOException">
-        /// </exception>
-        /// <exception cref="UnauthorizedAccessException">
-        /// </exception>
-        /// <exception cref="AggregateException">
-        /// </exception>
+        /// <summary>Reads file list from NTFS indexes.</summary>
         public static ConcurrentBag<string> InvokeNtfsSearch()
         {
             var ntfsDrives = DriveInfo.GetDrives()
@@ -77,19 +60,17 @@ namespace WinFIMLog.IO
 
             Parallel.ForEach(ntfsDrives, driveToAnalyze =>
             {
-                var ntfsReader =
-                    new NtfsReader(driveToAnalyze, RetrieveMode.All);
-                var files =
-                    ntfsReader.GetNodesParallel(driveToAnalyze.Name)
-                        .Where(n => (n.Attributes &
-                                     (Attributes.Temporary |
-                                      Attributes.System |
-                                      Attributes.Device |
-                                      Attributes.Directory |
-                                      Attributes.Offline |
-                                      Attributes.ReparsePoint |
-                                      Attributes.SparseFile)) == 0)
-                        .Select(n => n.FullName);
+                var ntfsReader = new NtfsReader(driveToAnalyze, RetrieveMode.All);
+                var files = ntfsReader.GetNodesParallel(driveToAnalyze.Name)
+                    .Where(node => (node.Attributes &
+                        (Attributes.Temporary |
+                         Attributes.System |
+                         Attributes.Device |
+                         Attributes.Directory |
+                         Attributes.Offline |
+                         Attributes.ReparsePoint |
+                         Attributes.SparseFile)) == 0)
+                    .Select(node => node.FullName);
 
                 allPaths.AddRange(files);
             });
@@ -98,16 +79,12 @@ namespace WinFIMLog.IO
         }
 
         /// <summary>
-        ///     Gets a path with wildcard, resolves it and returns a list of paths
+        /// Gets a path with a wildcard, resolves it, and returns a list of paths.
         /// </summary>
-        /// <param name="path">a path with or without wildcard.</param>
-        /// <returns>List of paths returned after resolving wildcard path.</returns>
         /// <remarks>
-        /// Position of wildcard can be;
-        /// 1. At the end of the path: all files in the directory such as "%WINDIR%\\*", remove and continue.
-        /// 2. In the middle of the path: All subfolders in a folder such as "%SYSTEMDRIVE%\\Users\\*\\Downloads". Get the path before wildcard. Enumerate all subfolders, append the part after wildcard and append the final path to the list of paths.
-        /// 3. At the beginning, such as "*\\Downloads", which is too broad. Ignore invalid.
-        /// 4. Nowhere. Return the same path as a single-item list.
+        /// The conventional <c>%SYSTEMDRIVE%\Users\*\Downloads</c> expression is resolved
+        /// against profile configuration as well as physical profile directories. This retains
+        /// coverage when a user has redirected Downloads away from the profile root.
         /// </remarks>
         public static List<string> ResolveWildcardPath(string path)
         {
@@ -115,57 +92,157 @@ namespace WinFIMLog.IO
 
             if (string.IsNullOrWhiteSpace(path))
             {
-                return resolvedPaths; // Return empty list for invalid input
+                return resolvedPaths;
             }
 
-            // Case 1: Wildcard at the end of the path
             if (path.EndsWith('*'))
             {
                 var directory = Path.GetDirectoryName(path);
-
                 if (Directory.Exists(directory))
                 {
-                    // Get all files in the directory
                     resolvedPaths.AddRange(Directory.GetFiles(directory));
                 }
             }
-            // Case 2: Wildcard in the middle of the path
             else if (path.Contains('*'))
             {
                 var wildcardIndex = path.IndexOf('*');
-                var prefix = path.Substring(0, wildcardIndex).TrimEnd(Path.DirectorySeparatorChar);
-                var suffix = path.Substring(wildcardIndex + 1).TrimStart(Path.DirectorySeparatorChar);
+                var prefix = path[..wildcardIndex].TrimEnd(Path.DirectorySeparatorChar);
+                var suffix = path[(wildcardIndex + 1)..].TrimStart(Path.DirectorySeparatorChar);
+
+                if (IsPerUserDownloadsWildcard(prefix, suffix))
+                {
+                    resolvedPaths.AddRange(ResolveConfiguredUserDownloads());
+                }
 
                 if (Directory.Exists(prefix))
                 {
-                    // Get all subfolders in the directory
-                    var subfolders = Directory.GetDirectories(prefix);
-
-                    foreach (var subfolder in subfolders)
+                    try
                     {
-                        var finalPath = Path.Combine(subfolder, suffix);
-
-                        // Check if the path exists (file or directory)
-                        if (Directory.Exists(finalPath) || File.Exists(finalPath))
+                        foreach (var subfolder in Directory.GetDirectories(prefix))
                         {
-                            resolvedPaths.Add(finalPath);
+                            var finalPath = Path.Combine(subfolder, suffix);
+                            if (Directory.Exists(finalPath) || File.Exists(finalPath))
+                            {
+                                resolvedPaths.Add(finalPath);
+                            }
                         }
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        // Retain results from accessible profiles and registry redirection.
+                    }
+                    catch (IOException)
+                    {
+                        // A profile can be removed while scopes are being resolved.
                     }
                 }
             }
-            // Case 3: Wildcard at the beginning
-            else if (path.StartsWith('*'))
-            {
-                // Ignore, as this is too broad
-                return resolvedPaths;
-            }
-            // Case 0: No wildcard
-            else
+            else if (!path.StartsWith('*'))
             {
                 resolvedPaths.Add(path);
             }
 
-            return resolvedPaths;
+            return resolvedPaths.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
         }
+
+        internal static IReadOnlyList<string> ResolveUserDownloads(
+            IEnumerable<(string ProfilePath, string? ConfiguredDownloads)> profiles,
+            Func<string, bool> directoryExists)
+        {
+            ArgumentNullException.ThrowIfNull(profiles);
+            ArgumentNullException.ThrowIfNull(directoryExists);
+
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (profilePath, configuredDownloads) in profiles)
+            {
+                if (string.IsNullOrWhiteSpace(profilePath))
+                {
+                    continue;
+                }
+
+                var candidate = ResolveUserDownloadsPath(profilePath, configuredDownloads);
+                if (directoryExists(candidate))
+                {
+                    paths.Add(candidate);
+                }
+            }
+
+            return paths.Order(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
+        private static bool IsPerUserDownloadsWildcard(string prefix, string suffix) =>
+            suffix.Equals("Downloads", StringComparison.OrdinalIgnoreCase) &&
+            Path.GetFileName(Path.TrimEndingDirectorySeparator(prefix))
+                .Equals("Users", StringComparison.OrdinalIgnoreCase);
+
+        private static IEnumerable<string> ResolveConfiguredUserDownloads()
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return [];
+            }
+
+            try
+            {
+                using var profileList = MicrosoftRegistry.LocalMachine.OpenSubKey(ProfileListPath, false);
+                if (profileList is null)
+                {
+                    return [];
+                }
+
+                var profiles = new List<(string ProfilePath, string? ConfiguredDownloads)>();
+                foreach (var sid in profileList.GetSubKeyNames())
+                {
+                    using var profile = profileList.OpenSubKey(sid, false);
+                    var profilePath = profile?.GetValue("ProfileImagePath") as string;
+                    if (string.IsNullOrWhiteSpace(profilePath))
+                    {
+                        continue;
+                    }
+
+                    using var userShellFolders = MicrosoftRegistry.Users.OpenSubKey(sid + "\\" + UserShellFoldersPath, false);
+                    string? configuredDownloads = userShellFolders?.GetValue(DownloadsFolderId, null,
+                        RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                    configuredDownloads ??= userShellFolders?.GetValue("Downloads", null,
+                        RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                    profiles.Add((Environment.ExpandEnvironmentVariables(profilePath), configuredDownloads));
+                }
+
+                return ResolveUserDownloads(profiles, Directory.Exists);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return [];
+            }
+            catch (IOException)
+            {
+                return [];
+            }
+        }
+
+        private static string ResolveUserDownloadsPath(string profilePath, string? configuredDownloads)
+        {
+            if (string.IsNullOrWhiteSpace(configuredDownloads))
+            {
+                return IsFullyQualifiedWindowsPath(profilePath)
+                    ? profilePath.TrimEnd('\\', '/') + "\\Downloads"
+                    : Path.Combine(profilePath, "Downloads");
+            }
+
+            var expanded = configuredDownloads.Replace("%USERPROFILE%", profilePath,
+                StringComparison.OrdinalIgnoreCase);
+            expanded = Environment.ExpandEnvironmentVariables(expanded);
+            return IsFullyQualifiedWindowsPath(expanded)
+                ? expanded
+                : IsFullyQualifiedWindowsPath(profilePath)
+                    ? profilePath.TrimEnd('\\', '/') + "\\" + expanded
+                    : Path.Combine(profilePath, expanded);
+        }
+
+        private static bool IsFullyQualifiedWindowsPath(string path) =>
+            Path.IsPathFullyQualified(path) ||
+            (path.Length >= 3 && char.IsAsciiLetter(path[0]) && path[1] == ':' &&
+             (path[2] == '\\' || path[2] == '/')) ||
+            path.StartsWith("\\\\", StringComparison.Ordinal);
     }
 }

@@ -242,9 +242,13 @@ namespace WinFIMLog
             return value;
         }
 
-        private ParallelQuery<string> FilterMonitoredPaths(IEnumerable<string> paths) => from path in paths.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
-                                                                                         where ReadState().MonitoredPathsPattern.IsMatch(path)
-                                                                                         select path;
+        private ParallelQuery<string> FilterMonitoredPaths(IEnumerable<string> paths)
+        {
+            var monitoredPaths = ReadState().MonitoredPaths;
+            return from path in paths.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
+                   where PathScopeMatcher.IsWithinAny(monitoredPaths, path)
+                   select path;
+        }
 
         private ParallelQuery<string> FilterOutExcludedExtensions(ParallelQuery<string> matches)
         {
@@ -260,13 +264,13 @@ namespace WinFIMLog
 
         private ParallelQuery<string> FilterOutExcludedPaths(ParallelQuery<string> matches)
         {
-            var pattern = ReadState().ExcludedPathsPattern;
-            if (pattern == null)
+            var excludedPaths = ReadState().ExcludedPaths;
+            if (excludedPaths.Length == 0)
             {
                 return matches;
             }
             return from path in matches.AsParallel().WithMergeOptions(ParallelMergeOptions.NotBuffered)
-                   where !pattern.IsMatch(path)
+                   where !PathScopeMatcher.IsWithinAny(excludedPaths, path)
                    select path;
         }
 
@@ -595,7 +599,7 @@ namespace WinFIMLog
             var scopeInterval = Registry.ReadDwordValue("ScopeReresolutionInterval");
             if (scopeInterval == -1)
             {
-                scopeInterval = 300;
+                scopeInterval = 30;
                 Registry.WriteDwordValue("ScopeReresolutionInterval", scopeInterval);
             }
             if (scopeInterval < 10)

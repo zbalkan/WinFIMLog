@@ -72,6 +72,17 @@ public sealed class EventContractTests
     }
 
     [TestMethod]
+    public void Undefined_acl_json_element_is_emitted_as_null()
+    {
+        var record = EventContract.Create(7777, "FileSystemFinding", "01TEST", "sha256:test",
+            new Dictionary<string, object?> { ["previousAcl"] = default(JsonElement) });
+
+        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
+        Assert.AreEqual(JsonValueKind.Null,
+            json.RootElement.GetProperty("fields").GetProperty("previousAcl").ValueKind);
+    }
+
+    [TestMethod]
     [DataRow(7776, "FileSystemFinding", EventChannel.Operational)]
     [DataRow(7787, "RegistryFinding", EventChannel.Operational)]
     [DataRow(7795, "BaselineFinding", EventChannel.Baseline)]

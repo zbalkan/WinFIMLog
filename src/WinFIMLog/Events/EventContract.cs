@@ -23,7 +23,53 @@ namespace WinFIMLog.Events
         public const int CurrentSchemaVersion = 1;
 
         internal string FormatEventLogMessage() =>
-            JsonSerializer.Serialize(this, EventJsonContext.Default.EventContract);
+            JsonSerializer.Serialize(
+                this with { Fields = FieldsForEventLog(Fields) },
+                EventJsonContext.Default.EventContract);
+
+        // ACL evidence stays as text while it is persisted in LiteDB. Convert valid
+        // object/array payloads only in the short-lived event-log projection; storing a
+        // JsonElement in the outbox would be reconstructed by LiteDB as an invalid default value.
+        private static IReadOnlyDictionary<string, object?> FieldsForEventLog(
+            IReadOnlyDictionary<string, object?> fields)
+        {
+            var eventLogFields = new Dictionary<string, object?>(fields.Count);
+            foreach (var field in fields)
+            {
+                eventLogFields[field.Key] = field.Key is "currentAcl" or "previousAcl"
+                    ? StructuredJsonOrOriginal(field.Value)
+                    : field.Value;
+            }
+            return eventLogFields;
+        }
+
+        private static object? StructuredJsonOrOriginal(object? value)
+        {
+            // Records written by the earlier implementation can contain LiteDB-rehydrated,
+            // undefined JsonElement values. Emit null for that unrecoverable evidence rather
+            // than retrying the same failed event indefinitely.
+            if (value is JsonElement { ValueKind: JsonValueKind.Undefined })
+            {
+                return null;
+            }
+
+            if (value is not string text)
+            {
+                return value;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(text);
+                return document.RootElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array
+                    ? document.RootElement.Clone()
+                    : value;
+            }
+            catch (JsonException)
+            {
+                return value;
+            }
+        }
 
         public static EventContract Create(ushort eventId, string recordType, string recordId,
             string scopeHash, IReadOnlyDictionary<string, object?> fields,

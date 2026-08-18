@@ -31,6 +31,7 @@ WinFIMLog reads machine policy from `HKLM\SOFTWARE\WinFIMLog` preference. Policy
 | `HashLimitMB` | `REG_DWORD` | `1024` | Maximum file size considered for hashing. |
 | `HeartbeatInterval` | `REG_DWORD` | `60` | Seconds; `0` disables heartbeat. |
 | `CaptureQueueCapacity` | `REG_DWORD` | `8192` | Must exceed zero; runtime changes are rejected and require service restart because admission capacity is fixed at construction. |
+| `DiscoveryConcurrency` | `REG_DWORD` | `2` | 1–64 workers; bounds legacy filesystem discovery hashing and metadata work. |
 | `WatcherBufferSizeKB` | `REG_DWORD` | `64` | 8–64 KiB. |
 | `ScopeReresolutionInterval` | `REG_DWORD` | `300` | At least 10 seconds; controls policy refresh and wildcard re-resolution. |
 | `FileSystemSnapshotInterval` | `REG_DWORD` | `21600` | At least 60 seconds; Tier 0 filesystem scan interval and principal component of the detection SLA. |

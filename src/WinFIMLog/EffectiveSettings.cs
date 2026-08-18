@@ -8,6 +8,7 @@ namespace WinFIMLog
     public sealed class EffectiveSettings
     {
         internal int CaptureQueueCapacity { get; set; } = 8192;
+        internal int DiscoveryConcurrency { get; set; } = 2;
         internal bool EnableLocalDatabase { get; set; } = true;
         internal bool EnableRegistryMonitoring { get; set; }
         internal string[] ExcludedExtensions { get; set; } = [];

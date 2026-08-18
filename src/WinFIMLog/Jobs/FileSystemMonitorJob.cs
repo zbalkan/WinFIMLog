@@ -37,6 +37,11 @@ namespace WinFIMLog.Jobs
         }
 
         /// <summary>Applies watcher additions and removals for the newly resolved scope.</summary>
+        /// <remarks>
+        /// Desired paths form a set and active watchers form a path-keyed dictionary because only
+        /// membership is relevant. Keep these case-insensitive hash structures: scanning the
+        /// watcher list once per desired path makes reconfiguration quadratic.
+        /// </remarks>
         public void Reconfigure()
         {
             var configuration = _settings.Capture();
@@ -49,9 +54,19 @@ namespace WinFIMLog.Jobs
                     return;
                 }
 
+                var watchersByPath = new Dictionary<string, FileSystemWatcher>(StringComparer.OrdinalIgnoreCase);
                 foreach (var watcher in _watchers.ToArray())
                 {
-                    if (desired.Contains(watcher.Path) &&
+                    var watcherPath = watcher.Path;
+                    if (!watchersByPath.TryAdd(watcherPath, watcher))
+                    {
+                        DisposeWatcher(watcher);
+                        _watchers.Remove(watcher);
+                        _logger.LogWarning("Removed duplicate file system watcher for directory {Directory}", watcherPath);
+                        continue;
+                    }
+
+                    if (desired.Contains(watcherPath) &&
                         watcher.InternalBufferSize == configuration.WatcherBufferSizeKB * 1024)
                     {
                         continue;
@@ -59,11 +74,19 @@ namespace WinFIMLog.Jobs
 
                     DisposeWatcher(watcher);
                     _watchers.Remove(watcher);
-                    _logger.LogInformation("Removed file system watcher for directory {Directory}", watcher.Path);
+                    watchersByPath.Remove(watcherPath);
+                    _logger.LogInformation("Removed file system watcher for directory {Directory}", watcherPath);
                 }
-                foreach (var path in desired.Where(path => !_watchers.Exists(watcher => string.Equals(watcher.Path, path, StringComparison.OrdinalIgnoreCase))))
+                foreach (var path in desired)
                 {
-                    _watchers.Add(CreateWatcher(path, configuration));
+                    if (watchersByPath.ContainsKey(path))
+                    {
+                        continue;
+                    }
+
+                    var watcher = CreateWatcher(path, configuration);
+                    _watchers.Add(watcher);
+                    watchersByPath.Add(path, watcher);
                     _logger.LogInformation("Added file system watcher for directory {Directory}", path);
                 }
             }

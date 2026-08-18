@@ -85,6 +85,23 @@ public sealed class RegistrySnapshotSourceTests
     }
 
     [TestMethod]
+    public void ResolveRoots_preserves_siblings_with_misleading_textual_prefixes()
+    {
+        var roots = RegistrySnapshotSource.ResolveRoots([
+            @"HKEY_LOCAL_MACHINE\SOFT",
+            @"HKEY_LOCAL_MACHINE\SOFTWARE",
+            @"HKEY_LOCAL_MACHINE\SOFT\Child",
+            @"HKEY_LOCAL_MACHINE\SYSTEM"
+        ]);
+
+        Assert.AreSequenceEqual([
+            @"HKEY_LOCAL_MACHINE\SOFT",
+            @"HKEY_LOCAL_MACHINE\SOFTWARE",
+            @"HKEY_LOCAL_MACHINE\SYSTEM"
+        ], roots);
+    }
+
+    [TestMethod]
     public void Registry_security_exceptions_are_classified_as_access_denied()
     {
         Assert.IsTrue(RegistrySnapshotSource.IsAccessDenied(new UnauthorizedAccessException()));

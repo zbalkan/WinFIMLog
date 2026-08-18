@@ -84,6 +84,33 @@ public sealed class FileSystemSnapshotSourceTests
     }
 
     [TestMethod]
+    public void Capture_keeps_children_yielded_before_enumeration_failure()
+    {
+        var root = Directory.CreateTempSubdirectory("winfimlog-partial-");
+        try
+        {
+            var child = Path.Combine(root.FullName, "evidence.txt");
+            File.WriteAllText(child, "evidence");
+
+            IEnumerable<string> Enumerate(string path)
+            {
+                if (path == root.FullName)
+                {
+                    yield return child;
+                    throw new IOException("Synthetic late enumeration failure.");
+                }
+            }
+
+            var members = new FileSystemSnapshotSource(1, _ => true, Enumerate).Capture([root.FullName]);
+
+            Assert.Contains(member => member.Path == child, members);
+            Assert.AreEqual(EvidenceAvailability.Failed,
+                members.Single(member => member.Path == root.FullName).AclState);
+        }
+        finally { root.Delete(true); }
+    }
+
+    [TestMethod]
     public void Capture_RecordsSizeCapAsEvidenceRatherThanEmptyHash()
     {
         var root = Directory.CreateTempSubdirectory("winfimlog-snapshot-");

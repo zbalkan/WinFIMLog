@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using LiteDB;
 using Microsoft.Extensions.Options;
@@ -11,6 +13,8 @@ namespace WinFIMLog.Data
 {
     public partial class LiteDbContext : ILiteDbContext
     {
+        private const int LatestStateSchemaVersion = 1;
+
         /// <summary>
         ///     The default size is 80MB
         /// </summary>
@@ -38,11 +42,9 @@ namespace WinFIMLog.Data
 
             FileSystemChanges = _database.GetCollection<FileSystemChange>("fileSystemChanges");
             FileSystemChanges.EnsureIndex(x => x.Id);
-            FileSystemChanges.EnsureIndex(x => x.Entity);
-
             RegistryChanges = _database.GetCollection<RegistryChange>("registryChanges");
             RegistryChanges.EnsureIndex(x => x.Id);
-            RegistryChanges.EnsureIndex(x => x.Entity);
+            EnsureLatestStateSchema();
 
             Baselines = _database.GetCollection<BaselineMetadata>("baselines");
             Baselines.EnsureIndex(x => x.Status);
@@ -65,6 +67,77 @@ namespace WinFIMLog.Data
 
         public ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
         public ILiteCollection<RegistryChange> RegistryChanges { get; }
+
+        internal bool LatestStateMigrationPerformed { get; private set; }
+
+        /// <summary>Creates normalized latest-state indexes and migrates legacy rows exactly once.</summary>
+        /// <remarks>
+        /// The persisted version marker prevents full collection scans on later startups. The
+        /// migration of both projections and marker write are atomic; all later openings only
+        /// validate the unique indexes used by the indexed per-entity replacement path.
+        /// </remarks>
+        private void EnsureLatestStateSchema()
+        {
+            var metadata = _database.GetCollection<BsonDocument>("databaseMetadata");
+            var schema = metadata.FindById("latestState");
+            if (schema is null || schema["version"].AsInt32 < LatestStateSchemaVersion)
+            {
+                if (!ExecuteTransaction(() =>
+                    {
+                        MigrateLatestState(FileSystemChanges);
+                        MigrateLatestState(RegistryChanges);
+                        metadata.Upsert(new BsonDocument
+                        {
+                            ["_id"] = "latestState",
+                            ["version"] = LatestStateSchemaVersion
+                        });
+                    }))
+                {
+                    throw new InvalidOperationException("Could not migrate latest-state projections.");
+                }
+
+                LatestStateMigrationPerformed = true;
+            }
+
+            FileSystemChanges.EnsureIndex(x => x.NormalizedEntity, true);
+            RegistryChanges.EnsureIndex(x => x.NormalizedEntity, true);
+        }
+
+        /// <summary>Normalizes legacy identities and retains the newest case-insensitive duplicate.</summary>
+        /// <remarks>
+        /// The dictionary makes duplicate resolution expected O(n) while holding only one winner
+        /// per identity. This is a versioned migration path, not an ordinary startup operation.
+        /// </remarks>
+        private static void MigrateLatestState<T>(ILiteCollection<T> collection) where T : Change
+        {
+            var retained = new Dictionary<string, T>(StringComparer.Ordinal);
+            foreach (var change in collection.FindAll())
+            {
+                var key = NormalizeEntity(change.Entity);
+                if (!retained.TryGetValue(key, out var current) || change.DateTime > current.DateTime)
+                {
+                    retained[key] = change;
+                }
+            }
+
+            foreach (var change in collection.FindAll().ToList())
+            {
+                var key = NormalizeEntity(change.Entity);
+                if (!string.Equals(retained[key].Id, change.Id, StringComparison.Ordinal))
+                {
+                    collection.Delete(change.Id);
+                    continue;
+                }
+
+                if (!string.Equals(change.NormalizedEntity, key, StringComparison.Ordinal))
+                {
+                    change.NormalizedEntity = key;
+                    collection.Update(change);
+                }
+            }
+        }
+
+        internal static string NormalizeEntity(string entity) => entity.ToUpperInvariant();
 
         #region Dispose
 

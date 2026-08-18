@@ -70,6 +70,9 @@ namespace WinFIMLog
         /// </exception>
         public string DatabasePath => $"{Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)}\\FIM\\fim.db";
 
+        /// <summary>Maximum concurrent workers used by legacy filesystem discovery.</summary>
+        public int DiscoveryConcurrency { get => ReadState().DiscoveryConcurrency; private set => WriteState().DiscoveryConcurrency = value; }
+
         /// <summary>
         ///     Switch to enable/disable latest-state live projections. Tier 0 and the durable
         ///     delivery outbox always require the local database.
@@ -218,6 +221,7 @@ namespace WinFIMLog
             left.EnableRegistryMonitoring == right.EnableRegistryMonitoring &&
             left.HashLimitMB == right.HashLimitMB && left.HeartbeatInterval == right.HeartbeatInterval &&
             left.CaptureQueueCapacity == right.CaptureQueueCapacity &&
+            left.DiscoveryConcurrency == right.DiscoveryConcurrency &&
             left.WatcherBufferSizeKB == right.WatcherBufferSizeKB &&
             left.ScopeReresolutionInterval == right.ScopeReresolutionInterval &&
             left.FileSystemSnapshotInterval == right.FileSystemSnapshotInterval &&
@@ -561,6 +565,19 @@ namespace WinFIMLog
             }
 
             CaptureQueueCapacity = captureQueueCapacity;
+
+            var discoveryConcurrency = Registry.ReadDwordValue("DiscoveryConcurrency");
+            if (discoveryConcurrency == -1)
+            {
+                discoveryConcurrency = 2;
+                Registry.WriteDwordValue("DiscoveryConcurrency", discoveryConcurrency);
+            }
+            if (discoveryConcurrency is < 1 or > 64)
+            {
+                throw new InvalidOperationException("DiscoveryConcurrency must be between 1 and 64.");
+            }
+
+            DiscoveryConcurrency = discoveryConcurrency;
 
             var watcherBufferSizeKb = Registry.ReadDwordValue("WatcherBufferSizeKB");
             if (watcherBufferSizeKb == -1)

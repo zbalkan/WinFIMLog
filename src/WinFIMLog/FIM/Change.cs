@@ -4,6 +4,8 @@ namespace WinFIMLog.FIM
 {
     public class Change : IChange
     {
+        private string entity = string.Empty;
+
         public string ACLs { get; set; }
 
         /// <summary>ACL evidence from the previously projected state, when available.</summary>
@@ -28,7 +30,22 @@ namespace WinFIMLog.FIM
 
         public DateTime DateTime { get; set; }
 
-        public string Entity { get; set; }
+        public string Entity
+        {
+            get => entity;
+            set
+            {
+                entity = value;
+                NormalizedEntity = value.ToUpperInvariant();
+            }
+        }
+
+        /// <summary>Case-insensitive database key used by the latest-state projection.</summary>
+        /// <remarks>
+        /// LiteDB indexes compare persisted values rather than accepting a <see cref="StringComparer"/>.
+        /// The invariant-normalized identity allows a unique index and avoids full collection scans.
+        /// </remarks>
+        public string NormalizedEntity { get; set; } = string.Empty;
 
         public string Id { get; set; }
 

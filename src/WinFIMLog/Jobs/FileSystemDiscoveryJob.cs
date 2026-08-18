@@ -178,9 +178,24 @@ namespace WinFIMLog.Jobs
         private void UpdateDiscoveryDatabase(Stopwatch sw, List<string> filtered)
         {
             sw.Restart();
-            Parallel.ForEach(filtered, Add);
+            var concurrency = _settings.DiscoveryConcurrency;
+            ProcessPaths(filtered, concurrency, Add);
             sw.Stop();
-            Debug.WriteLine("Database update completed: {0}", sw.Elapsed);
+            Debug.WriteLine("Database update completed in {0} with concurrency {1}", sw.Elapsed, concurrency);
+            _logger.LogInformation(
+                "Discovery processed {Count} paths in {Elapsed} with concurrency {Concurrency}",
+                filtered.Count, sw.Elapsed, concurrency);
         }
+
+        /// <summary>Processes discovery paths without exceeding the configured worker count.</summary>
+        /// <remarks>
+        /// Explicitly bounded parallelism prevents hashing and metadata reads from oversubscribing
+        /// storage. Do not use the unbounded default Parallel.ForEach overload on this I/O path.
+        /// </remarks>
+        internal static void ProcessPaths(IEnumerable<string> paths, int concurrency, Action<string> process) =>
+            Parallel.ForEach(paths, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = concurrency
+            }, process);
     }
 }

@@ -85,7 +85,7 @@ namespace WinFIMLog.FIM
         }
 
         public static FileSystemChange? RetrievePreviousChange(string path, ILiteDbContext ctx) => ctx.FileSystemChanges.Query()
-                      .Where(x => x.Entity == path)
+                      .Where(x => x.NormalizedEntity == LiteDbContext.NormalizeEntity(path))
                       .OrderByDescending(c => c.DateTime)
                       .FirstOrDefault();
 

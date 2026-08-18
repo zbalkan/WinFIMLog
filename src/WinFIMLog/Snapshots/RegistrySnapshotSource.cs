@@ -72,14 +72,39 @@ namespace WinFIMLog.Snapshots
         internal static string Identity(string path, SnapshotNodeType nodeType) =>
             (nodeType == SnapshotNodeType.RegistryValue ? "VALUE|" : "KEY|") + path.ToUpperInvariant();
 
+        /// <summary>Removes roots already covered by a retained segment-delimited ancestor.</summary>
+        /// <remarks>
+        /// The hash set makes ancestor membership expected constant time for each path segment and
+        /// preserves siblings such as SOFT and SOFTWARE. Do not replace this with an all-roots Any
+        /// check, which makes root reconciliation quadratic.
+        /// </remarks>
         internal static IReadOnlyList<string> RemoveOverlappingRoots(IEnumerable<string> roots)
         {
             var normalised = roots.Select(root => root.TrimEnd('\\'))
                 .Where(root => root.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.OrdinalIgnoreCase).ToArray();
-            return normalised.Where(root => !normalised.Any(candidate => candidate.Length < root.Length &&
-                root.StartsWith(candidate + "\\", StringComparison.OrdinalIgnoreCase))).ToArray();
+            var retained = new List<string>(normalised.Length);
+            var retainedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var root in normalised)
+            {
+                var hasAncestor = false;
+                for (var separator = root.IndexOf('\\'); separator >= 0;
+                    separator = root.IndexOf('\\', separator + 1))
+                {
+                    if (retainedSet.Contains(root[..separator]))
+                    {
+                        hasAncestor = true;
+                        break;
+                    }
+                }
+
+                if (hasAncestor) continue;
+                retained.Add(root);
+                retainedSet.Add(root);
+            }
+
+            return retained;
         }
 
         private static RegistryHive ParseHive(string hive) => hive.ToUpperInvariant() switch
@@ -110,12 +135,37 @@ namespace WinFIMLog.Snapshots
             AclState = state
         };
 
-        private void CaptureKey(RegistryKey key, string path, List<BaselineMember> output)
+        /// <summary>Captures a Registry subtree with iterative depth-first traversal.</summary>
+        /// <remarks>
+        /// Pending work stores paths rather than open RegistryKey handles. This keeps handle use
+        /// constant with respect to sibling count while the explicit stack avoids recursion depth
+        /// limits. Opening every child before pushing it can exhaust handles on wide keys.
+        /// </remarks>
+        private void CaptureKey(RegistryKey hive, string subKey, string path, List<BaselineMember> output)
         {
-            if (!isIncluded(path))
+            var pending = new Stack<(string SubKey, string Path)>();
+            pending.Push((subKey, path));
+            while (pending.Count > 0)
             {
-                return;
+                var work = pending.Pop();
+                try
+                {
+                    using var key = hive.OpenSubKey(work.SubKey, false);
+                    if (key is not null)
+                    {
+                        CaptureKeyNode(key, work.SubKey, work.Path, output, pending);
+                    }
+                }
+                catch (Exception exception) when (IsAccessDenied(exception))
+                { output.Add(Unavailable(work.Path, EvidenceAvailability.AccessDenied)); }
+                catch { output.Add(Unavailable(work.Path, EvidenceAvailability.Failed)); }
             }
+        }
+
+        private void CaptureKeyNode(RegistryKey key, string subKey, string path, List<BaselineMember> output,
+            Stack<(string SubKey, string Path)> pending)
+        {
+            if (!isIncluded(path)) return;
 
             var keyMember = new BaselineMember
             {
@@ -154,20 +204,18 @@ namespace WinFIMLog.Snapshots
                 catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.AccessDenied)); }
                 catch { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.Failed)); }
             }
-            foreach (var childName in Safe(key.GetSubKeyNames))
+
+            var childNames = Safe(key.GetSubKeyNames);
+            for (var index = childNames.Length - 1; index >= 0; index--)
             {
+                var childName = childNames[index];
                 if (!isIncluded(path + "\\" + childName))
                 {
                     continue;
                 }
 
-                try { using var child = key.OpenSubKey(childName, false); if (child is not null)
-                    {
-                        CaptureKey(child, path + "\\" + childName, output);
-                    }
-                }
-                catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.AccessDenied)); }
-                catch { output.Add(Unavailable(path + "\\" + childName, SnapshotNodeType.RegistryKey, EvidenceAvailability.Failed)); }
+                pending.Push((subKey.Length == 0 ? childName : subKey + "\\" + childName,
+                    path + "\\" + childName));
             }
         }
 
@@ -182,16 +230,7 @@ namespace WinFIMLog.Snapshots
             var hiveName = separator < 0 ? fullName : fullName[..separator];
             var subKey = separator < 0 ? string.Empty : fullName[(separator + 1)..];
             using var hive = RegistryKey.OpenBaseKey(ParseHive(hiveName), RegistryView.Default);
-            try
-            {
-                using var key = hive.OpenSubKey(subKey, false);
-                if (key is not null)
-                {
-                    CaptureKey(key, fullName.TrimEnd('\\'), output);
-                }
-            }
-            catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(fullName, EvidenceAvailability.AccessDenied)); }
-            catch { output.Add(Unavailable(fullName, EvidenceAvailability.Failed)); }
+            CaptureKey(hive, subKey, fullName.TrimEnd('\\'), output);
         }
 
         internal static bool IsAccessDenied(Exception exception) =>

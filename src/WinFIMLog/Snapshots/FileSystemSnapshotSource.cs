@@ -10,6 +10,7 @@ namespace WinFIMLog.Snapshots
     /// <summary>Portable enumerator for Tier 0 filesystem evidence.</summary>
     public sealed class FileSystemSnapshotSource
     {
+        private readonly Func<string, IEnumerable<string>> enumerateChildren;
         private readonly long hashSizeLimit;
         private readonly Func<string, bool> isIncluded;
 
@@ -17,14 +18,19 @@ namespace WinFIMLog.Snapshots
         {
             hashSizeLimit = hashLimitMb * 1024L * 1024L;
             this.isIncluded = isIncluded ?? (_ => true);
+            enumerateChildren = Directory.EnumerateFileSystemEntries;
         }
+
+        internal FileSystemSnapshotSource(int hashLimitMb, Func<string, bool> isIncluded,
+            Func<string, IEnumerable<string>> enumerateChildren) : this(hashLimitMb, isIncluded) =>
+            this.enumerateChildren = enumerateChildren;
 
         public IReadOnlyList<BaselineMember> Capture(IEnumerable<string> roots)
         {
             var output = new List<BaselineMember>();
             foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                CaptureNode(root, output);
+                CaptureTree(root, output);
             }
 
             return output;
@@ -70,14 +76,27 @@ namespace WinFIMLog.Snapshots
             catch { member.HashState = HashEvidenceState.Failed; }
         }
 
-        private void CaptureNode(string path, List<BaselineMember> output)
+        /// <summary>Captures a tree with iterative depth-first traversal.</summary>
+        /// <remarks>
+        /// An explicit stack avoids call-stack exhaustion on deeply nested trees. Children are
+        /// streamed onto it rather than materialized as an array so wide directories do not cause
+        /// large temporary allocations and already-yielded children survive late enumeration errors.
+        /// </remarks>
+        private void CaptureTree(string root, List<BaselineMember> output)
+        {
+            var pending = new Stack<string>();
+            pending.Push(root);
+            while (pending.Count > 0)
+            {
+                CaptureNode(pending.Pop(), output, pending);
+            }
+        }
+
+        private void CaptureNode(string path, List<BaselineMember> output, Stack<string> pending)
         {
             // Excluded directories prune their entire subtree; capture and notification
             // admission therefore use exactly the same effective-scope predicate.
-            if (!isIncluded(path))
-            {
-                return;
-            }
+            if (!isIncluded(path)) return;
 
             FileAttributes attributes;
             try { attributes = File.GetAttributes(path); }
@@ -110,16 +129,15 @@ namespace WinFIMLog.Snapshots
             output.Add(member);
 
             // Reparse points are evidence nodes, never traversal roots.
-            if (!directory || reparse)
-            {
-                return;
-            }
+            if (!directory || reparse) return;
 
             try
             {
-                foreach (var child in Directory.EnumerateFileSystemEntries(path))
+                // Baseline reconciliation is identity-based, so sibling visitation order is not
+                // significant. Stream names to avoid a potentially large per-directory array.
+                foreach (var child in enumerateChildren(path))
                 {
-                    CaptureNode(child, output);
+                    pending.Push(child);
                 }
             }
             catch (UnauthorizedAccessException) { member.AclState = EvidenceAvailability.AccessDenied; }

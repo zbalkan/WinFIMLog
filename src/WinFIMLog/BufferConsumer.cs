@@ -94,10 +94,14 @@ namespace WinFIMLog
             }
         }
 
+        /// <summary>Returns only the newest change for each case-insensitive entity identity.</summary>
+        /// <remarks>
+        /// A dictionary provides expected constant-time replacement and retains one reference per
+        /// entity. Do not replace it with GroupBy/OrderBy: that allocates grouping and sort buffers
+        /// on every persistence batch and can regress this reduction from linear time.
+        /// </remarks>
         private static Dictionary<string, T>.ValueCollection LatestByEntity<T>(List<T> changes) where T : IChange
         {
-            // GroupBy + OrderBy creates a grouping and a sort buffer for every entity. A single
-            // dictionary keeps only one reference per entity and performs no per-group sorting.
             var latest = new Dictionary<string, T>(changes.Count, StringComparer.OrdinalIgnoreCase);
             foreach (var change in changes)
             {
@@ -134,12 +138,15 @@ namespace WinFIMLog
                         {
                             foreach (var change in LatestByEntity(fsChanges))
                             {
-                                foreach (var previous in _ctx.FileSystemChanges.FindAll()
-                                    .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase) ||
-                                        (change.OldPath is not null && string.Equals(x.Entity, change.OldPath,
-                                            StringComparison.OrdinalIgnoreCase))).ToList())
+                                change.NormalizedEntity = LiteDbContext.NormalizeEntity(change.Entity);
+                                DeleteFileSystemProjection(change.NormalizedEntity);
+                                if (change.OldPath is not null)
                                 {
-                                    _ctx.FileSystemChanges.Delete(previous.Id);
+                                    var normalizedOldPath = LiteDbContext.NormalizeEntity(change.OldPath);
+                                    if (!string.Equals(normalizedOldPath, change.NormalizedEntity, StringComparison.Ordinal))
+                                    {
+                                        DeleteFileSystemProjection(normalizedOldPath);
+                                    }
                                 }
 
                                 _ctx.FileSystemChanges.Insert(change);
@@ -162,6 +169,15 @@ namespace WinFIMLog
             return false;
         }
 
+        private void DeleteFileSystemProjection(string normalizedEntity)
+        {
+            var previous = _ctx.FileSystemChanges.FindOne(x => x.NormalizedEntity == normalizedEntity);
+            if (previous is not null)
+            {
+                _ctx.FileSystemChanges.Delete(previous.Id);
+            }
+        }
+
         private bool ProcessRegistryChanges()
         {
             var regCount = Math.Min(_regStore.Count(), BUCKET_SIZE);
@@ -175,9 +191,9 @@ namespace WinFIMLog
                     {
                         if (_settings.EnableLocalDatabase)
                         {
-                            change.PreviousACL = _ctx.RegistryChanges.FindAll()
-                                .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase))
-                                .OrderByDescending(x => x.DateTime).FirstOrDefault()?.ACLs ?? string.Empty;
+                            change.NormalizedEntity = LiteDbContext.NormalizeEntity(change.Entity);
+                            change.PreviousACL = _ctx.RegistryChanges.FindOne(
+                                x => x.NormalizedEntity == change.NormalizedEntity)?.ACLs ?? string.Empty;
                         }
                         records.Add((FindingEventFactory.Registry(change), false));
                     }
@@ -187,8 +203,10 @@ namespace WinFIMLog
                         {
                             foreach (var change in LatestByEntity(regChanges))
                             {
-                                foreach (var previous in _ctx.RegistryChanges.FindAll()
-                                    .Where(x => string.Equals(x.Entity, change.Entity, StringComparison.OrdinalIgnoreCase)).ToList())
+                                change.NormalizedEntity = LiteDbContext.NormalizeEntity(change.Entity);
+                                var previous = _ctx.RegistryChanges.FindOne(
+                                    x => x.NormalizedEntity == change.NormalizedEntity);
+                                if (previous is not null)
                                 {
                                     _ctx.RegistryChanges.Delete(previous.Id);
                                 }

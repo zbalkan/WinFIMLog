@@ -46,9 +46,9 @@ request a Tier 0 reconciliation snapshot. See [ADR-0009](docs/adr/0009-attributi
 [ADR-0013](docs/adr/0013-health-and-coverage-contract.md), and
 [ADR-0014](docs/adr/0014-product-limitations.md).
 
-The repository is AGPL-3.0 licensed and contains the separately licensed
-LGPL-2.1 `NtfsReader` component; its licence is retained in
-[`src/NtfsReader/License.txt`](src/NtfsReader/License.txt).
+The repository is AGPL-3.0 licensed and consumes the separately licensed
+LGPL-2.1 `NtfsReader` component as a Git submodule; its licence is retained in
+[`src/NtfsReader/LICENSE`](src/NtfsReader/LICENSE).
 
 For ease of use, an ADMX file is created. So, the monitored paths, excluded paths (such as log folders), and excluded file extensions (such as log, evtx, etl) can be set via Group Policy. Suggested values for Group Policies can be found below.
 
@@ -278,6 +278,23 @@ Add `--remove-files` to remove the installed application directory as well. If y
 
 You need .NET 10 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish WinFIMLog release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
 
+`NtfsReader` is tracked as a Git submodule. Clone WinFIMLog with the submodule populated, or initialize it before restoring, building, or testing. The parent repository records the NtfsReader commit used by each WinFIMLog revision; the commands below therefore check out that pinned revision rather than an arbitrary current NtfsReader branch tip.[1]
+
+```powershell
+# New clone
+git clone --recurse-submodules https://github.com/zbalkan/WinFIMLog.git
+
+# Existing clone, after pulling a revision that introduces or changes a submodule
+git submodule update --init --recursive
+```
+
+When `.gitmodules` changes a submodule URL, synchronize the local configuration before initialization:
+
+```powershell
+git submodule sync --recursive
+git submodule update --init --recursive
+```
+
 Restore, build, and test the repository through the solution from its root:
 
 ```powershell
@@ -290,6 +307,10 @@ Operational contracts are documented in [ADR-0012](docs/adr/0012-event-contract.
 [ADR-0013](docs/adr/0013-health-and-coverage-contract.md),
 [ADR-0016](docs/adr/0016-performance-qualification.md),
 and the [architecture decisions](docs/adr/README.md).
+
+## References
+
+[1]: https://git-scm.com/docs/git-submodule "Git documentation: git-submodule"
 
 ## Special thanks to:
 

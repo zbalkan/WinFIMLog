@@ -4,29 +4,37 @@ using System.Globalization;
 
 namespace WinFIMLog.IO
 {
-    /// <summary>A disposable growable character buffer backed by <see cref="ArrayPool{T}"/>.</summary>
-    internal sealed class PooledCharBuffer : IDisposable
+    /// <summary>
+    /// A stack-backed character builder that rents a larger array only when its initial span is exceeded.
+    /// Any rented buffer is cleared and returned on disposal.
+    /// </summary>
+    internal ref struct PooledCharBuffer
     {
-        private char[]? buffer;
+        private Span<char> buffer;
+        private char[]? rented;
         private int length;
 
-        public PooledCharBuffer(int initialCapacity)
+        public PooledCharBuffer(Span<char> initialBuffer)
         {
-            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(initialCapacity);
-            buffer = ArrayPool<char>.Shared.Rent(initialCapacity);
+            if (initialBuffer.IsEmpty)
+            {
+                throw new ArgumentException("The initial buffer must not be empty.", nameof(initialBuffer));
+            }
+
+            buffer = initialBuffer;
         }
 
-        public void Append(ReadOnlySpan<char> value)
+        public void Append(scoped ReadOnlySpan<char> value)
         {
             EnsureCapacity(value.Length);
-            value.CopyTo(buffer!.AsSpan(length));
+            value.CopyTo(buffer[length..]);
             length += value.Length;
         }
 
         public void Append(char value)
         {
             EnsureCapacity(1);
-            buffer![length++] = value;
+            buffer[length++] = value;
         }
 
         public void Append(bool value) => Append(value ? "true" : "false");
@@ -108,36 +116,37 @@ namespace WinFIMLog.IO
             Append(characters[..written]);
         }
 
-        public override string ToString()
-        {
-            ObjectDisposedException.ThrowIf(buffer is null, this);
-            return new string(buffer, 0, length);
-        }
+        public override string ToString() => new(buffer[..length]);
 
         public void Dispose()
         {
-            var rented = buffer;
-            buffer = null;
+            var array = rented;
+            rented = null;
             length = 0;
-            if (rented is not null)
+            if (array is not null)
             {
-                ArrayPool<char>.Shared.Return(rented, clearArray: true);
+                ArrayPool<char>.Shared.Return(array, clearArray: true);
             }
         }
 
         private void EnsureCapacity(int additionalLength)
         {
-            ObjectDisposedException.ThrowIf(buffer is null, this);
-            if (additionalLength <= buffer!.Length - length)
+            if (additionalLength <= buffer.Length - length)
             {
                 return;
             }
 
             var requiredLength = checked(length + additionalLength);
             var expanded = ArrayPool<char>.Shared.Rent(Math.Max(requiredLength, checked(buffer.Length * 2)));
-            buffer.AsSpan(0, length).CopyTo(expanded);
-            ArrayPool<char>.Shared.Return(buffer, clearArray: true);
+            buffer[..length].CopyTo(expanded);
+
+            var previous = rented;
             buffer = expanded;
+            rented = expanded;
+            if (previous is not null)
+            {
+                ArrayPool<char>.Shared.Return(previous, clearArray: true);
+            }
         }
     }
 }

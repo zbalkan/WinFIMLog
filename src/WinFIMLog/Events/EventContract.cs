@@ -46,36 +46,44 @@ namespace WinFIMLog.Events
         {
             ArgumentNullException.ThrowIfNull(record);
 
-            using var buffer = new PooledCharBuffer(512);
-            AppendField(buffer, "SchemaVersion", record.SchemaVersion, hasPrevious: false);
-            AppendField(buffer, "EventId", record.EventId, hasPrevious: true);
-            AppendField(buffer, "RecordType", record.RecordType, hasPrevious: true);
-            AppendField(buffer, "OccurredAt", record.OccurredAt, hasPrevious: true);
-            AppendField(buffer, "RecordId", record.RecordId, hasPrevious: true);
-            AppendField(buffer, "ScopeHash", record.ScopeHash, hasPrevious: true);
-            AppendField(buffer, "Channel", record.Channel, hasPrevious: true);
-
-            foreach (var field in record.Fields)
+            Span<char> initialBuffer = stackalloc char[512];
+            var buffer = new PooledCharBuffer(initialBuffer);
+            try
             {
-                AppendField(buffer, field.Key, field.Value, hasPrevious: true);
-            }
+                AppendField(ref buffer, "SchemaVersion", record.SchemaVersion, hasPrevious: false);
+                AppendField(ref buffer, "EventId", record.EventId, hasPrevious: true);
+                AppendField(ref buffer, "RecordType", record.RecordType, hasPrevious: true);
+                AppendField(ref buffer, "OccurredAt", record.OccurredAt, hasPrevious: true);
+                AppendField(ref buffer, "RecordId", record.RecordId, hasPrevious: true);
+                AppendField(ref buffer, "ScopeHash", record.ScopeHash, hasPrevious: true);
+                AppendField(ref buffer, "Channel", record.Channel, hasPrevious: true);
 
-            return buffer.ToString();
+                foreach (var field in record.Fields)
+                {
+                    AppendField(ref buffer, field.Key, field.Value, hasPrevious: true);
+                }
+
+                return buffer.ToString();
+            }
+            finally
+            {
+                buffer.Dispose();
+            }
         }
 
-        private static void AppendField(PooledCharBuffer buffer, ReadOnlySpan<char> name, object? value, bool hasPrevious)
+        private static void AppendField(ref PooledCharBuffer buffer, ReadOnlySpan<char> name, object? value, bool hasPrevious)
         {
             if (hasPrevious)
             {
                 buffer.Append('\n');
             }
 
-            AppendDisplayName(buffer, name);
+            AppendDisplayName(ref buffer, name);
             buffer.Append(": ");
-            AppendValue(buffer, value);
+            AppendValue(ref buffer, value);
         }
 
-        private static void AppendDisplayName(PooledCharBuffer buffer, ReadOnlySpan<char> name)
+        private static void AppendDisplayName(ref PooledCharBuffer buffer, ReadOnlySpan<char> name)
         {
             var wasLowerCase = false;
             for (var index = 0; index < name.Length; index++)
@@ -91,7 +99,7 @@ namespace WinFIMLog.Events
             }
         }
 
-        private static void AppendValue(PooledCharBuffer buffer, object? value)
+        private static void AppendValue(ref PooledCharBuffer buffer, object? value)
         {
             switch (value)
             {

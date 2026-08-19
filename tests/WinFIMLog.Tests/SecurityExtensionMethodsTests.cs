@@ -43,13 +43,24 @@ namespace WinFIMLog.Tests
         }
 
         [TestMethod]
+        public void AccountNameOrSidRetriesLocalLookupAfterDomainResolutionFails()
+        {
+            const string sid = "S-1-5-21-1000-2000-3000-4000";
+            var localLookupCount = 0;
+
+            var result = ExtensionMethods.AccountNameOrSid(
+                sid,
+                () => throw new Win32Exception(1789),
+                _ => ++localLookupCount == 2 ? @"LOCAL\\Alice" : null);
+
+            Assert.AreEqual(@"LOCAL\\Alice", result);
+            Assert.AreEqual(2, localLookupCount);
+        }
+
+        [TestMethod]
+        [OSCondition(OperatingSystems.Windows)]
         public void AccountNameOrSidReturnsSidWhenIdentityIsNotMapped()
         {
-            if (!OperatingSystem.IsWindows())
-            {
-                Assert.Inconclusive("IdentityNotMappedException requires Windows Principal support.");
-                return;
-            }
             const string sid = "S-1-5-21-1000-2000-3000-4001";
             var result = ExtensionMethods.AccountNameOrSid(
                 sid,
@@ -76,7 +87,7 @@ namespace WinFIMLog.Tests
         [TestMethod]
         public void FileSystemChangeKeepsAvailableAcl()
         {
-            const string acl = "{\"Owner\":\"CONTOSO\\\\Alice\"}";
+            const string acl = "Owner: CONTOSO\\Alice; PrimaryGroup: None; AceCount: 0";
 
             var result = FileSystemChange.GetAclOrEmpty(() => acl);
 
@@ -84,10 +95,10 @@ namespace WinFIMLog.Tests
         }
 
         [TestMethod]
-        public void AclStringPoolReusesEqualPayloads()
+        public void AclStringPoolReusesEqualKeyValuePayloads()
         {
             var pool = new AclStringPool();
-            var first = new string("{\"Owner\":\"CONTOSO\\\\Alice\"}".ToCharArray());
+            var first = new string("Owner: CONTOSO\\Alice; PrimaryGroup: None; AceCount: 0".ToCharArray());
             var duplicate = new string(first.ToCharArray());
 
             var canonical = pool.GetOrAdd(first);
@@ -107,5 +118,6 @@ namespace WinFIMLog.Tests
             Assert.AreSame(first, pool.GetOrAdd(new string('a', 2)));
             Assert.AreNotSame(uncached, secondUncached);
         }
+
     }
 }

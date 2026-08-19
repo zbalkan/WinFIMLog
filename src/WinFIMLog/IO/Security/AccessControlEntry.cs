@@ -1,13 +1,17 @@
-﻿using System.Collections.Generic;
+﻿using System.Security.AccessControl;
+using System.Security.Principal;
 
 namespace WinFIMLog.IO.Security
 {
-    public class AccessControlEntry
-    {
-        public bool IsInherited { get; set; }
-
-        public List<string> Permissions { get; set; }
-
-        public string UserOrGroup { get; set; }
-    }
+    /// <summary>
+    /// A compact typed view of a file-system or registry access control entry.
+    /// The SID and rights remain typed until the final text record is rendered.
+    /// </summary>
+    public readonly record struct AccessControlEntry(
+        SecurityIdentifier Identity,
+        uint Rights,
+        AccessControlType Type,
+        bool IsInherited,
+        InheritanceFlags InheritanceFlags,
+        PropagationFlags PropagationFlags);
 }

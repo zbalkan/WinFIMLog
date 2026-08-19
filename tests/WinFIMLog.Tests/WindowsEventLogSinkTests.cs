@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Events;
 using WinFIMLog.IO;
@@ -16,7 +15,7 @@ public sealed class WindowsEventLogSinkTests
     [DataRow(7794, "ConfigurationChanged", EventChannel.Operational, "WinFIMLog", EventLogEntryType.Warning)]
     [DataRow(7795, "BaselineFinding", EventChannel.Baseline, "WinFIMLog", EventLogEntryType.Warning)]
     [DataRow(7797, "SecurityAuditAttribution", EventChannel.Diagnostic, "WinFIMLog", EventLogEntryType.Information)]
-    public void Writes_json_to_the_selected_event_log_with_the_allocated_id_and_level(
+    public void Writes_key_value_text_to_the_selected_event_log_with_the_allocated_id_and_level(
         int eventId, string recordType, EventChannel channel, string expectedSource, EventLogEntryType expectedLevel)
     {
         string? source = null;
@@ -33,9 +32,9 @@ public sealed class WindowsEventLogSinkTests
         Assert.AreEqual(expectedSource, source);
         Assert.AreEqual(expectedLevel, level);
         Assert.AreEqual(eventId, writtenId);
-        using var json = JsonDocument.Parse(message!);
-        Assert.AreEqual(eventId, json.RootElement.GetProperty("eventId").GetInt32());
-        Assert.AreEqual(recordType, json.RootElement.GetProperty("recordType").GetString());
+        Assert.Contains($"Event Id: {eventId}", message!);
+        Assert.Contains($"Record Type: {recordType}", message);
+        Assert.IsFalse(message.Contains('{'));
     }
 
     [TestMethod]

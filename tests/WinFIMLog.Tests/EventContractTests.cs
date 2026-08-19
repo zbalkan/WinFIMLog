@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Events;
 
@@ -17,7 +16,7 @@ public sealed class EventContractTests
         Assert.AreEqual(expected, EventContract.IsSupported(version));
 
     [TestMethod]
-    public void Every_record_type_has_its_required_machine_readable_fields()
+    public void Every_record_type_has_its_required_key_value_fields()
     {
         AssertFields("FileSystemFinding", "category", "operation", "path", "currentSizeBytes", "previousSizeBytes", "currentAcl", "previousAcl", "objectType", "renameCorrelationMethod", "renameCorrelationConfidence", "attributionStatus");
         AssertFields("RegistryFinding", "category", "operation", "key", "hive", "currentAcl", "previousAcl", "attributionStatus");
@@ -43,18 +42,17 @@ public sealed class EventContractTests
                 ["bool"] = true
             });
 
-        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
-        var fields = json.RootElement.GetProperty("fields");
-        Assert.AreEqual(42L, fields.GetProperty("long").GetInt64());
-        Assert.AreEqual(1.5D, fields.GetProperty("double").GetDouble());
-        Assert.AreEqual(7, fields.GetProperty("int").GetInt32());
-        Assert.AreEqual(7790, fields.GetProperty("ushort").GetUInt16());
-        Assert.AreEqual(123UL, fields.GetProperty("ulong").GetUInt64());
-        Assert.IsTrue(fields.GetProperty("bool").GetBoolean());
+        var message = record.FormatEventLogMessage();
+        Assert.Contains("Long: 42", message);
+        Assert.Contains("Double: 1.5", message);
+        Assert.Contains("Int: 7", message);
+        Assert.Contains("Ushort: 7790", message);
+        Assert.Contains("Ulong: 123", message);
+        Assert.Contains("Bool: true", message);
     }
 
     [TestMethod]
-    public void Fields_support_boxed_timestamp_types_used_by_event_producers()
+    public void Fields_support_timestamp_types_used_by_event_producers()
     {
         var dateTime = new DateTime(2026, 8, 17, 12, 34, 56, DateTimeKind.Utc);
         var dateTimeOffset = new DateTimeOffset(2026, 8, 17, 12, 34, 56, TimeSpan.Zero);
@@ -65,42 +63,24 @@ public sealed class EventContractTests
                 ["dateTimeOffset"] = dateTimeOffset
             }, EventChannel.Baseline);
 
-        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
-        var fields = json.RootElement.GetProperty("fields");
-        Assert.AreEqual(dateTime, fields.GetProperty("dateTime").GetDateTime());
-        Assert.AreEqual(dateTimeOffset, fields.GetProperty("dateTimeOffset").GetDateTimeOffset());
+        var message = record.FormatEventLogMessage();
+        Assert.Contains($"Date Time: {dateTime:O}", message);
+        Assert.Contains($"Date Time Offset: {dateTimeOffset:O}", message);
     }
 
     [TestMethod]
-    public void Undefined_acl_json_element_is_emitted_as_null()
+    public void Event_log_message_is_human_readable_key_value_text()
     {
         var record = EventContract.Create(7777, "FileSystemFinding", "01TEST", "sha256:test",
-            new Dictionary<string, object?> { ["previousAcl"] = default(JsonElement) });
+            new Dictionary<string, object?> { ["category"] = "Changed", ["optional"] = null });
 
-        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
-        Assert.AreEqual(JsonValueKind.Null,
-            json.RootElement.GetProperty("fields").GetProperty("previousAcl").ValueKind);
-    }
+        var message = record.FormatEventLogMessage();
 
-    [TestMethod]
-    [DataRow(7776, "FileSystemFinding", EventChannel.Operational)]
-    [DataRow(7787, "RegistryFinding", EventChannel.Operational)]
-    [DataRow(7795, "BaselineFinding", EventChannel.Baseline)]
-    [DataRow(7791, "CoverageGap", EventChannel.Operational)]
-    [DataRow(7790, "Health", EventChannel.Operational)]
-    [DataRow(7794, "ConfigurationChanged", EventChannel.Operational)]
-    [DataRow(7796, "Aggregation", EventChannel.Operational)]
-    public void Schema_fixture_is_machine_readable(int eventId, string type, EventChannel channel)
-    {
-        var record = EventContract.Create((ushort)eventId, type, "01TEST", "sha256:test",
-            new Dictionary<string, object?> { ["category"] = "Changed", ["optional"] = null }, channel);
-
-        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
-        Assert.AreEqual(EventContract.CurrentSchemaVersion, json.RootElement.GetProperty("schemaVersion").GetInt32());
-        Assert.AreEqual(eventId, json.RootElement.GetProperty("eventId").GetInt32());
-        Assert.AreEqual(type, json.RootElement.GetProperty("recordType").GetString());
-        Assert.AreEqual("Changed", json.RootElement.GetProperty("fields").GetProperty("category").GetString());
-        Assert.AreEqual(channel.ToString(), json.RootElement.GetProperty("channel").GetString());
+        Assert.StartsWith("Schema Version: 1\nEvent Id: 7777\nRecord Type: FileSystemFinding", message);
+        Assert.Contains("Category: Changed", message);
+        Assert.Contains("Optional: None", message);
+        Assert.IsFalse(message.Contains('{'));
+        Assert.DoesNotContain("\"fields\"", message);
     }
 
     private static void AssertFields(string recordType, params string[] names)
@@ -124,10 +104,29 @@ public sealed class EventContractTests
             _ => throw new AssertFailedException($"No event allocation for {recordType}")
         };
         var record = EventContract.Create(eventId, recordType, "record", "scope", fields, channel);
-        using var json = JsonDocument.Parse(record.FormatEventLogMessage());
+        var message = record.FormatEventLogMessage();
         foreach (var name in names)
         {
-            Assert.IsTrue(json.RootElement.GetProperty("fields").TryGetProperty(name, out _), $"{recordType}.{name} is absent");
+            Assert.Contains($"{DisplayName(name)}:", message, $"{recordType}.{name} is absent");
         }
+    }
+
+    private static string DisplayName(string name)
+    {
+        var builder = new System.Text.StringBuilder(name.Length + 4);
+        var wasLowerCase = false;
+        for (var index = 0; index < name.Length; index++)
+        {
+            var character = name[index];
+            if (index != 0 && char.IsUpper(character) && wasLowerCase)
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(index == 0 ? char.ToUpperInvariant(character) : character);
+            wasLowerCase = char.IsLower(character);
+        }
+
+        return builder.ToString();
     }
 }

@@ -1,15 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using WinFIMLog.IO;
 
 namespace WinFIMLog.Events
 {
-    [JsonConverter(typeof(JsonStringEnumConverter<EventChannel>))]
     public enum EventChannel
-    { Operational, Baseline, Diagnostic }
+    {
+        Operational,
+        Baseline,
+        Diagnostic
+    }
 
-    /// <summary>The stable, machine-readable Phase 5 transport envelope.</summary>
+    /// <summary>The stable event envelope used for durable delivery and Windows Event Log rendering.</summary>
     public sealed record EventContract(
         int SchemaVersion,
         ushort EventId,
@@ -22,54 +24,8 @@ namespace WinFIMLog.Events
     {
         public const int CurrentSchemaVersion = 1;
 
-        internal string FormatEventLogMessage() =>
-            JsonSerializer.Serialize(
-                this with { Fields = FieldsForEventLog(Fields) },
-                EventJsonContext.Default.EventContract);
-
-        // ACL evidence stays as text while it is persisted in LiteDB. Convert valid
-        // object/array payloads only in the short-lived event-log projection; storing a
-        // JsonElement in the outbox would be reconstructed by LiteDB as an invalid default value.
-        private static IReadOnlyDictionary<string, object?> FieldsForEventLog(
-            IReadOnlyDictionary<string, object?> fields)
-        {
-            var eventLogFields = new Dictionary<string, object?>(fields.Count);
-            foreach (var field in fields)
-            {
-                eventLogFields[field.Key] = field.Key is "currentAcl" or "previousAcl"
-                    ? StructuredJsonOrOriginal(field.Value)
-                    : field.Value;
-            }
-            return eventLogFields;
-        }
-
-        private static object? StructuredJsonOrOriginal(object? value)
-        {
-            // Records written by the earlier implementation can contain LiteDB-rehydrated,
-            // undefined JsonElement values. Emit null for that unrecoverable evidence rather
-            // than retrying the same failed event indefinitely.
-            if (value is JsonElement { ValueKind: JsonValueKind.Undefined })
-            {
-                return null;
-            }
-
-            if (value is not string text)
-            {
-                return value;
-            }
-
-            try
-            {
-                using var document = JsonDocument.Parse(text);
-                return document.RootElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array
-                    ? document.RootElement.Clone()
-                    : value;
-            }
-            catch (JsonException)
-            {
-                return value;
-            }
-        }
+        /// <summary>Renders the event as a human-readable key-value record without JSON serialization.</summary>
+        internal string FormatEventLogMessage() => EventLogMessageFormatter.Format(this);
 
         public static EventContract Create(ushort eventId, string recordType, string recordId,
             string scopeHash, IReadOnlyDictionary<string, object?> fields,
@@ -83,20 +39,105 @@ namespace WinFIMLog.Events
         public static bool IsSupported(int schemaVersion) => schemaVersion == CurrentSchemaVersion;
     }
 
-    // Fields is intentionally open-ended, so source generation cannot discover the
-    // boxed scalar types that are assigned to it at runtime. Keep every scalar used
-    // by event producers in the context; otherwise serialization fails when the
-    // object converter encounters (for example) a boxed Int64 health metric.
-    [JsonSerializable(typeof(EventContract))]
-    [JsonSerializable(typeof(long))]
-    [JsonSerializable(typeof(double))]
-    [JsonSerializable(typeof(int))]
-    [JsonSerializable(typeof(ushort))]
-    [JsonSerializable(typeof(ulong))]
-    [JsonSerializable(typeof(bool))]
-    [JsonSerializable(typeof(DateTime))]
-    [JsonSerializable(typeof(DateTimeOffset))]
-    [JsonSerializable(typeof(JsonElement))]
-    [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-    internal partial class EventJsonContext : JsonSerializerContext;
+    /// <summary>Formats event records directly into one final Windows Event Log message string.</summary>
+    internal static class EventLogMessageFormatter
+    {
+        public static string Format(EventContract record)
+        {
+            ArgumentNullException.ThrowIfNull(record);
+
+            using var buffer = new PooledCharBuffer(512);
+            AppendField(buffer, "SchemaVersion", record.SchemaVersion, hasPrevious: false);
+            AppendField(buffer, "EventId", record.EventId, hasPrevious: true);
+            AppendField(buffer, "RecordType", record.RecordType, hasPrevious: true);
+            AppendField(buffer, "OccurredAt", record.OccurredAt, hasPrevious: true);
+            AppendField(buffer, "RecordId", record.RecordId, hasPrevious: true);
+            AppendField(buffer, "ScopeHash", record.ScopeHash, hasPrevious: true);
+            AppendField(buffer, "Channel", record.Channel, hasPrevious: true);
+
+            foreach (var field in record.Fields)
+            {
+                AppendField(buffer, field.Key, field.Value, hasPrevious: true);
+            }
+
+            return buffer.ToString();
+        }
+
+        private static void AppendField(PooledCharBuffer buffer, ReadOnlySpan<char> name, object? value, bool hasPrevious)
+        {
+            if (hasPrevious)
+            {
+                buffer.Append('\n');
+            }
+
+            AppendDisplayName(buffer, name);
+            buffer.Append(": ");
+            AppendValue(buffer, value);
+        }
+
+        private static void AppendDisplayName(PooledCharBuffer buffer, ReadOnlySpan<char> name)
+        {
+            var wasLowerCase = false;
+            for (var index = 0; index < name.Length; index++)
+            {
+                var character = name[index];
+                if (index != 0 && char.IsUpper(character) && wasLowerCase)
+                {
+                    buffer.Append(' ');
+                }
+
+                buffer.Append(index == 0 ? char.ToUpperInvariant(character) : character);
+                wasLowerCase = char.IsLower(character);
+            }
+        }
+
+        private static void AppendValue(PooledCharBuffer buffer, object? value)
+        {
+            switch (value)
+            {
+                case null:
+                    buffer.Append("None");
+                    break;
+                case string text:
+                    buffer.Append(text);
+                    break;
+                case bool boolean:
+                    buffer.Append(boolean);
+                    break;
+                case int integer:
+                    buffer.Append(integer);
+                    break;
+                case long integer:
+                    buffer.Append(integer);
+                    break;
+                case ushort integer:
+                    buffer.Append((int)integer);
+                    break;
+                case ulong integer:
+                    buffer.Append(integer);
+                    break;
+                case double number:
+                    buffer.Append(number);
+                    break;
+                case DateTime timestamp:
+                    buffer.Append(timestamp);
+                    break;
+                case DateTimeOffset timestamp:
+                    buffer.Append(timestamp);
+                    break;
+                case EventChannel channel:
+                    buffer.Append(channel switch
+                    {
+                        EventChannel.Operational => "Operational",
+                        EventChannel.Baseline => "Baseline",
+                        EventChannel.Diagnostic => "Diagnostic",
+                        _ => "Unknown"
+                    });
+                    break;
+                default:
+                    buffer.Append(value.ToString() ?? "None");
+                    break;
+            }
+        }
+    }
 }

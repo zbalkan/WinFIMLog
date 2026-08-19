@@ -134,9 +134,9 @@ public sealed class FileSystemSnapshotSourceTests
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
     public void Locked_file_has_an_explicit_hash_state_on_windows()
     {
-        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("Windows file sharing semantics required."); return; }
         var root = Directory.CreateTempSubdirectory("winfimlog-lock-");
         var file = Path.Combine(root.FullName, "locked.txt");
         File.WriteAllText(file, "locked");
@@ -150,9 +150,9 @@ public sealed class FileSystemSnapshotSourceTests
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
     public void Named_ads_is_listed_but_unnamed_stream_remains_the_content_hash()
     {
-        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("NTFS alternate data streams required."); return; }
         var root = Directory.CreateTempSubdirectory("winfimlog-ads-");
         var file = Path.Combine(root.FullName, "streams.txt");
         try

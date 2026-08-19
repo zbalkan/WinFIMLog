@@ -1,5 +1,4 @@
 using System;
-using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Events;
 using WinFIMLog.FIM;
@@ -39,24 +38,21 @@ public sealed class FindingEventFactoryTests
     }
 
     [TestMethod]
-    public void Valid_acl_json_is_embedded_as_a_structured_event_field()
+    public void Key_value_acl_evidence_is_emitted_without_a_json_projection()
     {
         var change = FileChange(ChangeCategory.Created);
-        change.ACLs = """{"Owner":"BUILTIN\\Administrators","Permissions":[]}""";
-        change.PreviousACL = """{"Owner":"NT AUTHORITY\\SYSTEM","Permissions":[]}""";
+        change.ACLs = "Owner: BUILTIN\\Administrators; PrimaryGroup: None; AceCount: 0";
+        change.PreviousACL = "Owner: NT AUTHORITY\\SYSTEM; PrimaryGroup: None; AceCount: 0";
 
         var record = FindingEventFactory.FileSystem(change);
         Assert.IsInstanceOfType<string>(record.Fields["currentAcl"]);
         Assert.IsInstanceOfType<string>(record.Fields["previousAcl"]);
 
         var message = record.FormatEventLogMessage();
-        using var json = JsonDocument.Parse(message);
-        var fields = json.RootElement.GetProperty("fields");
 
-        Assert.AreEqual(JsonValueKind.Object, fields.GetProperty("currentAcl").ValueKind);
-        Assert.AreEqual("BUILTIN\\Administrators", fields.GetProperty("currentAcl").GetProperty("Owner").GetString());
-        Assert.AreEqual(JsonValueKind.Object, fields.GetProperty("previousAcl").ValueKind);
-        Assert.DoesNotContain("\\u0022", message);
+        Assert.Contains("Current Acl: Owner: BUILTIN\\Administrators; PrimaryGroup: None; AceCount: 0", message);
+        Assert.Contains("Previous Acl: Owner: NT AUTHORITY\\SYSTEM; PrimaryGroup: None; AceCount: 0", message);
+        Assert.IsFalse(message.Contains('{'));
     }
 
     [TestMethod]

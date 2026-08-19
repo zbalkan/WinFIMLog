@@ -54,7 +54,7 @@ public sealed class SnapshotCoordinationTests
         Assert.AreEqual(TimeSpan.FromSeconds(1), SnapshotService.RetryDelay(1));
         Assert.AreEqual(TimeSpan.FromSeconds(8), SnapshotService.RetryDelay(4));
         Assert.AreEqual(TimeSpan.FromSeconds(256), SnapshotService.RetryDelay(20));
-        Assert.IsTrue(SnapshotService.RetryDelay(20) < TimeSpan.FromHours(6));
+        Assert.IsLessThan(TimeSpan.FromHours(6), SnapshotService.RetryDelay(20));
     }
 
     private sealed class RecordingHealth : IHealthReporter

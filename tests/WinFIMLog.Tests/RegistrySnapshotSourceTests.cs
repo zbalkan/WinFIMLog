@@ -11,9 +11,9 @@ namespace WinFIMLog.Tests;
 public sealed class RegistrySnapshotSourceTests
 {
     [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
     public void Capture_prunes_excluded_registry_subtrees()
     {
-        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("Windows Registry required."); return; }
         var path = $@"Software\WinFIMLogTests\{Guid.NewGuid():N}";
         using (var root = Registry.CurrentUser.CreateSubKey(path))
         {
@@ -34,9 +34,9 @@ public sealed class RegistrySnapshotSourceTests
     }
 
     [TestMethod]
+    [OSCondition(OperatingSystems.Windows)]
     public void Capture_records_typed_values_and_key_acl_evidence()
     {
-        if (!OperatingSystem.IsWindows()) { Assert.Inconclusive("Windows Registry required."); return; }
         var path = $@"Software\WinFIMLogTests\{Guid.NewGuid():N}";
         using (var key = Registry.CurrentUser.CreateSubKey(path))
         {
@@ -49,7 +49,7 @@ public sealed class RegistrySnapshotSourceTests
             var members = new RegistrySnapshotSource().Capture([root]);
             var expandedRoot = members.Single(x => x.NodeType == SnapshotNodeType.RegistryKey &&
                 x.Path.EndsWith(path, StringComparison.OrdinalIgnoreCase)).Path;
-            StringAssert.StartsWith(expandedRoot, @"HKEY_USERS\S-1-");
+            Assert.StartsWith(@"HKEY_USERS\S-1-", expandedRoot);
             var number = members.Single(x => x.Path == expandedRoot + @"\Number");
             Assert.AreEqual(RegistryValueKind.DWord.ToString(), number.RegistryValueKind);
             Assert.IsNotNull(number.RegistryValueData);

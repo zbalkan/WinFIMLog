@@ -1,59 +1,39 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Security.AccessControl;
 using System.Security.Principal;
-using System.Text.Json;
 using Microsoft.Win32;
 using WinFIMLog.Utils;
 
 namespace WinFIMLog.IO.Security
 {
-    /// <summary>
-    ///     ACE and ACL related extension methods
-    /// </summary>
+    /// <summary>ACE and ACL related extension methods.</summary>
     public static class ExtensionMethods
     {
-        private static readonly AclStringPool AclStrings = new();
+        /// <summary>Gets a human-readable key-value ACL for a file-system path.</summary>
+        public static string GetACL(this string path)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            var accessControlList = OfFileSystem(new FileInfo(path));
+            if (accessControlList is null)
+            {
+                return string.Empty;
+            }
 
-        /// <summary>
-        ///     Get custom formatted ACL
-        /// </summary>
-        /// <param name="path">
-        ///     File path
-        /// </param>
-        /// <returns>
-        ///     Custom formatted ACL
-        /// </returns>
-        /// <exception cref="System.Security.SecurityException">
-        /// </exception>
-        /// <exception cref="UnauthorizedAccessException">
-        /// </exception>
-        /// <exception cref="NotSupportedException">
-        /// </exception>
-        /// <exception cref="PathTooLongException">
-        /// </exception>
-        public static string GetACL(this string path) => ToJson(new AccessControlList().OfFileSystem(new FileInfo(path)));
+            using (accessControlList)
+            {
+                return AccessControlListFormatter.Format(accessControlList);
+            }
+        }
 
-        /// <summary>
-        ///     Get custom formatted ACL
-        /// </summary>
-        /// <param name="key">
-        ///     Registry key
-        /// </param>
-        /// <returns>
-        ///     Custom formatted ACL
-        /// </returns>
-        /// <exception cref="System.Security.SecurityException">
-        /// </exception>
-        /// <exception cref="IdentityNotMappedException">
-        /// </exception>
-        /// <exception cref="SystemException">
-        /// </exception>
-        public static string GetACL(this RegistryKey key) => ToJson(new AccessControlList().OfRegistryKey(key));
+        /// <summary>Gets a human-readable key-value ACL for a registry key.</summary>
+        public static string GetACL(this RegistryKey key)
+        {
+            ArgumentNullException.ThrowIfNull(key);
+            using var accessControlList = OfRegistryKey(key);
+            return AccessControlListFormatter.Format(accessControlList);
+        }
 
         internal static string AccountNameOrSid(
             string identityValue,
@@ -71,30 +51,32 @@ namespace WinFIMLog.IO.Security
 
             try
             {
-                return translate() is NTAccount account
-                    ? account.Value
-                    : identityValue;
+                return translate() is NTAccount account ? account.Value : identityValue;
             }
-            catch (IdentityNotMappedException ex)
+            catch (IdentityNotMappedException)
             {
-                Debug.WriteLine(ex);
-                return identityValue;
+                return LocalAccountOrSid(identityValue, localLookup);
             }
-            catch (Win32Exception ex)
+            catch (Win32Exception)
             {
                 // Domain identities cannot always be resolved (for example, while a laptop is
-                // offline or its domain trust is unavailable). The SID still identifies the
-                // principal and allows ACL collection to continue without losing the value.
-                Debug.WriteLine(ex);
-                return identityValue;
+                // offline or its domain trust is unavailable). Refresh the local resolver before
+                // preserving the SID as the final stable evidence.
+                return LocalAccountOrSid(identityValue, localLookup);
             }
         }
 
+        private static string LocalAccountOrSid(string identityValue, Func<string, string?>? localLookup)
+        {
+            var localAccount = localLookup?.Invoke(identityValue);
+            return string.IsNullOrWhiteSpace(localAccount) ? identityValue : localAccount;
+        }
+
         /// <summary>
-        ///     Resolve an identity to its account name, falling back to its stable SID when Windows
-        ///     cannot contact the account's domain or does not know the identity.
+        /// Resolves an identity through the local logon-session cache first, then Windows account
+        /// translation, and finally preserves the SID when no account name is available.
         /// </summary>
-        private static string AccountNameOrSid(IdentityReference identity)
+        internal static string AccountNameOrSid(IdentityReference identity)
         {
             ArgumentNullException.ThrowIfNull(identity);
             return AccountNameOrSid(
@@ -103,167 +85,114 @@ namespace WinFIMLog.IO.Security
                 LocalSidAccountResolver.Resolve);
         }
 
-        private static IEnumerable<string> ListFlags<T>(this T value) where T : struct, Enum
+        private static AccessControlList? OfFileSystem(FileInfo fileInfo)
         {
-            // Check that this is really a "flags" enum:
-            if (!Attribute.IsDefined(typeof(T), typeof(FlagsAttribute)))
-            {
-                yield return Enum.GetName(value) ?? string.Empty;
-                yield break;
-            }
-
-            foreach (var flag in Enum.GetNames<T>())
-            {
-                yield return flag;
-            }
-        }
-
-        private static AccessControlList? OfFileSystem(this AccessControlList acl, FileInfo fileInfo)
-        {
-            FileSecurity fileSystemSecurity;
+            FileSecurity security;
             try
             {
-                fileSystemSecurity = fileInfo.GetAccessControl();
+                security = fileInfo.GetAccessControl();
             }
             catch (FileNotFoundException)
             {
-                return default;
+                return null;
             }
 
-            acl.Owner = OwnerName(fileSystemSecurity);
-            acl.PrimaryGroupOfOwner = PrimaryGroupOfOwnerName(fileSystemSecurity);
-            acl.Permissions = fileSystemSecurity
-                .GetAccessRules(true, true, typeof(NTAccount))
-                .Cast<FileSystemAccessRule>()
-                .Select(rule => rule.ToAce())
-                .ToList();
-
-            return acl;
+            return Capture(security);
         }
 
-        /// <summary>
-        ///     Get formatted ACL of a Registry key
-        /// </summary>
-        /// <param name="acl">
-        ///     ACL object
-        /// </param>
-        /// <param name="key">
-        ///     Registry key
-        /// </param>
-        /// <returns>
-        ///     Formatted ACL
-        /// </returns>
-        /// <exception cref="System.Security.SecurityException">
-        /// </exception>
-        /// <exception cref="IdentityNotMappedException">
-        /// </exception>
-        /// <exception cref="SystemException">
-        /// </exception>
-        private static AccessControlList OfRegistryKey(this AccessControlList acl, RegistryKey key)
+        private static AccessControlList OfRegistryKey(RegistryKey key)
         {
             try
             {
-                var registryPermissions = key.GetAccessControl(AccessControlSections.All);
-                acl.Owner = registryPermissions.GetOwner(typeof(NTAccount))?.Value ?? string.Empty;
-                acl.PrimaryGroupOfOwner = registryPermissions.GetGroup(typeof(NTAccount))?.Value ?? string.Empty;
-                acl.Permissions = registryPermissions
-                    .GetAccessRules(true, true, typeof(NTAccount))
-                    .Cast<RegistryAccessRule>()
-                    .Select(rule => rule.ToAce())
-                    .ToList();
+                return Capture(key.GetAccessControl(AccessControlSections.All));
             }
             catch (Exception)
             {
-                // return same acl
+                return new AccessControlList(0);
             }
-
-            return acl;
         }
 
-        /// <summary>
-        ///     Translate file owner name from SID
-        /// </summary>
-        /// <param name="fileSecurity">
-        /// </param>
-        /// <returns>
-        ///     Translated owner name, original SID or empty string.
-        /// </returns>
-        /// <exception cref="ArgumentNullException">
-        /// </exception>
-        private static string OwnerName(FileSecurity fileSecurity)
+        private static AccessControlList Capture(FileSecurity security)
         {
-            ArgumentNullException.ThrowIfNull(fileSecurity);
+            ArgumentNullException.ThrowIfNull(security);
+            var rules = security.GetAccessRules(true, true, typeof(SecurityIdentifier));
+            var accessControlList = new AccessControlList(rules.Count)
+            {
+                Owner = GetSecurityIdentifierOrNull(() => security.GetOwner(typeof(SecurityIdentifier))),
+                PrimaryGroupOfOwner = GetSecurityIdentifierOrNull(() => security.GetGroup(typeof(SecurityIdentifier)))
+            };
+
             try
             {
-                var sid = fileSecurity.GetOwner(typeof(SecurityIdentifier));
-                if (sid == null)
+                foreach (FileSystemAccessRule rule in rules)
                 {
-                    return string.Empty;
+                    accessControlList.Add(rule.ToAce());
                 }
 
-                return AccountNameOrSid(sid);
+                return accessControlList;
             }
-            catch (Exception ex)
+            catch
             {
-                Debug.WriteLine(ex);
-                return string.Empty;
+                accessControlList.Dispose();
+                throw;
             }
         }
 
-        /// <summary>
-        ///     Translate primary group name from SID
-        /// </summary>
-        /// <param name="fileSecurity">
-        ///     FileSecurity object to parse
-        /// </param>
-        /// <returns>
-        ///     Transled group name, original SID or empty string.
-        /// </returns>
-        /// <exception cref="ArgumentNullException">
-        /// </exception>
-        private static string PrimaryGroupOfOwnerName(FileSecurity fileSecurity)
+        private static AccessControlList Capture(RegistrySecurity security)
         {
-            ArgumentNullException.ThrowIfNull(fileSecurity);
+            ArgumentNullException.ThrowIfNull(security);
+            var rules = security.GetAccessRules(true, true, typeof(SecurityIdentifier));
+            var accessControlList = new AccessControlList(rules.Count)
+            {
+                Owner = GetSecurityIdentifierOrNull(() => security.GetOwner(typeof(SecurityIdentifier))),
+                PrimaryGroupOfOwner = GetSecurityIdentifierOrNull(() => security.GetGroup(typeof(SecurityIdentifier)))
+            };
+
             try
             {
-                var primaryGroup = fileSecurity.GetGroup(typeof(SecurityIdentifier));
-                if (primaryGroup == null)
+                foreach (RegistryAccessRule rule in rules)
                 {
-                    return string.Empty;
+                    accessControlList.Add(rule.ToAce());
                 }
 
-                return AccountNameOrSid(primaryGroup);
+                return accessControlList;
             }
-            catch (Exception ex)
+            catch
             {
-                Debug.WriteLine(ex);
-                return string.Empty;
+                accessControlList.Dispose();
+                throw;
             }
         }
 
-        private static AccessControlEntry ToAce(this RegistryAccessRule rule) => new()
+        private static SecurityIdentifier? GetSecurityIdentifierOrNull(Func<IdentityReference?> getIdentity)
         {
-            UserOrGroup = rule.IdentityReference.Value,
-            Permissions = rule.RegistryRights.ListFlags().ToList(),
-            IsInherited = rule.IsInherited
-        };
-
-        private static AccessControlEntry ToAce(this FileSystemAccessRule rule) => new()
-        {
-            UserOrGroup = rule.IdentityReference.Value,
-            Permissions = rule.FileSystemRights.ListFlags().ToList(),
-            IsInherited = rule.IsInherited
-        };
-
-        private static string ToJson(AccessControlList? ac)
-        {
-            if (ac is null)
+            try
             {
-                return string.Empty;
+                return getIdentity() as SecurityIdentifier;
             }
-
-            var json = JsonSerializer.Serialize(ac, AclJsonSerializerContext.Default.AccessControlList);
-            return AclStrings.GetOrAdd(json);
+            catch (Exception)
+            {
+                return null;
+            }
         }
+
+        private static AccessControlEntry ToAce(this RegistryAccessRule rule) => new(
+            ToSecurityIdentifier(rule.IdentityReference),
+            unchecked((uint)rule.RegistryRights),
+            rule.AccessControlType,
+            rule.IsInherited,
+            rule.InheritanceFlags,
+            rule.PropagationFlags);
+
+        private static AccessControlEntry ToAce(this FileSystemAccessRule rule) => new(
+            ToSecurityIdentifier(rule.IdentityReference),
+            unchecked((uint)rule.FileSystemRights),
+            rule.AccessControlType,
+            rule.IsInherited,
+            rule.InheritanceFlags,
+            rule.PropagationFlags);
+
+        private static SecurityIdentifier ToSecurityIdentifier(IdentityReference identity) =>
+            identity as SecurityIdentifier ?? new SecurityIdentifier(identity.Value);
     }
 }

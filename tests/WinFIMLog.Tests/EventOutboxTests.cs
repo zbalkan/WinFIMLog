@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using LiteDB;
 using Microsoft.Extensions.Logging;
@@ -130,22 +129,19 @@ public sealed class EventOutboxTests
     }
 
     [TestMethod]
-    public void Outbox_keeps_acl_evidence_as_text_and_projects_it_as_json_when_delivered()
+    public void Outbox_keeps_acl_evidence_as_key_value_text_when_delivered()
     {
+        const string acl = "Owner: BUILTIN\\Administrators; PrimaryGroup: None; AceCount: 0";
         var record = EventContract.Create(7777, "FileSystemFinding", "acl", "scope",
-            new Dictionary<string, object?>
-            {
-                ["previousAcl"] = """{"Owner":"BUILTIN\\Administrators","Permissions":[]}"""
-            });
+            new Dictionary<string, object?> { ["previousAcl"] = acl });
         outbox.Enqueue(record);
 
         var stored = context.EventOutbox.FindById(new BsonValue("acl"));
         Assert.IsInstanceOfType<string>(stored.Fields["previousAcl"]);
 
-        using var message = JsonDocument.Parse(stored.ToEventContract().FormatEventLogMessage());
-        var previousAcl = message.RootElement.GetProperty("fields").GetProperty("previousAcl");
-        Assert.AreEqual(JsonValueKind.Object, previousAcl.ValueKind);
-        Assert.AreEqual("BUILTIN\\Administrators", previousAcl.GetProperty("Owner").GetString());
+        var message = stored.ToEventContract().FormatEventLogMessage();
+        Assert.Contains($"Previous Acl: {acl}", message);
+        Assert.IsFalse(message.Contains('{'));
     }
 
     [TestMethod]

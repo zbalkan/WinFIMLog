@@ -42,6 +42,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - name: Run DevSkim scanner
         uses: microsoft/DevSkim-Action@v1.0.16

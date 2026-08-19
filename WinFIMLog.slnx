@@ -6,7 +6,7 @@
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
   </Folder>
-  <Project Path="src/NtfsReader/NtfsReader.csproj" />
+  <Project Path="src/NtfsReader/src/NtfsReader/NtfsReader.csproj" />
   <Project Path="src/WinFIMLog/WinFIMLog.csproj" />
   <Project Path="tests/WinFIMLog.Tests/WinFIMLog.Tests.csproj" />
 </Solution>

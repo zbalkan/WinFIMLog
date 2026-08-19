@@ -1,0 +1,4 @@
+[submodule "src/NtfsReader"]
+	path = src/NtfsReader
+	url = https://github.com/zbalkan/NtfsReader.git
+	branch = master

@@ -1,7 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Linq;
-using System.Text.RegularExpressions;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Win32;
 using NUlid;
@@ -136,7 +134,7 @@ namespace WinFIMLog.FIM
             try
             {
                 var value = key.GetValue(ValueName);
-                if (value is null || string.IsNullOrEmpty(value.ToString()))
+                if (value is null)
                 {
                     return null;
                 }
@@ -145,10 +143,9 @@ namespace WinFIMLog.FIM
                 {
                     RegistryValueKind.DWord => Convert.ToString((int)value),
                     RegistryValueKind.QWord => Convert.ToString((long)value),
-                    RegistryValueKind.String or RegistryValueKind.ExpandString => value.ToString(),
-                    RegistryValueKind.Binary => string.Join(" ", ((byte[])value).Select(item => $"{item:x2}")),
+                    RegistryValueKind.Binary => FormatBinaryValue((byte[])value),
                     RegistryValueKind.MultiString => string.Join(" ", (string[])value),
-                    _ => value.ToString()
+                    _ => ValueOrNull(value)
                 };
             }
             catch (Exception exception)
@@ -156,6 +153,37 @@ namespace WinFIMLog.FIM
                 MarkEvidencePartial(exception.GetType().Name);
                 return null;
             }
+        }
+
+        internal static string FormatBinaryValue(byte[] value)
+        {
+            if (value.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            return string.Create(value.Length * 3 - 1, value, static (destination, bytes) =>
+            {
+                const string hexCharacters = "0123456789abcdef";
+                var written = 0;
+                for (var index = 0; index < bytes.Length; index++)
+                {
+                    if (index > 0)
+                    {
+                        destination[written++] = ' ';
+                    }
+
+                    var current = bytes[index];
+                    destination[written++] = hexCharacters[current >> 4];
+                    destination[written++] = hexCharacters[current & 0x0f];
+                }
+            });
+        }
+
+        private static string? ValueOrNull(object value)
+        {
+            var text = value.ToString();
+            return string.IsNullOrEmpty(text) ? null : text;
         }
 
         private void MarkEvidencePartial(string reason)
@@ -199,23 +227,33 @@ namespace WinFIMLog.FIM
             return RegistryHive.Users;
         }
 
-        [GeneratedRegex(@"^[^\\]+\\(.+?)(\\)?$")]
-        private static partial Regex StrippedKeyNameRegex();
-
-        private static string StripFullName(string fullName, string valueName)
+        internal static string StripFullName(string fullName, string valueName)
         {
             if (string.IsNullOrEmpty(fullName))
             {
                 return string.Empty;
             }
 
-            if (!string.IsNullOrEmpty(valueName))
+            var end = fullName.Length;
+            if (!string.IsNullOrEmpty(valueName) &&
+                end > valueName.Length &&
+                fullName.AsSpan(0, end).EndsWith(valueName, StringComparison.Ordinal) &&
+                fullName[end - valueName.Length - 1] == '\\')
             {
-                var valuePattern = $@"\\{Regex.Escape(valueName)}$";
-                fullName = Regex.Replace(fullName, valuePattern, string.Empty);
+                end -= valueName.Length + 1;
             }
 
-            return StrippedKeyNameRegex().Replace(fullName, "$1");
+            var path = fullName.AsSpan(0, end);
+            var hiveSeparator = path.IndexOf('\\');
+            if (hiveSeparator <= 0 || hiveSeparator == path.Length - 1)
+            {
+                return end == fullName.Length ? fullName : fullName[..end];
+            }
+
+            // The registry API consumes this subkey string synchronously; materialize only the
+            // final retained argument rather than a regex pattern, intermediate replacement, and
+            // captured-group result.
+            return path[(hiveSeparator + 1)..].ToString();
         }
     }
 }

@@ -39,8 +39,10 @@ namespace WinFIMLog.Configuration
                 return normalisedPath.StartsWith(normalisedRoot, StringComparison.OrdinalIgnoreCase);
             }
 
-            return normalisedPath.StartsWith(normalisedRoot + "\\", StringComparison.OrdinalIgnoreCase) ||
-                normalisedPath.StartsWith(normalisedRoot + "/", StringComparison.OrdinalIgnoreCase);
+            return normalisedPath.AsSpan().StartsWith(normalisedRoot, StringComparison.OrdinalIgnoreCase) &&
+                   normalisedPath.Length > normalisedRoot.Length &&
+                   (normalisedPath[normalisedRoot.Length] == '\\' ||
+                    normalisedPath[normalisedRoot.Length] == '/');
         }
     }
 }

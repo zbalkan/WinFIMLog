@@ -20,32 +20,32 @@ namespace WinFIMLog.Configuration
 
         public static bool Matches(string configuredName, string eventName)
         {
-            if (IsWithin(configuredName, eventName))
+            if (IsWithin(configuredName.AsSpan(), eventName.AsSpan()))
             {
                 return true;
             }
 
-            if (!configuredName.StartsWith(CurrentUser, StringComparison.OrdinalIgnoreCase) ||
-                !eventName.StartsWith(Users + "\\", StringComparison.OrdinalIgnoreCase))
+            var configured = configuredName.AsSpan();
+            var eventPath = eventName.AsSpan();
+            if (!configured.StartsWith(CurrentUser, StringComparison.OrdinalIgnoreCase) ||
+                !eventPath.StartsWith(Users, StringComparison.OrdinalIgnoreCase) ||
+                eventPath.Length <= Users.Length || eventPath[Users.Length] != '\\')
             {
                 return false;
             }
 
-            var afterUsers = eventName[(Users.Length + 1)..];
+            var afterUsers = eventPath[(Users.Length + 1)..];
             var separator = afterUsers.IndexOf('\\');
-            if (separator <= 0)
+            if (separator <= 0 ||
+                !afterUsers[..separator].StartsWith("S-1-", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
-            var sid = afterUsers[..separator];
-            if (!sid.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            var perUserName = CurrentUser + afterUsers[separator..];
-            return IsWithin(configuredName, perUserName);
+            // Compare the configured HKCU suffix to the event's SID-hive suffix directly.
+            // This avoids creating the short-lived "HKEY_CURRENT_USER" + suffix string for
+            // every loaded-user-hive event.
+            return IsWithin(configured[CurrentUser.Length..], afterUsers[separator..]);
         }
 
         public bool IsMatch(string keyName)
@@ -59,8 +59,17 @@ namespace WinFIMLog.Configuration
                    !_excluded.Any(pattern => Matches(pattern, keyName));
         }
 
-        private static bool IsWithin(string configuredName, string eventName) =>
-            eventName.Equals(configuredName, StringComparison.OrdinalIgnoreCase) ||
-            eventName.StartsWith(configuredName.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+        private static bool IsWithin(ReadOnlySpan<char> configuredName, ReadOnlySpan<char> eventName)
+        {
+            if (eventName.Equals(configuredName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var configuredLength = configuredName.TrimEnd('\\').Length;
+            return eventName.Length > configuredLength &&
+                   eventName.StartsWith(configuredName[..configuredLength], StringComparison.OrdinalIgnoreCase) &&
+                   eventName[configuredLength] == '\\';
+        }
     }
 }

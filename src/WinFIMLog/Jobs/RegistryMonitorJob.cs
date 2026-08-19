@@ -1,7 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Diagnostics.Tracing.Parsers;
@@ -152,29 +150,124 @@ namespace WinFIMLog.Jobs
         internal static string CombineFullKeyName(string? cachedKeyName, string? eventKeyName,
             string? eventValueName)
         {
-            var fullNameBuilder = new StringBuilder();
-            AppendSegment(fullNameBuilder, cachedKeyName);
-            AppendSegment(fullNameBuilder, eventKeyName);
-            AppendSegment(fullNameBuilder, eventValueName);
+            var segmentCount = CountSegments(cachedKeyName, eventKeyName, eventValueName);
+            if (segmentCount == 0)
+            {
+                return string.Empty;
+            }
 
-            var fullName = fullNameBuilder.ToString();
-            fullName = RegistryMachineRegex().Replace(fullName, "HKEY_LOCAL_MACHINE");
-            return RegistryUserRegex().Replace(fullName, "HKEY_USERS");
+            var length = GetSegmentLength(cachedKeyName) + GetSegmentLength(eventKeyName) +
+                         GetSegmentLength(eventValueName) + segmentCount - 1;
+            var fullName = string.Create(length, (cachedKeyName, eventKeyName, eventValueName),
+                static (destination, segments) =>
+                {
+                    var written = 0;
+                    AppendSegment(destination, ref written, segments.cachedKeyName);
+                    AppendSegment(destination, ref written, segments.eventKeyName);
+                    AppendSegment(destination, ref written, segments.eventValueName);
+                });
+
+            return NormalizeRegistryHivePrefixes(fullName);
         }
 
-        private static void AppendSegment(StringBuilder builder, string? segment)
+        private static int CountSegments(string? cachedKeyName, string? eventKeyName, string? eventValueName) =>
+            (string.IsNullOrWhiteSpace(cachedKeyName) ? 0 : 1) +
+            (string.IsNullOrWhiteSpace(eventKeyName) ? 0 : 1) +
+            (string.IsNullOrWhiteSpace(eventValueName) ? 0 : 1);
+
+        private static int GetSegmentLength(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? 0 : value.Length;
+
+        private static void AppendSegment(Span<char> destination, ref int written, string? segment)
         {
             if (string.IsNullOrWhiteSpace(segment))
             {
                 return;
             }
 
-            if (builder.Length > 0)
+            if (written > 0)
             {
-                builder.Append('\\');
+                destination[written++] = '\\';
             }
 
-            builder.Append(segment);
+            segment.AsSpan().CopyTo(destination[written..]);
+            written += segment.Length;
+        }
+
+        private static string NormalizeRegistryHivePrefixes(string fullName)
+        {
+            const string machinePrefix = "\\REGISTRY\\MACHINE";
+            const string userPrefix = "\\REGISTRY\\USER";
+            const string machineReplacement = "HKEY_LOCAL_MACHINE";
+            const string userReplacement = "HKEY_USERS";
+
+            var source = fullName.AsSpan();
+            var normalizedLength = NormalizedLength(source, machinePrefix, machineReplacement,
+                userPrefix, userReplacement);
+            if (normalizedLength == source.Length)
+            {
+                return fullName;
+            }
+
+            return string.Create(normalizedLength, fullName, static (destination, value) =>
+            {
+                const string machinePrefix = "\\REGISTRY\\MACHINE";
+                const string userPrefix = "\\REGISTRY\\USER";
+                const string machineReplacement = "HKEY_LOCAL_MACHINE";
+                const string userReplacement = "HKEY_USERS";
+
+                var source = value.AsSpan();
+                var written = 0;
+                for (var index = 0; index < source.Length;)
+                {
+                    if (source[index] == '\\' &&
+                        source[index..].StartsWith(machinePrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        machineReplacement.AsSpan().CopyTo(destination[written..]);
+                        written += machineReplacement.Length;
+                        index += machinePrefix.Length;
+                    }
+                    else if (source[index] == '\\' &&
+                             source[index..].StartsWith(userPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        userReplacement.AsSpan().CopyTo(destination[written..]);
+                        written += userReplacement.Length;
+                        index += userPrefix.Length;
+                    }
+                    else
+                    {
+                        destination[written++] = source[index++];
+                    }
+                }
+            });
+        }
+
+        private static int NormalizedLength(ReadOnlySpan<char> source, string machinePrefix,
+            string machineReplacement, string userPrefix, string userReplacement)
+        {
+            var length = 0;
+            for (var index = 0; index < source.Length;)
+            {
+                if (source[index] == '\\' &&
+                    source[index..].StartsWith(machinePrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    length += machineReplacement.Length;
+                    index += machinePrefix.Length;
+                }
+                else if (source[index] == '\\' &&
+                         source[index..].StartsWith(userPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    length += userReplacement.Length;
+                    index += userPrefix.Length;
+                }
+                else
+                {
+                    length++;
+                    index++;
+                }
+            }
+
+            return length;
         }
 
         private bool IsMonitoredEvent(EffectiveSettings configuration, string keyName, int pid)
@@ -232,16 +325,6 @@ namespace WinFIMLog.Jobs
 
         private void UpdateCache(RegistryTraceData data) =>
                                                     _keyCache.Update(data.KeyHandle, data.KeyName);
-
-        #region Regex
-
-        [GeneratedRegex(@"\\REGISTRY\\MACHINE", RegexOptions.IgnoreCase, "en-US")]
-        private static partial Regex RegistryMachineRegex();
-
-        [GeneratedRegex(@"\\REGISTRY\\USER", RegexOptions.IgnoreCase, "en-US")]
-        private static partial Regex RegistryUserRegex();
-
-        #endregion Regex
 
         #region Dispose
 

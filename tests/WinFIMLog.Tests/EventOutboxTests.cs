@@ -125,7 +125,6 @@ public sealed class EventOutboxTests
         Assert.AreEqual("FileSystemFinding", stored.RecordType);
         Assert.AreEqual("scope", stored.ScopeHash);
         Assert.AreEqual("C:\\evidence.txt", stored.Fields["path"]);
-        Assert.AreEqual(EventChannel.Operational, stored.Channel);
     }
 
     [TestMethod]

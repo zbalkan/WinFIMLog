@@ -10,7 +10,6 @@ namespace WinFIMLog.Events
         public EventOutboxRecord()
         { }
 
-        public EventChannel Channel { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? DeliveredAt { get; set; }
         public int DeliveryAttempts { get; set; }
@@ -26,6 +25,6 @@ namespace WinFIMLog.Events
         public string ScopeHash { get; set; } = string.Empty;
 
         public EventContract ToEventContract() => new(
-            SchemaVersion, EventId, RecordType, OccurredAt, Id, ScopeHash, Fields, Channel);
+            SchemaVersion, EventId, RecordType, OccurredAt, Id, ScopeHash, Fields);
     }
 }

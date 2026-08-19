@@ -39,7 +39,7 @@ namespace WinFIMLog.Jobs
                             ["oldPath"] = result.OldPath,
                             ["newPath"] = result.NewPath,
                             ["detectedAt"] = result.DetectedAt
-                        }, EventChannel.Baseline));
+                        }));
                     repository.RecordDeliveryAttempt(result, true);
                 }
                 catch (Exception exception)

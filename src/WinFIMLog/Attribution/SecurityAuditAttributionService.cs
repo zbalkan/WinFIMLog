@@ -123,7 +123,7 @@ namespace WinFIMLog.Attribution
                         ["oldValue"] = data.GetValueOrDefault("OldValue"),
                         ["newValue"] = data.GetValueOrDefault("NewValue"),
                         ["nativeEvidence"] = xml
-                    }, EventChannel.Diagnostic));
+                    }));
             }
             catch (Exception exception)
             {

@@ -43,23 +43,12 @@ namespace WinFIMLog.Events
                 [SecurityAuditAttribution] = "SecurityAuditAttribution"
             };
 
-        internal static void Validate(ushort eventId, string recordType, EventChannel channel)
+        internal static void Validate(ushort eventId, string recordType)
         {
             if (!RecordTypes.TryGetValue(eventId, out var expectedType) ||
                 !string.Equals(expectedType, recordType, StringComparison.Ordinal))
             {
                 throw new ArgumentException($"Event ID {eventId} is not allocated to record type '{recordType}'.");
-            }
-
-            var expectedChannel = eventId switch
-            {
-                BaselineFinding => EventChannel.Baseline,
-                SecurityAuditAttribution => EventChannel.Diagnostic,
-                _ => EventChannel.Operational
-            };
-            if (channel != expectedChannel)
-            {
-                throw new ArgumentException($"Event ID {eventId} must be written to the {expectedChannel} channel.");
             }
         }
 

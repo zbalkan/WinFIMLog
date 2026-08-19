@@ -10,13 +10,13 @@ namespace WinFIMLog.Tests;
 public sealed class WindowsEventLogSinkTests
 {
     [TestMethod]
-    [DataRow(7777, "FileSystemFinding", EventChannel.Operational, "WinFIMLog", EventLogEntryType.Information)]
-    [DataRow(7791, "CoverageGap", EventChannel.Operational, "WinFIMLog", EventLogEntryType.Error)]
-    [DataRow(7794, "ConfigurationChanged", EventChannel.Operational, "WinFIMLog", EventLogEntryType.Warning)]
-    [DataRow(7795, "BaselineFinding", EventChannel.Baseline, "WinFIMLog", EventLogEntryType.Warning)]
-    [DataRow(7797, "SecurityAuditAttribution", EventChannel.Diagnostic, "WinFIMLog", EventLogEntryType.Information)]
-    public void Writes_key_value_text_to_the_selected_event_log_with_the_allocated_id_and_level(
-        int eventId, string recordType, EventChannel channel, string expectedSource, EventLogEntryType expectedLevel)
+    [DataRow(7777, "FileSystemFinding", "WinFIMLog", EventLogEntryType.Information)]
+    [DataRow(7791, "CoverageGap", "WinFIMLog", EventLogEntryType.Error)]
+    [DataRow(7794, "ConfigurationChanged", "WinFIMLog", EventLogEntryType.Warning)]
+    [DataRow(7795, "BaselineFinding", "WinFIMLog", EventLogEntryType.Warning)]
+    [DataRow(7797, "SecurityAuditAttribution", "WinFIMLog", EventLogEntryType.Information)]
+    public void Writes_key_value_text_to_the_unified_event_log_with_the_allocated_id_and_level(
+        int eventId, string recordType, string expectedSource, EventLogEntryType expectedLevel)
     {
         string? source = null;
         string? message = null;
@@ -25,7 +25,7 @@ public sealed class WindowsEventLogSinkTests
         var sink = new WindowsEventLogSink((actualSource, actualMessage, actualLevel, actualId) =>
             (source, message, level, writtenId) = (actualSource, actualMessage, actualLevel, actualId));
         var record = EventContract.Create((ushort)eventId, recordType, "record", "scope",
-            new Dictionary<string, object?>(), channel);
+            new Dictionary<string, object?>());
 
         sink.Write(record);
 
@@ -34,6 +34,7 @@ public sealed class WindowsEventLogSinkTests
         Assert.AreEqual(eventId, writtenId);
         Assert.Contains($"Event Id: {eventId}", message!);
         Assert.Contains($"Record Type: {recordType}", message);
+        Assert.DoesNotContain("Channel:", message);
         Assert.IsFalse(message.Contains('{'));
     }
 
@@ -74,8 +75,4 @@ public sealed class WindowsEventLogSinkTests
         Assert.Throws<System.ArgumentException>(() => EventContract.Create(7790, "RegistryFinding",
             "record", "scope", new Dictionary<string, object?>()));
 
-    [TestMethod]
-    public void Contract_factory_rejects_an_id_on_the_wrong_channel() =>
-        Assert.Throws<System.ArgumentException>(() => EventContract.Create(7795, "BaselineFinding",
-            "record", "scope", new Dictionary<string, object?>()));
 }

@@ -34,7 +34,7 @@ namespace WinFIMLog.IO
 
         public void Write(EventContract record, bool error = false)
         {
-            EventIdCatalog.Validate(record.EventId, record.RecordType, record.Channel);
+            EventIdCatalog.Validate(record.EventId, record.RecordType);
             var (source, logName) = Source();
             EnsureSource(source, logName);
             writeEntry(source, record.FormatEventLogMessage(),

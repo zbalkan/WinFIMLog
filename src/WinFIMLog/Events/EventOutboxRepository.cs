@@ -77,7 +77,6 @@ namespace WinFIMLog.Events
                         OccurredAt = item.Record.OccurredAt,
                         ScopeHash = item.Record.ScopeHash,
                         Fields = new Dictionary<string, object?>(item.Record.Fields),
-                        Channel = item.Record.Channel,
                         Error = item.Error,
                         CreatedAt = DateTimeOffset.UtcNow,
                         NextAttemptAt = DateTimeOffset.MinValue

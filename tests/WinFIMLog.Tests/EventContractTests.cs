@@ -61,7 +61,7 @@ public sealed class EventContractTests
             {
                 ["dateTime"] = dateTime,
                 ["dateTimeOffset"] = dateTimeOffset
-            }, EventChannel.Baseline);
+            });
 
         var message = record.FormatEventLogMessage();
         Assert.Contains($"Date Time: {dateTime:O}", message);
@@ -91,19 +91,19 @@ public sealed class EventContractTests
             fields[name] = name.EndsWith("At", StringComparison.Ordinal) ? DateTimeOffset.UtcNow : "value";
         }
 
-        var (eventId, channel) = recordType switch
+        var eventId = recordType switch
         {
-            "FileSystemFinding" => ((ushort)7777, EventChannel.Operational),
-            "RegistryFinding" => ((ushort)7787, EventChannel.Operational),
-            "BaselineFinding" => ((ushort)7795, EventChannel.Baseline),
-            "CoverageGap" => ((ushort)7791, EventChannel.Operational),
-            "Health" => ((ushort)7790, EventChannel.Operational),
-            "ConfigurationChanged" => ((ushort)7794, EventChannel.Operational),
-            "Aggregation" => ((ushort)7796, EventChannel.Operational),
-            "SecurityAuditAttribution" => ((ushort)7797, EventChannel.Diagnostic),
+            "FileSystemFinding" => (ushort)7777,
+            "RegistryFinding" => (ushort)7787,
+            "BaselineFinding" => (ushort)7795,
+            "CoverageGap" => (ushort)7791,
+            "Health" => (ushort)7790,
+            "ConfigurationChanged" => (ushort)7794,
+            "Aggregation" => (ushort)7796,
+            "SecurityAuditAttribution" => (ushort)7797,
             _ => throw new AssertFailedException($"No event allocation for {recordType}")
         };
-        var record = EventContract.Create(eventId, recordType, "record", "scope", fields, channel);
+        var record = EventContract.Create(eventId, recordType, "record", "scope", fields);
         var message = record.FormatEventLogMessage();
         foreach (var name in names)
         {

@@ -4,13 +4,6 @@ using WinFIMLog.IO;
 
 namespace WinFIMLog.Events
 {
-    public enum EventChannel
-    {
-        Operational,
-        Baseline,
-        Diagnostic
-    }
-
     /// <summary>The stable event envelope used for durable delivery and Windows Event Log rendering.</summary>
     public sealed record EventContract(
         int SchemaVersion,
@@ -19,8 +12,7 @@ namespace WinFIMLog.Events
         DateTimeOffset OccurredAt,
         string RecordId,
         string ScopeHash,
-        IReadOnlyDictionary<string, object?> Fields,
-        EventChannel Channel = EventChannel.Operational)
+        IReadOnlyDictionary<string, object?> Fields)
     {
         public const int CurrentSchemaVersion = 1;
 
@@ -28,12 +20,11 @@ namespace WinFIMLog.Events
         internal string FormatEventLogMessage() => EventLogMessageFormatter.Format(this);
 
         public static EventContract Create(ushort eventId, string recordType, string recordId,
-            string scopeHash, IReadOnlyDictionary<string, object?> fields,
-            EventChannel channel = EventChannel.Operational)
+            string scopeHash, IReadOnlyDictionary<string, object?> fields)
         {
-            EventIdCatalog.Validate(eventId, recordType, channel);
+            EventIdCatalog.Validate(eventId, recordType);
             return new(CurrentSchemaVersion, eventId, recordType, DateTimeOffset.UtcNow, recordId,
-                scopeHash, fields, channel);
+                scopeHash, fields);
         }
 
         public static bool IsSupported(int schemaVersion) => schemaVersion == CurrentSchemaVersion;
@@ -56,7 +47,6 @@ namespace WinFIMLog.Events
                 AppendField(ref buffer, "OccurredAt", record.OccurredAt, hasPrevious: true);
                 AppendField(ref buffer, "RecordId", record.RecordId, hasPrevious: true);
                 AppendField(ref buffer, "ScopeHash", record.ScopeHash, hasPrevious: true);
-                AppendField(ref buffer, "Channel", record.Channel, hasPrevious: true);
 
                 foreach (var field in record.Fields)
                 {
@@ -132,15 +122,6 @@ namespace WinFIMLog.Events
                     break;
                 case DateTimeOffset timestamp:
                     buffer.Append(timestamp);
-                    break;
-                case EventChannel channel:
-                    buffer.Append(channel switch
-                    {
-                        EventChannel.Operational => "Operational",
-                        EventChannel.Baseline => "Baseline",
-                        EventChannel.Diagnostic => "Diagnostic",
-                        _ => "Unknown"
-                    });
                     break;
                 default:
                     buffer.Append(value.ToString() ?? "None");

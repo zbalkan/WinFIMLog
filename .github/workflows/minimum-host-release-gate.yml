@@ -35,26 +35,30 @@ jobs:
       - name: Phase 4 offline and database-loss checks
         shell: pwsh
         run: ./scripts/phase4-snapshot-smoke-test.ps1
-      - name: Phase 5 channel contract and ACL checks
+      - name: Phase 5 Event Log contract and ACL checks
         shell: pwsh
         run: ./scripts/phase5-event-channel-test.ps1
       - name: Phase 6 attribution prerequisites
         shell: pwsh
         run: ./scripts/phase6-attribution-check.ps1
-      - name: Export evidence
+      - name: Export WinFIMLog evidence
         if: always()
         shell: pwsh
         run: |
-          wevtutil epl Application "$env:RUNNER_TEMP\WinFIMLog-Application.evtx" /ow:true
-          wevtutil epl WinFIM-Operational "$env:RUNNER_TEMP\WinFIM-Operational.evtx" /ow:true
-          wevtutil epl WinFIM-Baseline "$env:RUNNER_TEMP\WinFIM-Baseline.evtx" /ow:true
-          wevtutil epl WinFIM-Diagnostic "$env:RUNNER_TEMP\WinFIM-Diagnostic.evtx" /ow:true
+          $log = 'WinFIMLog'
+          if ((wevtutil el) -contains $log) {
+            wevtutil epl $log "$env:RUNNER_TEMP\WinFIMLog.evtx" /ow:true
+            if ($LASTEXITCODE) { throw "Could not export $log: $LASTEXITCODE" }
+          }
+          else {
+            Write-Warning "$log does not exist; no Event Log evidence can be exported."
+          }
       - name: Clean uninstall gate
         if: always()
         shell: pwsh
         run: |
           ./publish/WinFIMLog.exe uninstall
-          foreach ($log in 'WinFIM-Operational','WinFIM-Baseline','WinFIM-Diagnostic') {
+          foreach ($log in 'WinFIMLog','WinFIM-Operational','WinFIM-Baseline','WinFIM-Diagnostic') {
             if ((wevtutil el) -contains $log) { throw "$log remains after uninstall" }
           }
       - uses: actions/upload-artifact@v7

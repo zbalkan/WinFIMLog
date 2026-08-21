@@ -34,7 +34,7 @@
 
     <ItemGroup>
         <PackageReference Include="LiteDB" Version="5.0.21" />
-        <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.5" ExcludeAssets="build;buildTransitive" />
+        <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.6" ExcludeAssets="build;buildTransitive" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
         <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.11" />
         <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />

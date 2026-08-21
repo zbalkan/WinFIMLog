@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Security;
+using LiteDB;
 using NUlid;
 using WinFIMLog.Data;
 using WinFIMLog.IO.Security;
@@ -9,6 +10,7 @@ using static WinFIMLog.IO.FileSystem;
 
 namespace WinFIMLog.FIM
 {
+    [BsonSourceGenerated]
     public class FileSystemChange : Change
     {
         public string CurrentHash { get; set; }

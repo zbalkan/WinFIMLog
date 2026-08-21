@@ -1,4 +1,5 @@
 using System;
+using LiteDB;
 using NUlid;
 
 namespace WinFIMLog.Snapshots
@@ -24,6 +25,7 @@ namespace WinFIMLog.Snapshots
     public enum SnapshotNodeType
     { File, Directory, ReparsePoint, RegistryKey, RegistryValue }
 
+    [BsonSourceGenerated]
     public sealed class BaselineMember
     {
         public string AclEvidence { get; set; } = string.Empty;
@@ -54,6 +56,7 @@ namespace WinFIMLog.Snapshots
         public string[] StreamNames { get; set; } = [];
     }
 
+    [BsonSourceGenerated]
     public sealed class BaselineMetadata
     {
         public string AlgorithmVersion { get; set; } = "sha256-v1";
@@ -74,6 +77,7 @@ namespace WinFIMLog.Snapshots
         public BaselineStatus Status { get; set; }
     }
 
+    [BsonSourceGenerated]
     public sealed class ReconciliationResult
     {
         public string BaselineId { get; set; } = string.Empty;

@@ -7,6 +7,7 @@
     <PublishAot>false</PublishAot>
     <PublishTrimmed>false</PublishTrimmed>
     <Nullable>enable</Nullable>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
@@ -15,5 +16,10 @@
   </ItemGroup>
   <ItemGroup>
       <ProjectReference Include="..\..\src\WinFIMLog\WinFIMLog.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="LiteDB">
+      <HintPath>..\..\..\LiteDB\LiteDB\bin\Release\net8.0\win-x64\publish\LiteDB.dll</HintPath>
+    </Reference>
   </ItemGroup>
 </Project>

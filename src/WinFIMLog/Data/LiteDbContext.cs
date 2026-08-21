@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using LiteDB;
+using LiteDB.Generated;
 using Microsoft.Extensions.Options;
 using WinFIMLog.Events;
 using WinFIMLog.FIM;
@@ -29,33 +29,34 @@ namespace WinFIMLog.Data
         ///     Hardcoded database file name is fim.db. Initial database size is set to 800MB for
         ///     performance reasons.
         /// </summary>
-        [DynamicDependency(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor,
-            typeof(EventOutboxRecord))]
         public LiteDbContext(IOptions<LiteDbOptions> options)
         {
+            var mapper = new BsonMapper();
+            LiteDbGeneratedMappings.Register(mapper);
             _database = new LiteDatabase(new ConnectionString()
             {
                 Filename = options.Value.DatabasePath,
                 Connection = ConnectionType.Shared,
                 InitialSize = InitialDatabaseSize
-            });
+            },
+            mapper: mapper);
 
-            FileSystemChanges = _database.GetCollection<FileSystemChange>("fileSystemChanges");
+            FileSystemChanges = _database.GetGeneratedCollection<FileSystemChange>("fileSystemChanges");
             FileSystemChanges.EnsureIndex(x => x.Id);
-            RegistryChanges = _database.GetCollection<RegistryChange>("registryChanges");
+            RegistryChanges = _database.GetGeneratedCollection<RegistryChange>("registryChanges");
             RegistryChanges.EnsureIndex(x => x.Id);
             EnsureLatestStateSchema();
 
-            Baselines = _database.GetCollection<BaselineMetadata>("baselines");
+            Baselines = _database.GetGeneratedCollection<BaselineMetadata>("baselines");
             Baselines.EnsureIndex(x => x.Status);
             Baselines.EnsureIndex(x => x.Source);
-            BaselineMembers = _database.GetCollection<BaselineMember>("baselineMembers");
+            BaselineMembers = _database.GetGeneratedCollection<BaselineMember>("baselineMembers");
             BaselineMembers.EnsureIndex(x => x.BaselineId);
             BaselineMembers.EnsureIndex(x => x.Identity);
-            ReconciliationResults = _database.GetCollection<ReconciliationResult>("reconciliationResults");
+            ReconciliationResults = _database.GetGeneratedCollection<ReconciliationResult>("reconciliationResults");
             ReconciliationResults.EnsureIndex(x => x.BaselineId);
             ReconciliationResults.EnsureIndex(x => x.DeliveredAt);
-            EventOutbox = _database.GetCollection<EventOutboxRecord>("eventOutbox");
+            EventOutbox = _database.GetGeneratedCollection<EventOutboxRecord>("eventOutbox");
             EventOutbox.EnsureIndex(x => x.DeliveredAt);
             EventOutbox.EnsureIndex(x => x.NextAttemptAt);
         }
@@ -78,7 +79,7 @@ namespace WinFIMLog.Data
         /// </remarks>
         private void EnsureLatestStateSchema()
         {
-            var metadata = _database.GetCollection<BsonDocument>("databaseMetadata");
+            var metadata = _database.GetCollection("databaseMetadata");
             var schema = metadata.FindById("latestState");
             if (schema is null || schema["version"].AsInt32 < LatestStateSchemaVersion)
             {

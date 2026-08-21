@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using LiteDB;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Win32;
 using NUlid;
@@ -8,6 +9,7 @@ using WinFIMLog.Utils;
 
 namespace WinFIMLog.FIM
 {
+    [BsonSourceGenerated]
     public partial class RegistryChange : Change
     {
         internal RegistryChange()
@@ -162,7 +164,7 @@ namespace WinFIMLog.FIM
                 return string.Empty;
             }
 
-            return string.Create(value.Length * 3 - 1, value, static (destination, bytes) =>
+            return string.Create((value.Length * 3) - 1, value, static (destination, bytes) =>
             {
                 const string hexCharacters = "0123456789abcdef";
                 var written = 0;

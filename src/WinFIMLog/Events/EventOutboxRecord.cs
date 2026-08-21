@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using LiteDB;
 
 namespace WinFIMLog.Events
 {
+    [BsonSourceGenerated]
     public sealed class EventOutboxRecord
     {
         // LiteDB materialises records through reflection. Keep this constructor explicit so

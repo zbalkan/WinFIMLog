@@ -16,13 +16,23 @@
         <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
         <EnableAotAnalyzer>true</EnableAotAnalyzer>
         <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <Platforms>AnyCPU;x64</Platforms>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
         <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
     </PropertyGroup>
 
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+        <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+    </PropertyGroup>
+
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+        <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
         <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
     </PropertyGroup>
 
@@ -33,7 +43,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="LiteDB" Version="5.0.21" />
         <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.5" ExcludeAssets="build;buildTransitive" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
         <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.11" />
@@ -51,6 +60,13 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\NtfsReader\src\NtfsReader\NtfsReader.csproj" />
+        <ProjectReference Include="..\NtfsReader\src\NtfsReader\NtfsReader.csproj" />
+        <ProjectReference Include="..\..\..\LiteDB\LiteDB.SourceGenerator\LiteDB.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="LiteDB">
+        <HintPath>..\..\..\LiteDB\LiteDB\bin\Release\net8.0\win-x64\publish\LiteDB.dll</HintPath>
+      </Reference>
     </ItemGroup>
 </Project>

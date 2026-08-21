@@ -33,9 +33,9 @@ public sealed class WindowsEventLogSinkTests
         Assert.AreEqual(expectedLevel, level);
         Assert.AreEqual(eventId, writtenId);
         Assert.Contains($"Event Id: {eventId}", message!);
-        Assert.Contains($"Record Type: {recordType}", message);
-        Assert.DoesNotContain("Channel:", message);
-        Assert.IsFalse(message.Contains('{'));
+        Assert.Contains($"Record Type: {recordType}", message!);
+        Assert.DoesNotContain("Channel:", message!);
+        Assert.IsFalse(message!.Contains('{'));
     }
 
     [TestMethod]

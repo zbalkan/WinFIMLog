@@ -2,7 +2,7 @@ using System;
 
 namespace WinFIMLog.FIM
 {
-    public class Change : IChange
+    public abstract class Change : IChange
     {
         private string entity = string.Empty;
 

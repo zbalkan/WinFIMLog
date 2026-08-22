@@ -79,6 +79,8 @@ namespace WinFIMLog
                     _ = services.AddSingleton<ITpmBaselineIntegrity, TpmBaselineIntegrity>();
                     _ = services.AddSingleton<BaselineRepository>();
                     _ = services.AddSingleton<FileSystemBaselineAvailability>();
+                    _ = services.AddSingleton<IFileSystemSnapshotProvider, AlphaVssFileSystemSnapshotProvider>();
+                    _ = services.AddSingleton<IVssDriveInventory, VssMftDriveInventory>();
                     // Reject invalid settings before any source or snapshot hosted service starts.
                     _ = services.AddHostedService<SettingsStartupValidator>();
                     // Optional and deliberately independent of snapshot/completeness services.

@@ -25,11 +25,21 @@ namespace WinFIMLog.Snapshots
         private readonly Settings settings;
         private readonly SnapshotHealthState state;
         private readonly ITpmBaselineIntegrity tpmIntegrity;
+        private readonly IFileSystemSnapshotProvider vssSnapshots;
+        private readonly IVssDriveInventory vssDriveInventory;
 
         public SnapshotService(BaselineRepository repository, Settings settings,
             ILogger<SnapshotService> logger, IHealthReporter health, SnapshotHealthState state,
             IOptions<RetentionOptions> retention, FileSystemBaselineAvailability fileSystemBaselineAvailability,
             ITpmBaselineIntegrity tpmIntegrity)
+            : this(repository, settings, logger, health, state, retention, fileSystemBaselineAvailability,
+                tpmIntegrity, new DisabledFileSystemSnapshotProvider(), new VssMftDriveInventory())
+        { }
+
+        public SnapshotService(BaselineRepository repository, Settings settings,
+            ILogger<SnapshotService> logger, IHealthReporter health, SnapshotHealthState state,
+            IOptions<RetentionOptions> retention, FileSystemBaselineAvailability fileSystemBaselineAvailability,
+            ITpmBaselineIntegrity tpmIntegrity, IFileSystemSnapshotProvider vssSnapshots, IVssDriveInventory vssDriveInventory)
         {
             this.repository = repository;
             this.settings = settings;
@@ -39,6 +49,8 @@ namespace WinFIMLog.Snapshots
             this.retention = retention.Value;
             this.fileSystemBaselineAvailability = fileSystemBaselineAvailability;
             this.tpmIntegrity = tpmIntegrity;
+            this.vssSnapshots = vssSnapshots;
+            this.vssDriveInventory = vssDriveInventory;
         }
 
         internal int PendingFileSystemRequests => fileSystemRequests.Reader.Count;
@@ -65,23 +77,34 @@ namespace WinFIMLog.Snapshots
         internal async Task<bool> RunFileSystemSnapshot(CancellationToken cancellationToken)
         {
             var configuration = settings.Capture();
-            var tpmEnabled = IsTpmIntegrityAvailable(configuration, FallbackAlgorithmFor(BaselineSource.FileSystem));
+            var fallbackAlgorithm = FileSystemBaselineAvailability.AlgorithmVersion(configuration);
+            var tpmEnabled = IsTpmIntegrityAvailable(configuration, fallbackAlgorithm);
             var baseline = repository.Begin(BaselineSource.FileSystem, configuration.ScopeHash,
                 SourceIdentityProvider.FileSystem(configuration.MonitoredPaths),
-                algorithm: tpmEnabled ? BaselineAlgorithm.TpmRsaPssSha256 : FallbackAlgorithmFor(BaselineSource.FileSystem));
+                algorithm: tpmEnabled ? BaselineAlgorithm.TpmRsaPssSha256 : fallbackAlgorithm);
             try
             {
-                var source = new FileSystemSnapshotSource(configuration.HashLimitMB, configuration.IsMonitoredPath);
-                var observation = await Task.Run(() => CursorlessSnapshotConvergence.Capture(
-                    () => source.Capture(configuration.MonitoredPaths)), cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                baseline.ConsistencyMethod = "CursorlessConsecutiveAgreement";
-                baseline.ObservationPasses = observation.Passes;
-                if (tpmEnabled && !tpmIntegrity.TrySeal(baseline, observation.Members, out var tpmReason))
+                IReadOnlyList<BaselineMember> members;
+                if (configuration.EnableVssFileSystemSnapshots)
                 {
-                    ApplyTpmFallback(baseline, configuration.ScopeHash, tpmReason);
+                    var groups = VssDriveGroup.GroupByDrive(configuration.MonitoredPaths);
+                    using var slots = new SemaphoreSlim(Math.Min(configuration.DiscoveryConcurrency, groups.Count));
+                    var jobs = new Task<IReadOnlyList<BaselineMember>>[groups.Count];
+                    for (var i = 0; i < groups.Count; i++) jobs[i] = RunVssDriveJob(groups[i], configuration, slots, cancellationToken);
+                    var results = await Task.WhenAll(jobs).ConfigureAwait(false);
+                    var aggregate = new List<BaselineMember>(); foreach (var result in results) aggregate.AddRange(result);
+                    members = aggregate; baseline.ConsistencyMethod = "VssBackupSnapshotPerDrive"; baseline.ObservationPasses = 1;
                 }
-                _ = repository.ReconcileAndCompleteAfterConvergence(baseline, observation.Members);
+                else
+                {
+                    var source = new FileSystemSnapshotSource(configuration.HashLimitMB, configuration.IsMonitoredPath);
+                    var observation = await Task.Run(() => CursorlessSnapshotConvergence.Capture(() => source.Capture(configuration.MonitoredPaths)), cancellationToken);
+                    members = observation.Members; baseline.ConsistencyMethod = "CursorlessConsecutiveAgreement"; baseline.ObservationPasses = observation.Passes;
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (tpmEnabled && !tpmIntegrity.TrySeal(baseline, members, out var tpmReason)) ApplyTpmFallback(baseline, configuration.ScopeHash, tpmReason, fallbackAlgorithm);
+                if (configuration.EnableVssFileSystemSnapshots) _ = repository.ReconcileAndComplete(baseline, members);
+                else _ = repository.ReconcileAndCompleteAfterConvergence(baseline, members);
                 fileSystemBaselineAvailability.Refresh(configuration);
                 logger.LogInformation("Completed filesystem baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}",
                     baseline.Id, baseline.ItemCount, baseline.ScopeHash);
@@ -92,6 +115,13 @@ namespace WinFIMLog.Snapshots
             { repository.MarkInvalid(baseline, "Service stopped during scan"); throw; }
             catch (Exception exception)
             { repository.MarkInvalid(baseline, exception.GetType().Name); logger.LogError(exception, "Filesystem baseline {BaselineId} failed", baseline.Id); return false; }
+        }
+
+        private async Task<IReadOnlyList<BaselineMember>> RunVssDriveJob(VssDriveGroup group, EffectiveSettings configuration, SemaphoreSlim slots, CancellationToken cancellationToken)
+        {
+            await slots.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try { using var snapshot = await vssSnapshots.CreateAsync(group, cancellationToken).ConfigureAwait(false); var members = await Task.Run(() => vssDriveInventory.Capture(group, snapshot, configuration), cancellationToken).ConfigureAwait(false); await snapshot.CompleteAsync(cancellationToken).ConfigureAwait(false); return members; }
+            finally { slots.Release(); }
         }
 
         internal async Task<bool> RunRegistrySnapshot(CancellationToken cancellationToken)
@@ -159,9 +189,9 @@ namespace WinFIMLog.Snapshots
             return false;
         }
 
-        private void ApplyTpmFallback(BaselineMetadata baseline, string scopeHash, string reason)
+        private void ApplyTpmFallback(BaselineMetadata baseline, string scopeHash, string reason, BaselineAlgorithm? requestedFallback = null)
         {
-            var fallbackAlgorithm = FallbackAlgorithmFor(baseline.Source);
+            var fallbackAlgorithm = requestedFallback ?? FallbackAlgorithmFor(baseline.Source);
             baseline.Algorithm = fallbackAlgorithm;
             baseline.IntegrityAlgorithm = null;
             baseline.IntegrityManifestHash = null;
@@ -261,5 +291,7 @@ namespace WinFIMLog.Snapshots
         }
 
         private sealed record SnapshotRequest(string Reason, string? AffectedScope);
+        private sealed class DisabledFileSystemSnapshotProvider : IFileSystemSnapshotProvider
+        { public Task<IFileSystemSnapshot> CreateAsync(VssDriveGroup driveGroup, CancellationToken cancellationToken = default) => throw new InvalidOperationException("A VSS snapshot provider was not configured."); }
     }
 }

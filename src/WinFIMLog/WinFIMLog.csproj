@@ -12,7 +12,8 @@
         <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
         <PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <PublishAot>true</PublishAot>
+        <!-- AlphaVSS loads a platform-specific C++/CLI runtime assembly. -->
+        <PublishAot>false</PublishAot>
         <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
         <EnableAotAnalyzer>true</EnableAotAnalyzer>
         <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
@@ -27,6 +28,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="AlphaVSS" Version="2.0.3" />
         <None Remove="fim-log.db" />
         <None Remove="fim.db" />
         <Content Update="appsettings.json" CopyToPublishDirectory="Never" />

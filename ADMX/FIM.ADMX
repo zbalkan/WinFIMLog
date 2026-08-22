@@ -32,6 +32,10 @@
                         <string>0</string>
                     </falseValue>
                 </boolean>
+                <boolean id="presEnableVssFileSystemSnapshots" valueName="EnableVssFileSystemSnapshots">
+                    <trueValue><decimal value="1" /></trueValue>
+                    <falseValue><decimal value="0" /></falseValue>
+                </boolean>
                 <decimal id="presHashLimitMB" valueName="HashLimitMB" required="true"/>
                 <decimal id="presScopeReresolutionInterval" valueName="ScopeReresolutionInterval" minValue="10" maxValue="86400" required="true"/>
             </elements>

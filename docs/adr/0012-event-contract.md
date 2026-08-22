@@ -49,6 +49,14 @@ The WinFIMLog channels use the following stable ID allocation.
 | 7795 | Warning | Tier 0 baseline reconciliation finding |
 | 7796 | Information | Reserved legacy burst aggregation summary (not emitted) |
 | 7797 | Information | Optional native Security-audit attribution evidence |
+| 7804 | Information | VSS drive-group snapshot creation started |
+| 7805 | Information | VSS drive-group snapshot ready |
+| 7806 | Error | VSS drive-group snapshot creation failed |
+| 7807–7810 | Information | VSS completion and deletion lifecycle |
+| 7811 | Error | VSS snapshot-set deletion failed |
+| 7812–7814 | Information | VSS root mapping and snapshot scheduling |
+
+VSS lifecycle records carry the snapshot-set identifier when available. Cleanup is attempted for every started snapshot set, including partially failed creation attempts. These events are diagnostics rather than baseline findings.
 
 Filesystem fields are `category`, `operation`, `path`, `oldPath`, `newPath`, `currentHash`,
 `previousHash`, `currentSizeBytes`, `previousSizeBytes`, `currentAcl`, `previousAcl`, `objectType`,

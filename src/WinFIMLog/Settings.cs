@@ -87,6 +87,9 @@ namespace WinFIMLog
         /// </summary>
         public bool EnableRegistryMonitoring { get => ReadState().EnableRegistryMonitoring; private set => WriteState().EnableRegistryMonitoring = value; }
 
+        /// <summary>Uses one VSS snapshot per local drive group for filesystem baselines.</summary>
+        public bool EnableVssFileSystemSnapshots { get => ReadState().EnableVssFileSystemSnapshots; private set => WriteState().EnableVssFileSystemSnapshots = value; }
+
         /// <summary>
         ///     DWORD-backed TPM baseline integrity mode. Policy values take precedence over local
         ///     preferences through the standard effective-settings resolution path.
@@ -252,6 +255,7 @@ namespace WinFIMLog
         internal static bool GenerationChanged(EffectiveSettings left, EffectiveSettings right) => !(
             left.EnableLocalDatabase == right.EnableLocalDatabase &&
             left.EnableRegistryMonitoring == right.EnableRegistryMonitoring &&
+            left.EnableVssFileSystemSnapshots == right.EnableVssFileSystemSnapshots &&
             left.TpmIntegrityMode == right.TpmIntegrityMode &&
             left.TpmIntegrityPublicKey.SequenceEqual(right.TpmIntegrityPublicKey) &&
             left.HashLimitMB == right.HashLimitMB && left.HeartbeatInterval == right.HeartbeatInterval &&
@@ -492,6 +496,14 @@ namespace WinFIMLog
                 registryMonitoring = 1;
             }
             EnableRegistryMonitoring = registryMonitoring == 1;
+
+            var vssFileSystemSnapshots = Registry.ReadDwordValue("EnableVssFileSystemSnapshots");
+            if (vssFileSystemSnapshots == -1)
+            {
+                Registry.WriteDwordValue("EnableVssFileSystemSnapshots", 0);
+                vssFileSystemSnapshots = 0;
+            }
+            EnableVssFileSystemSnapshots = vssFileSystemSnapshots == 1;
 
             var tpmIntegrityMode = Registry.ReadDwordValue("TpmIntegrityMode");
             if (tpmIntegrityMode == -1)

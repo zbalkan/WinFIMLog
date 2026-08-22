@@ -44,9 +44,9 @@ public sealed class BaselineSchemaMigrationTests
             Assert.IsNotNull(baseline);
             Assert.AreEqual(BaselineAlgorithm.TpmRsaPssSha256, baseline.Algorithm);
             Assert.AreEqual(BaselineAlgorithm.TpmRsaPssSha256, baseline.IntegrityAlgorithm);
-            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, baseline.IntegrityManifestHash);
-            CollectionAssert.AreEqual(new byte[] { 4, 5, 6 }, baseline.IntegrityPublicKey);
-            CollectionAssert.AreEqual(new byte[] { 7, 8, 9 }, baseline.IntegritySignature);
+            Assert.AreSequenceEqual(new byte[] { 1, 2, 3 }, baseline.IntegrityManifestHash);
+            Assert.AreSequenceEqual(new byte[] { 4, 5, 6 }, baseline.IntegrityPublicKey);
+            Assert.AreSequenceEqual(new byte[] { 7, 8, 9 }, baseline.IntegritySignature);
         }
         finally
         {
@@ -87,7 +87,7 @@ public sealed class BaselineSchemaMigrationTests
             var baseline = context.Baselines.FindById("legacy-registry-v1");
             Assert.IsNotNull(baseline);
             Assert.AreEqual(BaselineStatus.Invalid, baseline.Status);
-            StringAssert.Contains(baseline.InvalidReason, "not comparable");
+            Assert.Contains("not comparable", baseline.InvalidReason);
         }
         finally
         {

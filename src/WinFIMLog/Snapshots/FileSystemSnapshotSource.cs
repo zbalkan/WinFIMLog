@@ -13,17 +13,28 @@ namespace WinFIMLog.Snapshots
         private readonly Func<string, IEnumerable<string>> enumerateChildren;
         private readonly long hashSizeLimit;
         private readonly Func<string, bool> isIncluded;
+        private readonly Func<string, string> toEvidencePath;
 
         public FileSystemSnapshotSource(int hashLimitMb, Func<string, bool>? isIncluded = null)
+            : this(hashLimitMb, isIncluded ?? (_ => true), static path => path, Directory.EnumerateFileSystemEntries)
+        { }
+
+        internal FileSystemSnapshotSource(int hashLimitMb, Func<string, bool> isIncluded, Func<string, string> toEvidencePath)
+            : this(hashLimitMb, isIncluded, toEvidencePath, Directory.EnumerateFileSystemEntries)
+        { }
+
+        private FileSystemSnapshotSource(int hashLimitMb, Func<string, bool> isIncluded,
+            Func<string, string> toEvidencePath, Func<string, IEnumerable<string>> enumerateChildren)
         {
             hashSizeLimit = hashLimitMb * 1024L * 1024L;
             this.isIncluded = isIncluded ?? (_ => true);
-            enumerateChildren = Directory.EnumerateFileSystemEntries;
+            this.toEvidencePath = toEvidencePath;
+            this.enumerateChildren = enumerateChildren;
         }
 
         internal FileSystemSnapshotSource(int hashLimitMb, Func<string, bool> isIncluded,
-            Func<string, IEnumerable<string>> enumerateChildren) : this(hashLimitMb, isIncluded) =>
-            this.enumerateChildren = enumerateChildren;
+            Func<string, IEnumerable<string>> enumerateChildren)
+            : this(hashLimitMb, isIncluded, static path => path, enumerateChildren) { }
 
         public IReadOnlyList<BaselineMember> Capture(IEnumerable<string> roots)
         {
@@ -33,6 +44,14 @@ namespace WinFIMLog.Snapshots
                 CaptureTree(root, output);
             }
 
+            return output;
+        }
+
+        internal IReadOnlyList<BaselineMember> CaptureMftPaths(IEnumerable<string> capturePaths)
+        {
+            ArgumentNullException.ThrowIfNull(capturePaths);
+            var output = new List<BaselineMember>();
+            foreach (var path in capturePaths) CaptureNode(path, output, null);
             return output;
         }
 
@@ -92,25 +111,26 @@ namespace WinFIMLog.Snapshots
             }
         }
 
-        private void CaptureNode(string path, List<BaselineMember> output, Stack<string> pending)
+        private void CaptureNode(string path, List<BaselineMember> output, Stack<string>? pending)
         {
+            var evidencePath = toEvidencePath(path);
             // Excluded directories prune their entire subtree; capture and notification
             // admission therefore use exactly the same effective-scope predicate.
-            if (!isIncluded(path)) return;
+            if (!isIncluded(evidencePath)) return;
 
             FileAttributes attributes;
             try { attributes = File.GetAttributes(path); }
             catch (FileNotFoundException) { return; }
             catch (DirectoryNotFoundException) { return; }
-            catch (UnauthorizedAccessException) { output.Add(Unavailable(path, EvidenceAvailability.AccessDenied)); return; }
-            catch { output.Add(Unavailable(path, EvidenceAvailability.Failed)); return; }
+            catch (UnauthorizedAccessException) { output.Add(Unavailable(evidencePath, EvidenceAvailability.AccessDenied)); return; }
+            catch { output.Add(Unavailable(evidencePath, EvidenceAvailability.Failed)); return; }
 
             var reparse = attributes.HasFlag(FileAttributes.ReparsePoint);
             var directory = attributes.HasFlag(FileAttributes.Directory);
             var member = new BaselineMember
             {
-                Identity = Normalise(path),
-                Path = Path.GetFullPath(path),
+                Identity = Normalise(evidencePath),
+                Path = Path.GetFullPath(evidencePath),
                 NodeType = reparse ? SnapshotNodeType.ReparsePoint : directory ? SnapshotNodeType.Directory : SnapshotNodeType.File,
                 HashState = directory || reparse ? HashEvidenceState.NotApplicable : HashEvidenceState.Failed,
                 StreamNames = directory || reparse ? [] : EnumerateStreamNames(path),
@@ -129,7 +149,7 @@ namespace WinFIMLog.Snapshots
             output.Add(member);
 
             // Reparse points are evidence nodes, never traversal roots.
-            if (!directory || reparse) return;
+            if (pending is null || !directory || reparse) return;
 
             try
             {

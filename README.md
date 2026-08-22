@@ -212,16 +212,17 @@ For ease of use, an ADMX file is created. So, the monitored paths, excluded path
 
 Event logs IDs are taken from [WINFIM.NET](https://github.com/redblueteam/WinFIM.NET). Thanks [redblueteam](https://github.com/redblueteam) for inspiration.
 
-| Event ID | Description |
-|----------|-------------|
-| 7770 | An exception occurred |
-| 7776 | File / Directory creation |
-| 7777 | File modification |
-| 7778 | File / Directory deletion |
-| 7786 | Registry key creation |
-| 7787 | Registry key/value modification |
-| 7788 | Registry key deletion |
-| 7780 | Other events (heartbeat checks in every 60 seconds, service start and stop, etc.) |
+| Event ID | Level | Description |
+|----------|-------|-------------|
+| 7770 | Error | An exception occurred |
+| 7776 | Information | File / Directory creation |
+| 7777 | Information | File modification |
+| 7778 | Information | File / Directory deletion |
+| 7780 | Information | Other events (heartbeat checks in every 60 seconds, service start and stop, etc.) |
+| 7786 | Information | Registry key creation |
+| 7787 | Information | Registry key/value modification |
+| 7788 | Information | Registry key deletion |
+| 7804–7814 | Information/Error | VSS snapshot lifecycle, mapping, scheduling, and failure diagnostics |
 
 ## Installation
 
@@ -274,7 +275,12 @@ Add `--remove-files` to remove the installed application directory as well. If y
 .\publish\win-x64\WinFIMLog.exe uninstall --remove-files
 ```
 
+## VSS-backed filesystem inventory
+
+Set the `EnableVssFileSystemSnapshots` machine policy to build filesystem baselines from immutable Volume Shadow Copies. VSS mode accepts only absolute local drive-letter targets, groups roots by drive, and creates one snapshot for each drive group. Drive jobs run under the shared `DiscoveryConcurrency` limit and are joined before the single LiteDB reconciliation, so a complete run remains one atomic baseline. A failed drive invalidates the pending baseline and is retried without falling back to live enumeration.
+
 ## Development
+
 
 You need .NET 10 for the service. Version metadata is centralized in `Directory.Build.props`, and the `Publish WinFIMLog release` GitHub Actions workflow reads that version to tag and package a win-x64 release asset. The installer is built into the service executable and does not require WiX Toolset or the legacy .NET Framework feature set.
 

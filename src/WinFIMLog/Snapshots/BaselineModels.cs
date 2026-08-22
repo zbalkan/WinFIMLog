@@ -14,7 +14,8 @@ namespace WinFIMLog.Snapshots
     {
         Sha256 = 1,
         RegistryV2 = 2,
-        TpmRsaPssSha256 = 3
+        TpmRsaPssSha256 = 3,
+        VssMftPerDrive = 4
     }
 
     /// <summary>DWORD-backed policy and preference values for optional TPM integrity hardening.</summary>

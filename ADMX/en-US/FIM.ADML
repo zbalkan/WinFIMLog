@@ -64,6 +64,9 @@ In the first run, the service creates a local database that includes information
 The initial discovery generally takes around 30-90 minutes depending on the number of the files. After a discovery scan, the service needs to be restarted.
 By using this checkbox, you can enable or disable the discovery phase. Without a local database, previous hash cannot be calculated.
 
+Enable VSS filesystem snapshots:
+Uses an immutable Volume Shadow Copy for filesystem baselines. Only absolute local drive-letter paths are supported. One snapshot is created for each configured drive, and a failed VSS inventory is retried without falling back to a live scan.
+
 Hashing limit:
 Larger files may take longer processing time and even block the process while calculating SHA256 hashes. By default the files with size 1GB or more are ignored for calculation.
 The spin uses steps of 256 MB to help easy configuration.</string>
@@ -91,6 +94,7 @@ Registry keys to exclude from file system monitoring. Please type each key in on
                 <multiTextBox refId="presExcludedPaths">Excluded paths:</multiTextBox>
                 <multiTextBox refId="presExcludedExtensions">Excluded extensions:</multiTextBox>
                 <checkBox refId="presEnableLocalDatabase" defaultChecked="false">Enable local database:</checkBox>
+                <checkBox refId="presEnableVssFileSystemSnapshots" defaultChecked="false">Enable VSS filesystem snapshots:</checkBox>
                 <decimalTextBox refId="presHashLimitMB" defaultValue="1024" spin="true" spinStep="256">Hashing limit:</decimalTextBox>
                 <decimalTextBox refId="presScopeReresolutionInterval" defaultValue="300" spin="true">Wildcard re-resolution interval (seconds):</decimalTextBox>
             </presentation>

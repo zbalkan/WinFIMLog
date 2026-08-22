@@ -32,7 +32,7 @@ and queue lag returns to zero after the burst.
 
 ## Supported publish mode
 
-The release mode is .NET 8 `win-x64`, ReadyToRun, non-trimmed and non-AOT.
+The release mode is .NET 10 `win-x64`, ReadyToRun, non-trimmed and non-AOT.
 TraceEvent depends on runtime metadata and validated private parser fields; startup
 fails loudly if the tested contract changes. CI must build and start that exact
 mode on Windows Server 2019 (build 17763), the minimum supported version.
@@ -45,4 +45,4 @@ Registry-root reconciliation first orders distinct configured roots, then uses a
 
 Filesystem snapshot traversal streams each directory's entries and pushes yielded child paths to an explicit work stack. This removes per-directory child-array allocation and preserves children already yielded when an enumerator fails late. The pending-path stack can still grow with the unprocessed traversal frontier, so peak managed memory must be measured on wide trees. Watcher reconfiguration uses case-insensitive hash sets and dictionaries, giving expected linear reconciliation in the number of desired paths and active watchers, apart from operating-system watcher create/dispose cost.
 
-The remaining runtime priorities are measured I/O rather than collection scans: NTFS enumeration, content hashing, ACL and Registry reads, LiteDB and Event Log latency, and the size of the filesystem traversal frontier. Legacy discovery persists paths through a configured maximum degree of parallelism, defaulting to two workers; qualification must record the configured concurrency alongside path count and elapsed time so storage saturation and queue effects remain visible.
+The opt-in VSS path groups `R` configured roots into `V` local drives in expected **O(R)** time and **O(R + V)** grouping space. For drive `i`, MFT parsing, scope filtering, and hashing cost **O(N_i + K_i + B_i)** for parsed nodes, admitted nodes, and hashed bytes. At most `min(DiscoveryConcurrency, V)` drives are active, and their results are joined before one serialized LiteDB reconciliation.

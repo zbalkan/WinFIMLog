@@ -8,7 +8,7 @@ using WinFIMLog.Snapshots;
 namespace WinFIMLog.Tests;
 
 [TestClass]
-public sealed class SettingsAtomicPublicationTests
+public sealed partial class SettingsAtomicPublicationTests
 {
     [TestMethod]
     public void Concurrent_readers_observe_one_complete_generation()
@@ -46,6 +46,15 @@ public sealed class SettingsAtomicPublicationTests
     }
 
     [TestMethod]
+    public void Vss_enablement_is_a_generation_change_even_when_scope_hash_is_unchanged()
+    {
+        var disabled = Generation("same-scope", @"C:\A");
+        var enabled = Generation("same-scope", @"C:\A");
+        enabled.EnableVssFileSystemSnapshots = true;
+        Assert.IsTrue(Settings.GenerationChanged(disabled, enabled));
+    }
+
+    [TestMethod]
     public void Tpm_integrity_mode_is_a_generation_change_even_when_scope_hash_is_unchanged()
     {
         var disabled = Generation("same-scope", @"C:\A");
@@ -79,9 +88,12 @@ public sealed class SettingsAtomicPublicationTests
             ExcludedExtensions = [],
             ExcludedKeys = [],
             MonitoredPathsPattern = new Regex($@"(?:^({escaped})\\?.*$)", RegexOptions.IgnoreCase),
-            MonitoredKeysPattern = new Regex(".*"),
+            MonitoredKeysPattern = AllPattern(),
             RegistryScopeMatcher = new RegistryScopeMatcher(
                 [@"HKEY_LOCAL_MACHINE\SOFTWARE\WinFIMLog"], [])
         };
     }
+
+    [GeneratedRegex(".*")]
+    private static partial Regex AllPattern();
 }

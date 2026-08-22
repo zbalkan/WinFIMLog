@@ -4,7 +4,9 @@ using System.IO;
 
 namespace WinFIMLog.Configuration
 {
-    /// <summary>Matches file-system paths against directory scopes without prefix collisions.</summary>
+    /// <summary>
+    /// Matches file-system paths against directory scopes without prefix collisions.
+    /// </summary>
     internal static class PathScopeMatcher
     {
         internal static bool IsWithinAny(IEnumerable<string> roots, string path)

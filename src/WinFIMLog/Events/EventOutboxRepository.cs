@@ -12,9 +12,9 @@ namespace WinFIMLog.Events
         public EventOutboxRepository(ILiteDbContext context) => this.context = context;
 
         public DateTimeOffset? OldestPending => context.EventOutbox.Query()
-            .Where(x => x.DeliveredAt == null).OrderBy(x => x.CreatedAt).FirstOrDefault()?.CreatedAt;
+            .Where(static x => x.DeliveredAt == null).OrderBy(static x => x.CreatedAt).FirstOrDefault()?.CreatedAt;
 
-        public long PendingCount => context.EventOutbox.Count(x => x.DeliveredAt == null);
+        public long PendingCount => context.EventOutbox.Count(static x => x.DeliveredAt == null);
 
         public int DeleteDeliveredBefore(DateTimeOffset cutoff)
         {
@@ -76,10 +76,10 @@ namespace WinFIMLog.Events
                         RecordType = item.Record.RecordType,
                         OccurredAt = item.Record.OccurredAt,
                         ScopeHash = item.Record.ScopeHash,
-                        Fields = new Dictionary<string, object?>(item.Record.Fields),
+                        Fields = new Dictionary<string, object?>(item.Record.Fields, StringComparer.OrdinalIgnoreCase),
                         Error = item.Error,
                         CreatedAt = DateTimeOffset.UtcNow,
-                        NextAttemptAt = DateTimeOffset.MinValue
+                        NextAttemptAt = DateTimeOffset.MinValue,
                     });
                 }
             }))
@@ -103,6 +103,6 @@ namespace WinFIMLog.Events
         public IReadOnlyList<EventOutboxRecord> Ready(DateTimeOffset now, int limit = 200) =>
                     context.EventOutbox.Query()
                 .Where(x => x.DeliveredAt == null && x.NextAttemptAt <= now)
-                .OrderBy(x => x.CreatedAt).Limit(limit).ToList();
+                .OrderBy(static x => x.CreatedAt).Limit(limit).ToList();
     }
 }

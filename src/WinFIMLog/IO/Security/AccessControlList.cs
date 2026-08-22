@@ -16,7 +16,7 @@ namespace WinFIMLog.IO.Security
         public AccessControlList(int initialCapacity = 4)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
-            if (initialCapacity != 0)
+            if (initialCapacity is not 0)
             {
                 entries = ArrayPool<AccessControlEntry>.Shared.Rent(initialCapacity);
             }
@@ -26,7 +26,9 @@ namespace WinFIMLog.IO.Security
         public SecurityIdentifier? Owner { get; set; }
         public SecurityIdentifier? PrimaryGroupOfOwner { get; set; }
 
-        /// <summary>Gets a non-allocating view of the captured ACEs.</summary>
+        /// <summary>
+        /// Gets a non-allocating view of the captured ACEs.
+        /// </summary>
         public ReadOnlyMemory<AccessControlEntry> Entries
         {
             get

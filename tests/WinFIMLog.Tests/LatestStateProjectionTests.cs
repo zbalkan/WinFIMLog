@@ -178,8 +178,15 @@ public sealed class LatestStateProjectionTests
 
     private static void DeleteDatabase(string databasePath)
     {
-        if (File.Exists(databasePath)) File.Delete(databasePath);
-        if (File.Exists(databasePath + "-log")) File.Delete(databasePath + "-log");
+        if (File.Exists(databasePath))
+        {
+            File.Delete(databasePath);
+        }
+
+        if (File.Exists(databasePath + "-log"))
+        {
+            File.Delete(databasePath + "-log");
+        }
     }
 
     private sealed class RecordingHealth : IHealthReporter

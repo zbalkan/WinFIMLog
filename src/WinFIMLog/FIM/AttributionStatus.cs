@@ -6,10 +6,14 @@ namespace WinFIMLog.FIM
         Attributed,
         Unavailable,
 
-        /// <summary>The source could not supply the mandatory process rundown.</summary>
+        /// <summary>
+        /// The source could not supply the mandatory process rundown.
+        /// </summary>
         RundownMissing,
 
-        /// <summary>A subject exists, but thread impersonation makes process identity ambiguous.</summary>
-        ImpersonationAmbiguous
+        /// <summary>
+        /// A subject exists, but thread impersonation makes process identity ambiguous.
+        /// </summary>
+        ImpersonationAmbiguous,
     }
 }

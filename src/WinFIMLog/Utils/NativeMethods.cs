@@ -24,7 +24,7 @@ namespace WinFIMLog.Utils
 
             KeyHandleTagsInformation,       // Reserved for system use.
 
-            MaxKeyInfoClass                 // The maximum value in this enumeration type.
+            MaxKeyInfoClass,                 // The maximum value in this enumeration type.
         }
 
         [LibraryImport("advapi32", SetLastError = true), SuppressUnmanagedCodeSecurity]

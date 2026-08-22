@@ -4,6 +4,6 @@
     {
         Registry,
 
-        FileSystem
+        FileSystem,
     }
 }

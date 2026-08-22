@@ -18,12 +18,12 @@ namespace WinFIMLog.Snapshots
         public int FileSystemFailures => Volatile.Read(ref fileSystemFailures);
         public TimeSpan FileSystemLastDuration => TimeSpan.FromTicks(Interlocked.Read(ref fileSystemDurationTicks));
         public DateTimeOffset? FileSystemLastSuccess => ReadTime(ref fileSystemLastSuccess);
-        public bool FileSystemRunning => Volatile.Read(ref fileSystemRunning) != 0;
+        public bool FileSystemRunning => Volatile.Read(ref fileSystemRunning) is not 0;
         public DateTimeOffset? FileSystemStarted => ReadTime(ref fileSystemStarted);
         public int RegistryFailures => Volatile.Read(ref registryFailures);
         public TimeSpan RegistryLastDuration => TimeSpan.FromTicks(Interlocked.Read(ref registryDurationTicks));
         public DateTimeOffset? RegistryLastSuccess => ReadTime(ref registryLastSuccess);
-        public bool RegistryRunning => Volatile.Read(ref registryRunning) != 0;
+        public bool RegistryRunning => Volatile.Read(ref registryRunning) is not 0;
         public DateTimeOffset? RegistryStarted => ReadTime(ref registryStarted);
 
         internal void Failed(BaselineSource source, int count)
@@ -52,18 +52,18 @@ namespace WinFIMLog.Snapshots
         { var ticks = Interlocked.Read(ref value); return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero); }
 
         private ref long Duration(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) { return ref fileSystemDurationTicks; } return ref registryDurationTicks; }
+        { if (source is BaselineSource.FileSystem) { return ref fileSystemDurationTicks; } return ref registryDurationTicks; }
 
         private ref int Failures(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) { return ref fileSystemFailures; } return ref registryFailures; }
+        { if (source is BaselineSource.FileSystem) { return ref fileSystemFailures; } return ref registryFailures; }
 
         private ref long LastSuccess(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) { return ref fileSystemLastSuccess; } return ref registryLastSuccess; }
+        { if (source is BaselineSource.FileSystem) { return ref fileSystemLastSuccess; } return ref registryLastSuccess; }
 
         private ref int Running(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) { return ref fileSystemRunning; } return ref registryRunning; }
+        { if (source is BaselineSource.FileSystem) { return ref fileSystemRunning; } return ref registryRunning; }
 
         private ref long StartedAt(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) { return ref fileSystemStarted; } return ref registryStarted; }
+        { if (source is BaselineSource.FileSystem) { return ref fileSystemStarted; } return ref registryStarted; }
     }
 }

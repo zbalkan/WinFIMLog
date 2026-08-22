@@ -123,7 +123,7 @@ namespace WinFIMLog.Utils
             private readonly IntPtr Buffer;
 
             public override string ToString() =>
-                Buffer == IntPtr.Zero || Length == 0
+                Buffer == IntPtr.Zero || Length is 0
                     ? string.Empty
                     : Marshal.PtrToStringUni(Buffer, Length / sizeof(char)) ?? string.Empty;
         }

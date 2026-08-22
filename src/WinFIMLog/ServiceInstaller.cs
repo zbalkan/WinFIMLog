@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace WinFIMLog
 {
@@ -14,7 +16,7 @@ namespace WinFIMLog
 
         internal static bool TryHandleCommand(string[] args)
         {
-            if (args.Length == 0)
+            if (args.Length is 0)
             {
                 return false;
             }
@@ -136,15 +138,15 @@ namespace WinFIMLog
 
         private static void RunPowerShell(string script)
         {
-            var result = RunProcess("powershell.exe", "-NoProfile", "-NonInteractive",
-                "-ExecutionPolicy", "Bypass", "-File", script);
-            if (result.ExitCode != 0)
+            var result = RunProcessAsync("powershell.exe", "-NoProfile", "-NonInteractive",
+                "-ExecutionPolicy", "Bypass", "-File", script).GetAwaiter().GetResult();
+            if (result.ExitCode is not 0)
             {
-                throw new InvalidOperationException($"Event channel configuration failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
+                throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture, $"Event channel configuration failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}"));
             }
         }
 
-        private static ProcessResult RunProcess(string fileName, params string[] arguments)
+        private static async Task<ProcessResult> RunProcessAsync(string fileName, params string[] arguments)
         {
             using var process = new Process();
             process.StartInfo.FileName = fileName;
@@ -157,24 +159,24 @@ namespace WinFIMLog
             }
 
             process.Start();
-            var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            var output = await process.StandardOutput.ReadToEndAsync() + await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync().ConfigureAwait(false);
             return new ProcessResult(process.ExitCode, output);
         }
 
         private static void RunSc(params string[] arguments)
         {
-            var result = RunProcess("sc.exe", arguments);
-            if (result.ExitCode != 0 && !IsIgnorableStopFailure(arguments, result.Output))
+            var result = RunProcessAsync("sc.exe", arguments).GetAwaiter().GetResult();
+            if (result.ExitCode is not 0 && !IsIgnorableStopFailure(arguments, result.Output))
             {
-                throw new InvalidOperationException($"sc.exe {string.Join(' ', arguments)} failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}");
+                throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture, $"sc.exe {string.Join(' ', arguments)} failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}"));
             }
         }
 
         private static bool ServiceExists()
         {
-            var result = RunProcess("sc.exe", "query", ServiceName);
-            return result.ExitCode == 0;
+            var result = RunProcessAsync("sc.exe", "query", ServiceName).GetAwaiter().GetResult();
+            return result.ExitCode is 0;
         }
 
         private static void Uninstall(string[] args)

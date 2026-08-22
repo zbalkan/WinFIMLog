@@ -3,7 +3,9 @@ using WinFIMLog.Configuration;
 
 namespace WinFIMLog
 {
-    /// <summary>An immutable-by-public-contract configuration generation.</summary>
+    /// <summary>
+    /// An immutable-by-public-contract configuration generation.
+    /// </summary>
     public sealed class EffectiveSettings
     {
         internal int CaptureQueueCapacity { get; set; } = 8192;

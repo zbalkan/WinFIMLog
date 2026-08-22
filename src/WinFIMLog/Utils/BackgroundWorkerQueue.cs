@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 namespace WinFIMLog.Utils
 {
     /// <summary>
-    ///     A queue for long running jobs
+    /// A queue for long running jobs
     /// </summary>
-    public partial class BackgroundWorkerQueue : IDisposable
+    public class BackgroundWorkerQueue : IDisposable
     {
         private readonly SemaphoreSlim _signal = new(0);
 
@@ -17,16 +17,11 @@ namespace WinFIMLog.Utils
         private bool disposedValue;
 
         /// <summary>
-        ///     Dequeue a job if cancellation token exists
+        /// Dequeue a job if cancellation token exists
         /// </summary>
-        /// <param name="cancellationToken">
-        ///     A cancellation token to stop the jobs and dequeue
-        /// </param>
-        /// <returns>
-        ///     return job to stop
-        /// </returns>
-        /// <exception cref="OperationCanceledException">
-        /// </exception>
+        /// <param name="cancellationToken">A cancellation token to stop the jobs and dequeue</param>
+        /// <returns>return job to stop</returns>
+        /// <exception cref="OperationCanceledException"></exception>
         public async Task<Func<CancellationToken, Task>?> DequeueAsync(CancellationToken cancellationToken)
         {
             if (!_workItems.IsEmpty)
@@ -40,15 +35,11 @@ namespace WinFIMLog.Utils
         }
 
         /// <summary>
-        ///     Add a new job to the queue
+        /// Add a new job to the queue
         /// </summary>
-        /// <param name="workItem">
-        ///     New job as <see cref="Task" />
-        /// </param>
-        /// <exception cref="ArgumentNullException">
-        /// </exception>
-        /// <exception cref="SemaphoreFullException">
-        /// </exception>
+        /// <param name="workItem">New job as</param>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="SemaphoreFullException"></exception>
         public void QueueBackgroundWorkItem(Func<CancellationToken, Task> workItem)
         {
             ArgumentNullException.ThrowIfNull(workItem);

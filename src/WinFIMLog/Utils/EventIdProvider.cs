@@ -13,15 +13,12 @@ namespace WinFIMLog.Utils
                 return (ushort)eventId.Id;
             }
 
-            if (level == LogLevel.Error || level == LogLevel.Critical)
+            if (level is LogLevel.Error or LogLevel.Critical)
             {
                 return 7770;
             }
 
-            if (level == LogLevel.Information &&
-                state is IEnumerable<KeyValuePair<string, object?>> properties &&
-                TryGetValue(properties, "changeType", out var changeType) &&
-                TryGetValue(properties, "category", out var category))
+            if (level is LogLevel.Information && state is IEnumerable<KeyValuePair<string, object?>> properties && TryGetValue(properties, "changeType", out var changeType) && TryGetValue(properties, "category", out var category))
             {
                 return (changeType.ToUpperInvariant(), category.ToUpperInvariant()) switch
                 {
@@ -31,7 +28,7 @@ namespace WinFIMLog.Utils
                     ("REGISTRY", "CREATED") => 7786,
                     ("REGISTRY", "CHANGED") => 7787,
                     ("REGISTRY", "DELETED") => 7788,
-                    _ => 7780
+                    _ => 7780,
                 };
             }
 

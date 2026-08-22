@@ -30,7 +30,7 @@ namespace WinFIMLog.Jobs
                 try
                 {
                     eventSink.Write(EventContract.Create(7795, "BaselineFinding", result.Id,
-                        baseline.ScopeHash, new Dictionary<string, object?>
+                        baseline.ScopeHash, new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                         {
                             ["baselineId"] = baseline.Id,
                             ["source"] = baseline.Source.ToString(),
@@ -38,13 +38,13 @@ namespace WinFIMLog.Jobs
                             ["identity"] = result.Identity,
                             ["oldPath"] = result.OldPath,
                             ["newPath"] = result.NewPath,
-                            ["detectedAt"] = result.DetectedAt
+                            ["detectedAt"] = result.DetectedAt,
                         }));
-                    repository.RecordDeliveryAttempt(result, true);
+                    repository.RecordDeliveryAttempt(result, delivered: true);
                 }
                 catch (Exception exception)
                 {
-                    repository.RecordDeliveryAttempt(result, false);
+                    repository.RecordDeliveryAttempt(result, delivered: false);
                     logger.LogError(exception, "Baseline finding {FindingId} remains pending", result.Id);
                 }
             }
@@ -57,7 +57,7 @@ namespace WinFIMLog.Jobs
             {
                 if (!PublishPending())
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken);
+                    await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken).ConfigureAwait(false);
                 }
             }
         }

@@ -36,10 +36,10 @@ namespace WinFIMLog.Jobs
             base.Dispose();
         }
 
-        public override Task StartAsync(CancellationToken cancellationToken)
+        public override async Task StartAsync(CancellationToken cancellationToken)
         {
             _attribution.Start();
-            return base.StartAsync(cancellationToken);
+            await base.StartAsync(cancellationToken);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -48,7 +48,7 @@ namespace WinFIMLog.Jobs
             // originating DELETE-capable handle has closed. Use a small, bounded window to fold
             // the accompanying Changed burst into the logical create/rename rather than waiting
             // (potentially forever) for the handle to close.
-            while (await _capture.WaitToReadAsync())
+            while (await _capture.WaitToReadAsync(stoppingToken))
             {
                 var pending = new List<RawFileSystemNotification>();
                 while (_capture.TryRead(out var raw))
@@ -56,7 +56,7 @@ namespace WinFIMLog.Jobs
                     pending.Add(raw);
                 }
 
-                await Task.Delay(NormalizationWindow, CancellationToken.None);
+                await Task.Delay(NormalizationWindow, stoppingToken).ConfigureAwait(false);
                 while (_capture.TryRead(out var raw))
                 {
                     pending.Add(raw);
@@ -65,14 +65,17 @@ namespace WinFIMLog.Jobs
                 var succeeded = true;
                 foreach (var raw in FileSystemNotificationWindow.Normalize(pending))
                 {
-                    try { await EnrichAsync(raw, CancellationToken.None); }
+                    try { await EnrichAsync(raw, stoppingToken).ConfigureAwait(false); }
                     catch (Exception exception)
                     {
                         succeeded = false;
                         _logger.LogError(exception, "Could not enrich filesystem notification for {Path}", raw.FullPath);
                     }
                 }
-                for (var index = 0; index < pending.Count; index++) _capture.Complete(succeeded);
+                for (var index = 0; index < pending.Count; index++)
+                {
+                    _capture.Complete(succeeded);
+                }
             }
         }
 
@@ -83,7 +86,7 @@ namespace WinFIMLog.Jobs
             // enrichment. Basic watcher notifications cannot recover its metadata after the fact.
             var change = FileSystemChange.FromPath(raw.FullPath, raw.Category, configuration.HashLimitMB,
                 configuration.ScopeHash, retainMissing: true);
-            if (change == null)
+            if (change is null)
             {
                 return;
             }
@@ -104,7 +107,7 @@ namespace WinFIMLog.Jobs
                     change.ProcessSequenceNumber = attribution.ProcessSequenceNumber;
                     change.AttributionStatus = attribution.Status;
                     change.AttributionMethod = "KernelETWProcessSequence";
-                    change.AttributionConfidence = attribution.Status == AttributionStatus.Attributed ? "High" : "None";
+                    change.AttributionConfidence = attribution.Status is AttributionStatus.Attributed ? "High" : "None";
                     change.AttributionSourceTimestamp = attribution.SourceTimestamp;
                     change.AttributionMissingReason = attribution.MissingReason;
                     break;
@@ -112,27 +115,26 @@ namespace WinFIMLog.Jobs
                 await Task.Delay(10, cancellationToken);
             }
 
-            if (change.AttributionStatus == AttributionStatus.Unattributed)
+            if (change.AttributionStatus is AttributionStatus.Unattributed)
             {
                 change.AttributionMethod = "KernelETWProcessSequence";
                 change.AttributionConfidence = "None";
                 change.AttributionMissingReason = "NoCorrelatedFileEvent";
             }
 
-            FileSystemChange? previous = null;
             if (configuration.EnableLocalDatabase)
             {
                 // A rename's previous projection lives under the old path. Looking up only the
                 // destination would lose prior hash/ACL evidence and could suppress the rename
                 // when the content itself did not change.
-                previous = FileSystemChange.RetrievePreviousChange(raw.OldPath ?? raw.FullPath, _context);
+                var previous = FileSystemChange.RetrievePreviousChange(raw.OldPath ?? raw.FullPath, _context);
                 ApplyPreviousEvidence(change, previous);
             }
 
             // The normalization window already folds duplicate native notifications for one
             // logical operation. An admitted notification is integrity evidence even when its
             // final hash, size, and ACL match the latest-state projection.
-            await _output.Add(change);
+            await _output.Add(change).ConfigureAwait(false);
         }
 
         internal static void ApplyPreviousEvidence(FileSystemChange change, FileSystemChange? previous)
@@ -140,7 +142,7 @@ namespace WinFIMLog.Jobs
             change.PreviousHash = previous?.CurrentHash ?? string.Empty;
             change.PreviousACL = previous?.ACLs ?? string.Empty;
             change.PreviousSizeBytes = previous?.CurrentSizeBytes;
-            if (change.ChangeCategory == ChangeCategory.Deleted && previous is not null)
+            if (change.ChangeCategory is ChangeCategory.Deleted && previous is not null)
             {
                 // Basic watcher removal notifications carry only the name. Recover directory
                 // listing evidence from the projection built while the object still existed.

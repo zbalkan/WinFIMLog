@@ -6,7 +6,7 @@ using WinFIMLog.Configuration;
 namespace WinFIMLog.IO
 {
     /// <summary>
-    ///     Static class to access Registry.
+    /// Static class to access Registry.
     /// </summary>
     internal static class Registry
     {
@@ -16,28 +16,25 @@ namespace WinFIMLog.IO
         public static RegistryHive Hive => RegistryHive.LocalMachine;
 
         /// <summary>
-        ///     Root object for Registry operations
+        /// Root object for Registry operations
         /// </summary>
-        /// <exception cref="System.Security.SecurityException" accessor="get">
-        /// </exception>
-        /// <exception cref="UnauthorizedAccessException" accessor="get">
-        /// </exception>
-        /// <exception cref="System.IO.IOException" accessor="get">
-        /// </exception>
-        public static RegistryKey Root => Microsoft.Win32.Registry.LocalMachine.CreateSubKey(PreferenceKeyName, true);
+        /// <exception cref="System.Security.SecurityException" accessor="get"></exception>
+        /// <exception cref="UnauthorizedAccessException" accessor="get"></exception>
+        /// <exception cref="System.IO.IOException" accessor="get"></exception>
+        public static RegistryKey Root => Microsoft.Win32.Registry.LocalMachine.CreateSubKey(PreferenceKeyName, writable: true);
 
         public static string RootName => Root.Name.Substring(Root.Name.IndexOf('\\') + 1);
 
         public static bool EffectiveValueExists(string value)
         {
-            using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, false);
-            using var legacy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(LegacyPreferenceKeyName, false);
-            return policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null ||
-                   Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null ||
-                   legacy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames) != null;
+            using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, writable: false);
+            using var legacy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(LegacyPreferenceKeyName, writable: false);
+            return (policy?.GetValue(value, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames)) is not null || Root.GetValue(value, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames) is not null || (legacy?.GetValue(value, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames)) is not null;
         }
 
-        /// <summary> Translates the Registry value data in Dword to Int32 </summary> <param
+        /// <summary>
+        /// Translates the Registry value data in Dword to Int32
+        /// </summary> <param
         /// name="value">Name of the Registry value</param> <returns><see cref="int"></returns>
         /// <exception cref="ArgumentException"></exception> <exception
         /// cref="System.Security.SecurityException"></exception> <exception
@@ -51,12 +48,12 @@ namespace WinFIMLog.IO
 
             var valueData = ReadEffectiveValue(value);
 
-            if (valueData == null)
+            if (valueData is null)
             {
                 return -1;
             }
 
-            if (int.TryParse(valueData.ToString(), out var valueDataAsInt))
+            if (int.TryParse(valueData.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var valueDataAsInt))
             {
                 return valueDataAsInt;
             }
@@ -78,9 +75,9 @@ namespace WinFIMLog.IO
 
             var valueData = ReadEffectiveValue(value);
 
-            return valueData == null || valueData is not string[] multiStringValue
+            return valueData is null || valueData is not string[] multiStringValue
                 ? []
-                : multiStringValue.Where(path => !string.IsNullOrEmpty(path)).ToArray();
+                : multiStringValue.Where(static path => !string.IsNullOrEmpty(path)).ToArray();
         }
 
         /// <summary> Translates the Registry value data from string to <see cref="string[]">
@@ -97,7 +94,7 @@ namespace WinFIMLog.IO
 
             var valueData = ReadEffectiveValue(value);
 
-            if (valueData == null || valueData is not string stringValue)
+            if (valueData is null || valueData is not string stringValue)
             {
                 return string.Empty;
             }
@@ -160,12 +157,12 @@ namespace WinFIMLog.IO
 
         private static object? ReadEffectiveValue(string value)
         {
-            using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, false);
-            using var legacy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(LegacyPreferenceKeyName, false);
+            using var policy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(PolicyKeyName, writable: false);
+            using var legacy = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(LegacyPreferenceKeyName, writable: false);
             return ConfigurationPrecedence.Resolve(
-                policy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
-                Root.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
-                legacy?.GetValue(value, null, RegistryValueOptions.DoNotExpandEnvironmentNames));
+                policy?.GetValue(value, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames),
+                Root.GetValue(value, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames),
+                legacy?.GetValue(value, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames));
         }
     }
 }

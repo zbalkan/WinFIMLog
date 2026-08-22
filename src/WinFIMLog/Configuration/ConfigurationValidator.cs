@@ -10,7 +10,7 @@ namespace WinFIMLog.Configuration
         private static readonly string[] Hives =
         [
             "HKEY_LOCAL_MACHINE", "HKEY_CURRENT_USER", "HKEY_USERS",
-            "HKEY_CURRENT_CONFIG", "HKEY_CLASSES_ROOT"
+            "HKEY_CURRENT_CONFIG", "HKEY_CLASSES_ROOT",
         ];
 
         public static void Validate(IEnumerable<string> monitoredPaths, IEnumerable<string> excludedPaths,
@@ -61,8 +61,8 @@ namespace WinFIMLog.Configuration
             }
 
             var segments = expanded.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Count(segment => segment.Contains('*')) > 1 ||
-                segments.Any(segment => segment.Contains('*') && segment != "*"))
+            if (segments.Count(static segment => segment.Contains('*')) > 1 ||
+                segments.Any(static segment => segment.Contains('*') && !string.Equals(segment, "*", StringComparison.OrdinalIgnoreCase)))
             {
                 throw Invalid("path", value, "'*' must occupy one complete path segment");
             }
@@ -74,7 +74,7 @@ namespace WinFIMLog.Configuration
         private static void ValidateValues(string setting, IEnumerable<string> values, Action<string> validator, bool allowEmpty)
         {
             var materialised = values?.ToArray() ?? throw new ConfigurationValidationException($"{setting} is missing.");
-            if (!allowEmpty && materialised.Length == 0)
+            if (!allowEmpty && materialised.Length is 0)
             {
                 throw new ConfigurationValidationException($"{setting} must contain at least one value.");
             }

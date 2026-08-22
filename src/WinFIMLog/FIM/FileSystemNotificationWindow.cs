@@ -18,13 +18,12 @@ namespace WinFIMLog.FIM
                 if (notification.OldPath is not null)
                 {
                     // A pre-rename Changed notification describes the same logical operation.
-                    output.RemoveAll(item => item.Category == ChangeCategory.Changed &&
-                        string.Equals(item.FullPath, notification.OldPath, StringComparison.OrdinalIgnoreCase));
+                    output.RemoveAll(item => item.Category is ChangeCategory.Changed && string.Equals(item.FullPath, notification.OldPath, StringComparison.OrdinalIgnoreCase));
                     output.Add(notification);
                     continue;
                 }
 
-                if (notification.Category == ChangeCategory.Changed)
+                if (notification.Category is ChangeCategory.Changed)
                 {
                     var existing = output.FindLastIndex(item =>
                         string.Equals(item.FullPath, notification.FullPath, StringComparison.OrdinalIgnoreCase));

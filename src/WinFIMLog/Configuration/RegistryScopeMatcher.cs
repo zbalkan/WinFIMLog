@@ -4,7 +4,9 @@ using System.Linq;
 
 namespace WinFIMLog.Configuration
 {
-    /// <summary>Matches registry names using an all-loaded-user-hives HKCU policy.</summary>
+    /// <summary>
+    /// Matches registry names using an all-loaded-user-hives HKCU policy.
+    /// </summary>
     public sealed class RegistryScopeMatcher
     {
         private const string CurrentUser = "HKEY_CURRENT_USER";
@@ -14,8 +16,8 @@ namespace WinFIMLog.Configuration
 
         public RegistryScopeMatcher(IEnumerable<string> included, IEnumerable<string> excluded)
         {
-            _included = included.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
-            _excluded = excluded.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+            _included = included.Where(static value => !string.IsNullOrWhiteSpace(value)).ToArray();
+            _excluded = excluded.Where(static value => !string.IsNullOrWhiteSpace(value)).ToArray();
         }
 
         public static bool Matches(string configuredName, string eventName)

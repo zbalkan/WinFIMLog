@@ -11,7 +11,7 @@ using WinFIMLog.Snapshots;
 
 namespace WinFIMLog
 {
-    public partial class JobOrchestrator : BackgroundService
+    public class JobOrchestrator : BackgroundService
     {
         private readonly FileSystemCaptureQueue _capture;
         private readonly FileSystemMonitorJob _fsMonitor;
@@ -62,13 +62,13 @@ namespace WinFIMLog
             }
         }
 
-        protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTaskAsync(stoppingToken);
 
         private async Task CleanupAsync(Task? fileSystemMonitorTask)
         {
             try
             {
-                if (fileSystemMonitorTask != null)
+                if (fileSystemMonitorTask is not null)
                 {
                     await fileSystemMonitorTask;
                 }
@@ -84,7 +84,7 @@ namespace WinFIMLog
 
         // Workaround for synchronous actions
         // Reference: https://blog.stephencleary.com/2020/05/backgroundservice-gotcha-startup.html
-        private async Task ExecutableTask(CancellationToken stoppingToken)
+        private async Task ExecutableTaskAsync(CancellationToken stoppingToken)
         {
             Task? fileSystemMonitorTask = null;
             Task? scopeRefreshTask = null;
@@ -120,7 +120,7 @@ namespace WinFIMLog
             }
             finally
             {
-                if (scopeRefreshTask != null)
+                if (scopeRefreshTask is not null)
                 {
                     try { await scopeRefreshTask; }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
@@ -145,7 +145,7 @@ namespace WinFIMLog
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromSeconds(_settings.ScopeReresolutionInterval), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(_settings.ScopeReresolutionInterval), stoppingToken).ConfigureAwait(false);
                 try
                 {
                     var result = _settings.Reload();
@@ -155,7 +155,7 @@ namespace WinFIMLog
                     }
 
                     _fsMonitor.Reconfigure();
-                    await ReconfigureRegistryMonitorAsync(stoppingToken);
+                    await ReconfigureRegistryMonitorAsync(stoppingToken).ConfigureAwait(false);
                     _health.ConfigurationChanged(result.PreviousHash, result.CurrentHash);
                     _snapshots.RequestScopeSnapshot("Effective configuration changed");
                 }
@@ -236,7 +236,7 @@ namespace WinFIMLog
                 return;
             }
 
-            cancellation!.Cancel();
+            await cancellation!.CancelAsync();
             try { await task; }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
             finally { cancellation.Dispose(); }

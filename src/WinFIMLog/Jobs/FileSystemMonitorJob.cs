@@ -12,7 +12,7 @@ using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Jobs
 {
-    internal partial class FileSystemMonitorJob : IMonitor
+    internal class FileSystemMonitorJob : IMonitor
     {
         private readonly FileSystemCaptureQueue _capture;
         private readonly IHealthReporter _health;
@@ -35,7 +35,9 @@ namespace WinFIMLog.Jobs
             _snapshots = snapshots;
         }
 
-        /// <summary>Applies watcher additions and removals for the newly resolved scope.</summary>
+        /// <summary>
+        /// Applies watcher additions and removals for the newly resolved scope.
+        /// </summary>
         /// <remarks>
         /// Desired paths form a set and active watchers form a path-keyed dictionary because only
         /// membership is relevant. Keep these case-insensitive hash structures: scanning the
@@ -126,7 +128,7 @@ namespace WinFIMLog.Jobs
                 IncludeSubdirectories = true,
                 InternalBufferSize = configuration.WatcherBufferSizeKB * 1024,
                 Filter = string.Empty,
-                EnableRaisingEvents = false
+                EnableRaisingEvents = false,
             };
 
             watcher.Changed += OnChanged;

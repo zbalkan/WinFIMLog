@@ -14,7 +14,7 @@ namespace WinFIMLog.Snapshots
             paths.Select(VolumeIdentity).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase));
 
         public static string RegistryResolved(IEnumerable<string> resolvedKeys) => string.Join(";",
-            resolvedKeys.Select(key => key.TrimEnd('\\').ToUpperInvariant())
+            resolvedKeys.Select(static key => key.TrimEnd('\\').ToUpperInvariant())
                 .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase));
 
         [DllImport("kernel32.dll", EntryPoint = "GetVolumeInformationW", SetLastError = true,

@@ -3,11 +3,9 @@
     public static partial class FileSystem
     {
         /// <summary>
-        ///     Filesystem object type.
+        /// Filesystem object type.
         /// </summary>
-        /// <remarks>
-        ///     Hardlinks and junctions are ignored as it does not matter for our application.
-        /// </remarks>
+        /// <remarks>Hardlinks and junctions are ignored as it does not matter for our application.</remarks>
         public enum ObjectType
         {
             Directory,
@@ -16,7 +14,7 @@
 
             SymbolicLink,
 
-            Unknown
+            Unknown,
         }
     }
 }

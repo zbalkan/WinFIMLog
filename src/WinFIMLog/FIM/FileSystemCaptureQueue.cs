@@ -28,7 +28,7 @@ namespace WinFIMLog.FIM
                 // Wait mode makes TryWrite return false rather than silently discarding a write.
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleReader = true,
-                SingleWriter = false
+                SingleWriter = false,
             });
         }
 
@@ -46,7 +46,9 @@ namespace WinFIMLog.FIM
             }
         }
 
-        /// <summary>Stops admission after all watcher producers have stopped.</summary>
+        /// <summary>
+        /// Stops admission after all watcher producers have stopped.
+        /// </summary>
         public void CompleteWriter() => _channel.Writer.TryComplete();
 
         public IAsyncEnumerable<RawFileSystemNotification> ReadAllAsync() =>

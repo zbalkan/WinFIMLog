@@ -4,7 +4,9 @@ using System.Diagnostics;
 
 namespace WinFIMLog.Events
 {
-    /// <summary>Stable Windows Event Log allocations for structured records.</summary>
+    /// <summary>
+    /// Stable Windows Event Log allocations for structured records.
+    /// </summary>
     internal static class EventIdCatalog
     {
         internal const ushort ServiceError = 7770;
@@ -40,7 +42,7 @@ namespace WinFIMLog.Events
                 [ConfigurationChanged] = "ConfigurationChanged",
                 [BaselineFinding] = "BaselineFinding",
                 [Aggregation] = "Aggregation",
-                [SecurityAuditAttribution] = "SecurityAuditAttribution"
+                [SecurityAuditAttribution] = "SecurityAuditAttribution",
             };
 
         internal static void Validate(ushort eventId, string recordType)
@@ -57,7 +59,7 @@ namespace WinFIMLog.Events
             CoverageGap or SinkFailure or ServiceError => EventLogEntryType.Error,
             ConfigurationChanged or BaselineFinding => EventLogEntryType.Warning,
             _ when errorFallback => EventLogEntryType.Error,
-            _ => EventLogEntryType.Information
+            _ => EventLogEntryType.Information,
         };
     }
 }

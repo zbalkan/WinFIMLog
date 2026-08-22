@@ -52,7 +52,7 @@ namespace WinFIMLog.IO.Security
                     }
                 }
 
-                if (bucket.Count == 0)
+                if (bucket.Count is 0)
                 {
                     buckets.Remove(fingerprint);
                 }
@@ -89,7 +89,7 @@ namespace WinFIMLog.IO.Security
                         }
                     }
 
-                    if (existingBucket.Count == 0)
+                    if (existingBucket.Count is 0)
                     {
                         buckets.Remove(fingerprint);
                         existingBucket = null;

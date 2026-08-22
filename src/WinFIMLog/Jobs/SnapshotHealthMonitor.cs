@@ -18,11 +18,11 @@ namespace WinFIMLog.Jobs
         internal void Check(BaselineSource source)
         {
             var configuration = settings.Capture();
-            var interval = TimeSpan.FromSeconds(source == BaselineSource.FileSystem
+            var interval = TimeSpan.FromSeconds(source is BaselineSource.FileSystem
                 ? configuration.FileSystemSnapshotInterval : configuration.RegistrySnapshotInterval);
-            var lastSuccess = source == BaselineSource.FileSystem
+            var lastSuccess = source is BaselineSource.FileSystem
                 ? state.FileSystemLastSuccess : state.RegistryLastSuccess;
-            var started = source == BaselineSource.FileSystem
+            var started = source is BaselineSource.FileSystem
                 ? state.FileSystemStarted : state.RegistryStarted;
             var overdue = lastSuccess is not null
                 ? DateTimeOffset.UtcNow - lastSuccess > interval + interval
@@ -55,6 +55,6 @@ namespace WinFIMLog.Jobs
         }
 
         private ref bool Overdue(BaselineSource source)
-        { if (source == BaselineSource.FileSystem) { return ref fileSystemOverdue; } return ref registryOverdue; }
+        { if (source is BaselineSource.FileSystem) { return ref fileSystemOverdue; } return ref registryOverdue; }
     }
 }

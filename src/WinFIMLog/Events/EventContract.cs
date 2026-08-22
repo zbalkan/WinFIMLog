@@ -4,7 +4,9 @@ using WinFIMLog.IO;
 
 namespace WinFIMLog.Events
 {
-    /// <summary>The stable event envelope used for durable delivery and Windows Event Log rendering.</summary>
+    /// <summary>
+    /// The stable event envelope used for durable delivery and Windows Event Log rendering.
+    /// </summary>
     public sealed record EventContract(
         int SchemaVersion,
         ushort EventId,
@@ -16,7 +18,9 @@ namespace WinFIMLog.Events
     {
         public const int CurrentSchemaVersion = 1;
 
-        /// <summary>Renders the event as a human-readable key-value record without JSON serialization.</summary>
+        /// <summary>
+        /// Renders the event as a human-readable key-value record without JSON serialization.
+        /// </summary>
         internal string FormatEventLogMessage() => EventLogMessageFormatter.Format(this);
 
         public static EventContract Create(ushort eventId, string recordType, string recordId,
@@ -30,7 +34,9 @@ namespace WinFIMLog.Events
         public static bool IsSupported(int schemaVersion) => schemaVersion == CurrentSchemaVersion;
     }
 
-    /// <summary>Formats event records directly into one final Windows Event Log message string.</summary>
+    /// <summary>
+    /// Formats event records directly into one final Windows Event Log message string.
+    /// </summary>
     internal static class EventLogMessageFormatter
     {
         public static string Format(EventContract record)
@@ -79,12 +85,12 @@ namespace WinFIMLog.Events
             for (var index = 0; index < name.Length; index++)
             {
                 var character = name[index];
-                if (index != 0 && char.IsUpper(character) && wasLowerCase)
+                if (index is not 0 && char.IsUpper(character) && wasLowerCase)
                 {
                     buffer.Append(' ');
                 }
 
-                buffer.Append(index == 0 ? char.ToUpperInvariant(character) : character);
+                buffer.Append(index is 0 ? char.ToUpperInvariant(character) : character);
                 wasLowerCase = char.IsLower(character);
             }
         }

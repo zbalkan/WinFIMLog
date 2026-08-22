@@ -19,7 +19,9 @@ namespace WinFIMLog.IO
         private const string ProfileListPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList";
         private const string UserShellFoldersPath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders";
 
-        /// <summary>Calculate <see cref="SHA256" /> digest of a file.</summary>
+        /// <summary>
+        /// Calculate <see cref="SHA256" /> digest of a file.
+        /// </summary>
         public static string CalculateFileHash(string path)
         {
             var digest = string.Empty;
@@ -50,11 +52,13 @@ namespace WinFIMLog.IO
             return digest;
         }
 
-        /// <summary>Reads file list from NTFS indexes.</summary>
+        /// <summary>
+        /// Reads file list from NTFS indexes.
+        /// </summary>
         public static ConcurrentBag<string> InvokeNtfsSearch()
         {
             var ntfsDrives = DriveInfo.GetDrives()
-                .Where(d => d.DriveFormat == "NTFS");
+                .Where(static d => string.Equals(d.DriveFormat, "NTFS", StringComparison.OrdinalIgnoreCase));
 
             var allPaths = new ConcurrentBag<string>();
 
@@ -62,7 +66,7 @@ namespace WinFIMLog.IO
             {
                 var ntfsReader = new NtfsReader(driveToAnalyze, RetrieveMode.All);
                 var files = ntfsReader.GetNodesParallel(driveToAnalyze.Name)
-                    .Where(node => (node.Attributes &
+                    .Where(static node => (node.Attributes &
                         (Attributes.Temporary |
                          Attributes.System |
                          Attributes.Device |
@@ -70,7 +74,7 @@ namespace WinFIMLog.IO
                          Attributes.Offline |
                          Attributes.ReparsePoint |
                          Attributes.SparseFile)) == 0)
-                    .Select(node => node.FullName);
+                    .Select(static node => node.FullName);
 
                 allPaths.AddRange(files);
             });
@@ -184,7 +188,7 @@ namespace WinFIMLog.IO
 
             try
             {
-                using var profileList = MicrosoftRegistry.LocalMachine.OpenSubKey(ProfileListPath, false);
+                using var profileList = MicrosoftRegistry.LocalMachine.OpenSubKey(ProfileListPath, writable: false);
                 if (profileList is null)
                 {
                     return [];
@@ -193,17 +197,17 @@ namespace WinFIMLog.IO
                 var profiles = new List<(string ProfilePath, string? ConfiguredDownloads)>();
                 foreach (var sid in profileList.GetSubKeyNames())
                 {
-                    using var profile = profileList.OpenSubKey(sid, false);
+                    using var profile = profileList.OpenSubKey(sid, writable: false);
                     var profilePath = profile?.GetValue("ProfileImagePath") as string;
                     if (string.IsNullOrWhiteSpace(profilePath))
                     {
                         continue;
                     }
 
-                    using var userShellFolders = MicrosoftRegistry.Users.OpenSubKey(sid + "\\" + UserShellFoldersPath, false);
-                    string? configuredDownloads = userShellFolders?.GetValue(DownloadsFolderId, null,
+                    using var userShellFolders = MicrosoftRegistry.Users.OpenSubKey(sid + "\\" + UserShellFoldersPath, writable: false);
+                    string? configuredDownloads = userShellFolders?.GetValue(DownloadsFolderId, defaultValue: null,
                         RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
-                    configuredDownloads ??= userShellFolders?.GetValue("Downloads", null,
+                    configuredDownloads ??= userShellFolders?.GetValue("Downloads", defaultValue: null,
                         RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
                     profiles.Add((Environment.ExpandEnvironmentVariables(profilePath), configuredDownloads));
                 }

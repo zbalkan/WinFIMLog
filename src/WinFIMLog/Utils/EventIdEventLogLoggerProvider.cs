@@ -38,7 +38,7 @@ namespace WinFIMLog.Utils
                 var message = isLifecycleCancellation
                     ? $"Lifecycle cancellation observed: {exception!.Message}"
                     : formatter(state, exception);
-                if (exception != null && !isLifecycleCancellation)
+                if (exception is not null && !isLifecycleCancellation)
                 {
                     message = $"{message}{Environment.NewLine}{exception}";
                 }
@@ -52,7 +52,7 @@ namespace WinFIMLog.Utils
             {
                 LogLevel.Warning => EventLogEntryType.Warning,
                 LogLevel.Error or LogLevel.Critical => EventLogEntryType.Error,
-                _ => EventLogEntryType.Information
+                _ => EventLogEntryType.Information,
             };
 
             private void EnsureSource()

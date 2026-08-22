@@ -8,14 +8,14 @@ using WinFIMLog.Utils;
 
 namespace WinFIMLog.FIM
 {
-    public partial class RegistryChange : Change
+    public class RegistryChange : Change
     {
         internal RegistryChange()
         { }
 
         public RegistryChange(RegistryTraceData data, string fullName)
         {
-            Id = Ulid.NewUlid().ToString();
+            Id = Ulid.NewUlid().ToString(format: null, System.Globalization.CultureInfo.InvariantCulture);
             EventName = data.OpcodeName;
             ProcessID = data.ProcessID;
             ProcessName = data.ProcessName;
@@ -33,10 +33,14 @@ namespace WinFIMLog.FIM
             CaptureAttribution(data);
         }
 
-        /// <summary>Availability of optional live registry metadata for this already observed ETW event.</summary>
+        /// <summary>
+        /// Availability of optional live registry metadata for this already observed ETW event.
+        /// </summary>
         public string EvidenceStatus { get; set; } = "Available";
 
-        /// <summary>Machine-readable reason why live registry metadata is incomplete.</summary>
+        /// <summary>
+        /// Machine-readable reason why live registry metadata is incomplete.
+        /// </summary>
         public string? EvidenceMissingReason { get; set; }
 
         public string EventName { get; set; }
@@ -68,12 +72,12 @@ namespace WinFIMLog.FIM
             RegistryEventCategory.Create => ChangeCategory.Created,
             RegistryEventCategory.SetValue or RegistryEventCategory.SetInformation => ChangeCategory.Changed,
             RegistryEventCategory.Delete or RegistryEventCategory.DeleteValue => ChangeCategory.Deleted,
-            _ => ChangeCategory.Changed
+            _ => ChangeCategory.Changed,
         };
 
         private void CaptureAttribution(RegistryTraceData data)
         {
-            var attribution = ProcessAttribution.Resolve(data.ProcessID, data.ProcessName, processId =>
+            var attribution = ProcessAttribution.Resolve(data.ProcessID, data.ProcessName, static processId =>
             {
                 using var process = Process.GetProcessById(processId);
                 var userInfo = SidUserInfoCache.Get(process);
@@ -81,9 +85,9 @@ namespace WinFIMLog.FIM
             });
             AttributionStatus = attribution.Status;
             AttributionMethod = "RegistryETWPostEventPid";
-            AttributionConfidence = attribution.Status == AttributionStatus.Attributed ? "Low" : "None";
+            AttributionConfidence = attribution.Status is AttributionStatus.Attributed ? "Low" : "None";
             AttributionSourceTimestamp = new DateTimeOffset(data.TimeStamp);
-            AttributionMissingReason = attribution.Status == AttributionStatus.Unavailable
+            AttributionMissingReason = attribution.Status is AttributionStatus.Unavailable
                 ? "ProcessExitedOrAccessDenied" : null;
             ProcessName = attribution.ProcessName;
             Username = attribution.Username;
@@ -95,18 +99,18 @@ namespace WinFIMLog.FIM
             try
             {
                 using var baseKey = RegistryKey.OpenBaseKey(hive, RegistryView.Default);
-                using var key = baseKey.OpenSubKey(StripFullName(fullName, ValueName ?? string.Empty), false);
+                using var key = baseKey.OpenSubKey(StripFullName(fullName, ValueName ?? string.Empty), writable: false);
                 if (key is null)
                 {
                     MarkEvidenceUnavailable("KeyNotAvailable");
                     return;
                 }
 
-                if (KeyName?.Length == 0)
+                if ((KeyName?.Length) is 0)
                 {
                     KeyName = key.Name;
                 }
-                if (ChangeCategory != ChangeCategory.Deleted)
+                if (ChangeCategory is not ChangeCategory.Deleted)
                 {
                     ValueData = ExtractValueData(key);
                 }
@@ -145,7 +149,7 @@ namespace WinFIMLog.FIM
                     RegistryValueKind.QWord => Convert.ToString((long)value),
                     RegistryValueKind.Binary => FormatBinaryValue((byte[])value),
                     RegistryValueKind.MultiString => string.Join(" ", (string[])value),
-                    _ => ValueOrNull(value)
+                    _ => ValueOrNull(value),
                 };
             }
             catch (Exception exception)
@@ -157,7 +161,7 @@ namespace WinFIMLog.FIM
 
         internal static string FormatBinaryValue(byte[] value)
         {
-            if (value.Length == 0)
+            if (value.Length is 0)
             {
                 return string.Empty;
             }
@@ -188,7 +192,7 @@ namespace WinFIMLog.FIM
 
         private void MarkEvidencePartial(string reason)
         {
-            if (EvidenceStatus == "Available")
+            if (string.Equals(EvidenceStatus, "Available", StringComparison.OrdinalIgnoreCase))
             {
                 EvidenceStatus = "Partial";
             }

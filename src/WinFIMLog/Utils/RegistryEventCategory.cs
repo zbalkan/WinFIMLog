@@ -1,7 +1,7 @@
 ﻿namespace WinFIMLog.Utils
 {
     /// <summary>
-    ///     RegistryTraceData Status as enum
+    /// RegistryTraceData Status as enum
     /// </summary>
     /// <see href="https://github.com/microsoftarchive/bcl/blob/master/Tools/ETW/traceEvent/KernelTraceEventParser.cs" />
     internal enum RegistryEventCategory
@@ -46,6 +46,6 @@
 
         Virtualize = 26,
 
-        Close = 27
+        Close = 27,
     }
 }

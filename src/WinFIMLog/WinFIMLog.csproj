@@ -18,6 +18,11 @@
         <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
     </PropertyGroup>
 
+
+    <PropertyGroup>
+        <MeziantouAnalysisMode>all-warnings</MeziantouAnalysisMode>
+    </PropertyGroup>
+
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
         <CheckForOverflowUnderflow>False</CheckForOverflowUnderflow>
     </PropertyGroup>
@@ -34,6 +39,10 @@
 
     <ItemGroup>
         <PackageReference Include="LiteDB" Version="5.0.21" />
+        <PackageReference Include="Meziantou.Analyzer" Version="3.0.177">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
         <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.2.6" ExcludeAssets="build;buildTransitive" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
         <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.11" />
@@ -51,6 +60,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\NtfsReader\src\NtfsReader\NtfsReader.csproj" />
+        <ProjectReference Include="..\NtfsReader\src\NtfsReader\NtfsReader.csproj" />
     </ItemGroup>
 </Project>

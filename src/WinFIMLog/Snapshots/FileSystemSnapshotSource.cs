@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using WinFIMLog.IO.Security;
 
 namespace WinFIMLog.Snapshots
 {
-    /// <summary>Portable enumerator for Tier 0 filesystem evidence.</summary>
+    /// <summary>
+    /// Portable enumerator for Tier 0 filesystem evidence.
+    /// </summary>
     public sealed class FileSystemSnapshotSource
     {
         private readonly Func<string, IEnumerable<string>> enumerateChildren;
@@ -17,7 +20,7 @@ namespace WinFIMLog.Snapshots
         public FileSystemSnapshotSource(int hashLimitMb, Func<string, bool>? isIncluded = null)
         {
             hashSizeLimit = hashLimitMb * 1024L * 1024L;
-            this.isIncluded = isIncluded ?? (_ => true);
+            this.isIncluded = isIncluded ?? (static _ => true);
             enumerateChildren = Directory.EnumerateFileSystemEntries;
         }
 
@@ -30,7 +33,7 @@ namespace WinFIMLog.Snapshots
             var output = new List<BaselineMember>();
             foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                CaptureTree(root, output);
+                CaptureTreeAsync(root, output);
             }
 
             return output;
@@ -56,18 +59,18 @@ namespace WinFIMLog.Snapshots
             Identity = Normalise(path),
             Path = Path.GetFullPath(path),
             NodeType = SnapshotNodeType.File,
-            HashState = state == EvidenceAvailability.AccessDenied ? HashEvidenceState.AccessDenied : HashEvidenceState.Failed,
-            AclState = state
+            HashState = state is EvidenceAvailability.AccessDenied ? HashEvidenceState.AccessDenied : HashEvidenceState.Failed,
+            AclState = state,
         };
 
-        private void CaptureHash(string path, BaselineMember member)
+        private async Task CaptureHashAsync(string path, BaselineMember member)
         {
             try
             {
                 if (new FileInfo(path).Length > hashSizeLimit)
                 { member.HashState = HashEvidenceState.SkippedBySizeCap; return; }
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                member.ContentHash = Convert.ToHexString(SHA256.HashData(stream));
+                await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                member.ContentHash = Convert.ToHexString(await SHA256.HashDataAsync(stream));
                 member.HashState = HashEvidenceState.Hashed;
             }
             catch (UnauthorizedAccessException) { member.HashState = HashEvidenceState.AccessDenied; }
@@ -76,27 +79,32 @@ namespace WinFIMLog.Snapshots
             catch { member.HashState = HashEvidenceState.Failed; }
         }
 
-        /// <summary>Captures a tree with iterative depth-first traversal.</summary>
+        /// <summary>
+        /// Captures a tree with iterative depth-first traversal.
+        /// </summary>
         /// <remarks>
         /// An explicit stack avoids call-stack exhaustion on deeply nested trees. Children are
         /// streamed onto it rather than materialized as an array so wide directories do not cause
         /// large temporary allocations and already-yielded children survive late enumeration errors.
         /// </remarks>
-        private void CaptureTree(string root, List<BaselineMember> output)
+        private async Task CaptureTreeAsync(string root, List<BaselineMember> output)
         {
             var pending = new Stack<string>();
             pending.Push(root);
             while (pending.Count > 0)
             {
-                CaptureNode(pending.Pop(), output, pending);
+                await CaptureNodeAsync(pending.Pop(), output, pending).ConfigureAwait(false);
             }
         }
 
-        private void CaptureNode(string path, List<BaselineMember> output, Stack<string> pending)
+        private async Task CaptureNodeAsync(string path, List<BaselineMember> output, Stack<string> pending)
         {
             // Excluded directories prune their entire subtree; capture and notification
             // admission therefore use exactly the same effective-scope predicate.
-            if (!isIncluded(path)) return;
+            if (!isIncluded(path))
+            {
+                return;
+            }
 
             FileAttributes attributes;
             try { attributes = File.GetAttributes(path); }
@@ -118,18 +126,21 @@ namespace WinFIMLog.Snapshots
                 IsSparse = attributes.HasFlag(FileAttributes.SparseFile),
                 IsTemporary = attributes.HasFlag(FileAttributes.Temporary),
                 IsOffline = attributes.HasFlag(FileAttributes.Offline),
-                LinkCount = !directory && !reparse ? FileLinkCount.TryGet(path) : null
+                LinkCount = !directory && !reparse ? FileLinkCount.TryGet(path) : null,
             };
             CaptureAcl(path, member);
             if (!directory && !reparse)
             {
-                CaptureHash(path, member);
+                await CaptureHashAsync(path, member).ConfigureAwait(false);
             }
 
             output.Add(member);
 
             // Reparse points are evidence nodes, never traversal roots.
-            if (!directory || reparse) return;
+            if (!directory || reparse)
+            {
+                return;
+            }
 
             try
             {

@@ -22,7 +22,9 @@ namespace WinFIMLog.FIM
         public string PreviousHash { get; set; }
         public long? PreviousSizeBytes { get; set; }
 
-        /// <summary> Generates new file system change record from parameters </summary>
+        /// <summary>
+        /// Generates new file system change record from parameters
+        /// </summary>
         /// <param name="path">The path to filekey</param>
         /// <param name="category"><see cref="ChangeCategory"></param>
         /// <param name="hashLimitMb">The maximum file size in megabytes for hash calculation.</param>
@@ -35,22 +37,20 @@ namespace WinFIMLog.FIM
             bool retainMissing = false)
         {
             var objectType = GetObjectType(path);
-            if (objectType == ObjectType.Unknown && category != ChangeCategory.Deleted && !retainMissing)
+            if (objectType is ObjectType.Unknown && category is not ChangeCategory.Deleted && !retainMissing)
             {
                 return null;
             }
 
             var hash = string.Empty;
-            if (objectType == ObjectType.File &&
-                category != ChangeCategory.Deleted &&
-                IsUnderSizeLimit(path, hashLimitMb))
+            if (objectType is ObjectType.File && category is not ChangeCategory.Deleted && IsUnderSizeLimit(path, hashLimitMb))
             {
                 hash = CalculateFileHash(path);
             }
 
             return new FileSystemChange
             {
-                Id = Ulid.NewUlid().ToString(),
+                Id = Ulid.NewUlid().ToString(format: null, System.Globalization.CultureInfo.InvariantCulture),
                 ChangeCategory = category,
                 ConfigChangeType = ConfigChangeType.FileSystem,
                 Entity = path,
@@ -61,13 +61,13 @@ namespace WinFIMLog.FIM
                 CurrentHash = hash,
                 CurrentSizeBytes = FileSizeOrNull(path, objectType, category),
                 PreviousHash = string.Empty,
-                ACLs = GetACL(path, category)
+                ACLs = GetACL(path, category),
             };
         }
 
         private static long? FileSizeOrNull(string path, ObjectType objectType, ChangeCategory category)
         {
-            if (objectType != ObjectType.File || category == ChangeCategory.Deleted)
+            if (objectType is not ObjectType.File || category is ChangeCategory.Deleted)
             {
                 return null;
             }
@@ -86,7 +86,7 @@ namespace WinFIMLog.FIM
 
         public static FileSystemChange? RetrievePreviousChange(string path, ILiteDbContext ctx) => ctx.FileSystemChanges.Query()
                       .Where(x => x.NormalizedEntity == LiteDbContext.NormalizeEntity(path))
-                      .OrderByDescending(c => c.DateTime)
+                      .OrderByDescending(static c => c.DateTime)
                       .FirstOrDefault();
 
         public static string RetrievePreviousHash(string path, ILiteDbContext ctx)
@@ -133,7 +133,7 @@ namespace WinFIMLog.FIM
 
         private static string GetACL(string path, ChangeCategory category)
         {
-            if (category == ChangeCategory.Deleted)
+            if (category is ChangeCategory.Deleted)
             {
                 return string.Empty;
             }
@@ -179,8 +179,8 @@ namespace WinFIMLog.FIM
             }
 
             return attributes.HasFlag(FileAttributes.Directory)
-                ? new DirectoryInfo(path).LinkTarget != null
-                : new FileInfo(path).LinkTarget != null;
+                ? new DirectoryInfo(path).LinkTarget is not null
+                : new FileInfo(path).LinkTarget is not null;
         }
 
         private static bool IsUnderSizeLimit(string path, int hashLimitMb)

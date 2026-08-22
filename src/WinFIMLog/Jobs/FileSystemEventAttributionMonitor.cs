@@ -33,7 +33,7 @@ namespace WinFIMLog.Jobs
         private readonly ProcessInstanceStore _processes = new();
         private readonly int _serviceProcessId = Environment.ProcessId;
         private readonly Settings _settings;
-        private readonly ManualResetEventSlim _started = new(false);
+        private readonly ManualResetEventSlim _started = new(initialState: false);
         private TraceEventSession? _session;
         private Thread? _thread;
 
@@ -58,13 +58,13 @@ namespace WinFIMLog.Jobs
                 return false;
             }
 
-            return int.TryParse(sessionName.AsSpan(LegacySessionNamePrefix.Length), out var processId) &&
+            return int.TryParse(sessionName.AsSpan(LegacySessionNamePrefix.Length), System.Globalization.CultureInfo.InvariantCulture, out var processId) &&
                    processId > 0;
         }
 
         internal void Start()
         {
-            if (_thread != null)
+            if (_thread is not null)
             {
                 return;
             }
@@ -72,7 +72,7 @@ namespace WinFIMLog.Jobs
             _thread = new Thread(Monitor)
             {
                 IsBackground = true,
-                Name = "File system ETW attribution"
+                Name = "File system ETW attribution",
             };
             _thread.Start();
             _started.Wait(TimeSpan.FromSeconds(2));
@@ -97,19 +97,19 @@ namespace WinFIMLog.Jobs
         private static ulong? ReadSequence(TraceEvent data)
         {
             var value = data.PayloadByName("ProcessSequenceNumber");
-            if (value == null)
+            if (value is null)
             {
                 return null;
             }
 
-            try { return Convert.ToUInt64(value); }
+            try { return Convert.ToUInt64(value, System.Globalization.CultureInfo.InvariantCulture); }
             catch (Exception) { return null; }
         }
 
         private void EndProcess(ProcessTraceData data)
         {
             var sequence = ReadSequence(data);
-            if (sequence != null)
+            if (sequence is not null)
             {
                 _processes.End(data.ProcessID, sequence.Value);
             }
@@ -120,7 +120,7 @@ namespace WinFIMLog.Jobs
             try
             {
                 RemoveLegacySessions();
-                using var session = new TraceEventSession(SessionName, null);
+                using var session = new TraceEventSession(SessionName, fileName: null);
                 _session = session;
                 _started.Set();
                 session.StopOnDispose = true;
@@ -165,7 +165,7 @@ namespace WinFIMLog.Jobs
             }
 
             var sequence = ReadSequence(data);
-            if (sequence == null)
+            if (sequence is null)
             {
                 _attributions[path] = Attribution.Missing(data.ProcessID, data.TimeStamp,
                     _processes.RundownComplete ? "ProcessSequenceNumberMissing" : "ProcessRundownMissing");
@@ -176,19 +176,19 @@ namespace WinFIMLog.Jobs
             {
                 _attributions[path] = new Attribution(data.ProcessID, sequence,
                     processEvidence.ProcessName, DateTime.UtcNow, new DateTimeOffset(data.TimeStamp),
-                    processEvidence.Username, processEvidence.UserSid, AttributionStatus.Attributed, null);
+                    processEvidence.Username, processEvidence.UserSid, AttributionStatus.Attributed, MissingReason: null);
                 return;
             }
 
             _attributions[path] = new Attribution(data.ProcessID, sequence,
                 data.ProcessName ?? string.Empty, DateTime.UtcNow, new DateTimeOffset(data.TimeStamp),
-                null, null, AttributionStatus.Unavailable, "ProcessInstanceNotFound");
+Username: null, UserSID: null, AttributionStatus.Unavailable, "ProcessInstanceNotFound");
         }
 
         private void RecordProcess(ProcessTraceData data)
         {
             var sequence = ReadSequence(data);
-            if (sequence == null)
+            if (sequence is null)
             {
                 return;
             }
@@ -256,9 +256,9 @@ namespace WinFIMLog.Jobs
             string? MissingReason)
         {
             internal static Attribution Missing(int processId, DateTime timestamp, string reason) =>
-                new(processId, null, string.Empty, DateTime.UtcNow, new DateTimeOffset(timestamp),
-                    null, null,
-                    reason == "ProcessRundownMissing" ? AttributionStatus.RundownMissing : AttributionStatus.Unavailable,
+                new(processId, ProcessSequenceNumber: null, string.Empty, DateTime.UtcNow, new DateTimeOffset(timestamp),
+Username: null, UserSID: null,
+string.Equals(reason, "ProcessRundownMissing", StringComparison.OrdinalIgnoreCase) ? AttributionStatus.RundownMissing : AttributionStatus.Unavailable,
                     reason);
         }
     }

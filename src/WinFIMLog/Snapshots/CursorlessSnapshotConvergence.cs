@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace WinFIMLog.Snapshots
@@ -25,7 +26,7 @@ namespace WinFIMLog.Snapshots
                 previous = current;
             }
             throw new SnapshotUnstableException(
-                $"Filesystem observations did not converge within {maximumPasses} passes.");
+                string.Create(CultureInfo.InvariantCulture, $"Filesystem observations did not converge within {maximumPasses} passes."));
         }
 
         private static bool Equivalent(IReadOnlyList<BaselineMember> left, IReadOnlyList<BaselineMember> right)
@@ -35,7 +36,7 @@ namespace WinFIMLog.Snapshots
                 return false;
             }
 
-            var before = left.ToDictionary(x => x.Identity, x => x.Fingerprint, StringComparer.OrdinalIgnoreCase);
+            var before = left.ToDictionary(static x => x.Identity, static x => x.Fingerprint, StringComparer.OrdinalIgnoreCase);
             return right.All(item => before.TryGetValue(item.Identity, out var fingerprint) &&
                 string.Equals(fingerprint, item.Fingerprint, StringComparison.Ordinal));
         }

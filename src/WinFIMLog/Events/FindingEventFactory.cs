@@ -13,10 +13,10 @@ namespace WinFIMLog.Events
                 ChangeCategory.Created => EventIdCatalog.FileSystemCreated,
                 ChangeCategory.Changed => EventIdCatalog.FileSystemChanged,
                 ChangeCategory.Deleted => EventIdCatalog.FileSystemDeleted,
-                _ => throw new ArgumentOutOfRangeException(nameof(change), "Discovery is not an Event Log finding.")
+                _ => throw new ArgumentOutOfRangeException(nameof(change), "Discovery is not an Event Log finding."),
             };
             return EventContract.Create(eventId, "FileSystemFinding", change.Id, change.ScopeHash,
-                new Dictionary<string, object?>
+                new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["category"] = change.ChangeCategory.ToString(),
                     ["operation"] = FileSystemOperation(change),
@@ -41,7 +41,7 @@ namespace WinFIMLog.Events
                     ["processId"] = change.ProcessID,
                     ["processName"] = change.ProcessName,
                     ["userSid"] = change.UserSID,
-                    ["username"] = change.Username
+                    ["username"] = change.Username,
                 });
         }
 
@@ -52,10 +52,10 @@ namespace WinFIMLog.Events
                 ChangeCategory.Created => EventIdCatalog.RegistryCreated,
                 ChangeCategory.Changed => EventIdCatalog.RegistryChanged,
                 ChangeCategory.Deleted => EventIdCatalog.RegistryDeleted,
-                _ => throw new ArgumentOutOfRangeException(nameof(change), "Unsupported Registry change category.")
+                _ => throw new ArgumentOutOfRangeException(nameof(change), "Unsupported Registry change category."),
             };
             return EventContract.Create(eventId, "RegistryFinding", change.Id, change.ScopeHash,
-                new Dictionary<string, object?>
+                new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["category"] = change.ChangeCategory.ToString(),
                     ["operation"] = change.ChangeCategory switch
@@ -63,7 +63,7 @@ namespace WinFIMLog.Events
                         ChangeCategory.Created => "Created",
                         ChangeCategory.Changed => "Modified",
                         ChangeCategory.Deleted => "Deleted",
-                        _ => "Other"
+                        _ => "Other",
                     },
                     ["key"] = change.Entity,
                     ["hive"] = change.Hive,
@@ -81,7 +81,7 @@ namespace WinFIMLog.Events
                     ["processId"] = change.ProcessID,
                     ["processName"] = change.ProcessName,
                     ["userSid"] = change.UserSID,
-                    ["username"] = change.Username
+                    ["username"] = change.Username,
                 });
         }
 
@@ -93,7 +93,7 @@ namespace WinFIMLog.Events
                     ChangeCategory.Created => "Created",
                     ChangeCategory.Changed => "Modified",
                     ChangeCategory.Deleted => "Deleted",
-                    _ => "Other"
+                    _ => "Other",
                 };
     }
 }

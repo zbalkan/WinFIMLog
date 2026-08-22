@@ -4,7 +4,9 @@ using System.Linq;
 
 namespace WinFIMLog.Configuration
 {
-    /// <summary>Creates a stable identity for an effective monitoring scope.</summary>
+    /// <summary>
+    /// Creates a stable identity for an effective monitoring scope.
+    /// </summary>
     public static class ScopeIdentity
     {
         public const string PolicyKey = @"HKEY_LOCAL_MACHINE\SOFTWARE\Policies\WinFIMLog";
@@ -17,7 +19,7 @@ namespace WinFIMLog.Configuration
             {
                 Canonicalise("MP", monitoredPaths), Canonicalise("XP", excludedPaths),
                 Canonicalise("XE", excludedExtensions), Canonicalise("MK", monitoredKeys),
-                Canonicalise("XK", excludedKeys)
+                Canonicalise("XK", excludedKeys),
             });
 
             Span<byte> hash = stackalloc byte[32];
@@ -46,7 +48,7 @@ namespace WinFIMLog.Configuration
 
         public static void RejectProtectedExclusions(IEnumerable<string> excludedKeys)
         {
-            foreach (var exclusion in excludedKeys.Where(value => !string.IsNullOrWhiteSpace(value)))
+            foreach (var exclusion in excludedKeys.Where(static value => !string.IsNullOrWhiteSpace(value)))
             {
                 if (Covers(exclusion, PolicyKey) || Covers(exclusion, PreferenceKey))
                 {
@@ -64,9 +66,9 @@ namespace WinFIMLog.Configuration
         }
 
         private static string Canonicalise(string name, IEnumerable<string> values) => name + "=" +
-                    string.Join("|", values.Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value.Trim().TrimEnd('\\').ToUpperInvariant())
-                .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+                    string.Join("|", values.Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Select(static value => value.Trim().TrimEnd('\\').ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal).OrderBy(static value => value, StringComparer.Ordinal));
 
         private static bool Covers(string candidate, string protectedKey)
         {

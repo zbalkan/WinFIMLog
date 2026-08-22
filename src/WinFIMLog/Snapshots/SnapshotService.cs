@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -11,7 +12,9 @@ using WinFIMLog.Health;
 
 namespace WinFIMLog.Snapshots
 {
-    /// <summary>Coordinates independent, bounded Tier 0 source schedulers.</summary>
+    /// <summary>
+    /// Coordinates independent, bounded Tier 0 source schedulers.
+    /// </summary>
     public sealed class SnapshotService : BackgroundService, ISnapshotCoordinator
     {
         private readonly FileSystemBaselineAvailability fileSystemBaselineAvailability;
@@ -123,7 +126,7 @@ namespace WinFIMLog.Snapshots
             {
                 SingleReader = true,
                 SingleWriter = false,
-                FullMode = BoundedChannelFullMode.DropWrite
+                FullMode = BoundedChannelFullMode.DropWrite,
             });
 
         private static void DrainRequests(ChannelReader<SnapshotRequest> reader)
@@ -155,7 +158,7 @@ namespace WinFIMLog.Snapshots
             while (!cancellationToken.IsCancellationRequested)
             {
                 var configuration = settings.Capture();
-                if (source == BaselineSource.Registry && !configuration.EnableRegistryMonitoring)
+                if (source is BaselineSource.Registry && !configuration.EnableRegistryMonitoring)
                 {
                     await WaitForRequestOrDelay(requests, TimeSpan.FromSeconds(5), cancellationToken);
                     continue;
@@ -177,7 +180,7 @@ namespace WinFIMLog.Snapshots
                 }
 
                 state.Started(source);
-                var succeeded = source == BaselineSource.FileSystem
+                var succeeded = source is BaselineSource.FileSystem
                     ? await RunFileSystemSnapshot(cancellationToken)
                     : await RunRegistrySnapshot(cancellationToken);
                 if (succeeded)
@@ -186,11 +189,11 @@ namespace WinFIMLog.Snapshots
                     if (failures > 0)
                     {
                         health.SourceRecovered($"{source}Snapshot", configuration.ScopeHash,
-                            $"CompletedAfter{failures}Failures");
+                            string.Create(CultureInfo.InvariantCulture, $"CompletedAfter{failures}Failures"));
                     }
 
                     failures = 0;
-                    var interval = source == BaselineSource.FileSystem
+                    var interval = source is BaselineSource.FileSystem
                         ? configuration.FileSystemSnapshotInterval : configuration.RegistrySnapshotInterval;
                     due = DateTimeOffset.UtcNow.AddSeconds(interval);
                 }
@@ -199,7 +202,7 @@ namespace WinFIMLog.Snapshots
                     failures++;
                     state.Failed(source, failures);
                     health.CoverageGap($"{source}Snapshot", configuration.ScopeHash,
-                        $"ScanFailed;RetryAttempt={failures}", 0);
+                        string.Create(CultureInfo.InvariantCulture, $"ScanFailed;RetryAttempt={failures}"), 0);
                     due = DateTimeOffset.UtcNow.Add(RetryDelay(failures));
                 }
             }

@@ -2,7 +2,9 @@ using System;
 
 namespace WinFIMLog.Attribution
 {
-    /// <summary>Opt-in Security-audit attribution. It never controls Tier 0 snapshots.</summary>
+    /// <summary>
+    /// Opt-in Security-audit attribution. It never controls Tier 0 snapshots.
+    /// </summary>
     public sealed class SaclAttributionOptions
     {
         public bool Enabled { get; set; }
@@ -17,7 +19,7 @@ namespace WinFIMLog.Attribution
                 return;
             }
 
-            if (count == 0)
+            if (count is 0)
             {
                 throw new InvalidOperationException("SACL attribution requires an explicit scope.");
             }

@@ -40,17 +40,17 @@ namespace WinFIMLog
 
         private static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                .ConfigureLogging(logging =>
+                .ConfigureLogging(static logging =>
                 {
                     logging.ClearProviders();
                     logging.SetMinimumLevel(LogLevel.Information);
                     logging.AddProvider(new EventIdEventLogLoggerProvider("WinFIMLog", "WinFIMLog"));
                 })
-                .ConfigureAppConfiguration(configuration => _ = configuration.AddWindowsRegistry(Registry.RootName, Registry.Hive, false))
-                .ConfigureServices(services =>
+                .ConfigureAppConfiguration(static configuration => _ = configuration.AddWindowsRegistry(Registry.RootName, Registry.Hive, optional: false))
+                .ConfigureServices(static services =>
                 {
                     // Suppress console messages like "Application started. Press Ctrl+C to shut down.", "Hosting environment: Development", etc.
-                    _ = services.Configure<ConsoleLifetimeOptions>(options => options.SuppressStatusMessages = true);
+                    _ = services.Configure<ConsoleLifetimeOptions>(static options => options.SuppressStatusMessages = true);
                     _ = services.AddOptions<SaclAttributionOptions>()
                         .BindConfiguration("Attribution:Sacl");
                     _ = services.AddOptions<RetentionOptions>()
@@ -58,7 +58,7 @@ namespace WinFIMLog
                     _ = services.AddSingleton<IAuditPolicyConformance, WindowsAuditPolicyConformance>();
                     _ = services.AddSingleton<Settings>();
                     _ = services.AddOptions<LiteDbOptions>()
-                        .Configure<Settings>((options, settings) => options.DatabasePath = settings.DatabasePath);
+                        .Configure<Settings>(static (options, settings) => options.DatabasePath = settings.DatabasePath);
                     _ = services.AddSingleton<ILiteDbContext, LiteDbContext>();
                     _ = services.AddSingleton<BackgroundWorkerQueue>();
                     _ = services.AddSingleton<IBuffer<FileSystemChange>, FileSystemChangeBuffer>();
@@ -67,10 +67,10 @@ namespace WinFIMLog
                     _ = services.AddSingleton<SnapshotHealthState>();
                     _ = services.AddSingleton<IHealthReporter, HealthReporter>();
                     _ = services.AddSingleton<WindowsEventLogSink>();
-                    _ = services.AddSingleton<IEventRecordWriter>(provider => provider.GetRequiredService<WindowsEventLogSink>());
+                    _ = services.AddSingleton<IEventRecordWriter>(static provider => provider.GetRequiredService<WindowsEventLogSink>());
                     _ = services.AddSingleton<EventOutboxRepository>();
                     _ = services.AddSingleton<DurableEventOutboxSink>();
-                    _ = services.AddSingleton<ILocalEventSink>(provider => provider.GetRequiredService<DurableEventOutboxSink>());
+                    _ = services.AddSingleton<ILocalEventSink>(static provider => provider.GetRequiredService<DurableEventOutboxSink>());
                     // Registered first so the durable publisher stops after every producer.
                     _ = services.AddHostedService<EventOutboxPublisher>();
                     _ = services.AddHostedService<StorageMaintenanceService>();
@@ -82,8 +82,8 @@ namespace WinFIMLog
                     // Optional and deliberately independent of snapshot/completeness services.
                     _ = services.AddHostedService<SecurityAuditAttributionService>();
                     _ = services.AddSingleton<SnapshotService>();
-                    _ = services.AddSingleton<ISnapshotCoordinator>(provider => provider.GetRequiredService<SnapshotService>());
-                    _ = services.AddHostedService(provider => provider.GetRequiredService<SnapshotService>());
+                    _ = services.AddSingleton<ISnapshotCoordinator>(static provider => provider.GetRequiredService<SnapshotService>());
+                    _ = services.AddHostedService(static provider => provider.GetRequiredService<SnapshotService>());
                     _ = services.AddHostedService<BaselineFindingPublisher>();
                     _ = services.AddHostedService<SnapshotHealthMonitor>();
                     // Hosted services are stopped in reverse registration order. Start the

@@ -11,12 +11,12 @@ using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Data
 {
-    public partial class LiteDbContext : ILiteDbContext
+    public class LiteDbContext : ILiteDbContext
     {
         private const int LatestStateSchemaVersion = 1;
 
         /// <summary>
-        ///     The default size is 80MB
+        /// The default size is 80MB
         /// </summary>
         private const long InitialDatabaseSize = 80 * MB;
 
@@ -37,27 +37,27 @@ namespace WinFIMLog.Data
             {
                 Filename = options.Value.DatabasePath,
                 Connection = ConnectionType.Shared,
-                InitialSize = InitialDatabaseSize
+                InitialSize = InitialDatabaseSize,
             });
 
             FileSystemChanges = _database.GetCollection<FileSystemChange>("fileSystemChanges");
-            FileSystemChanges.EnsureIndex(x => x.Id);
+            FileSystemChanges.EnsureIndex(static x => x.Id);
             RegistryChanges = _database.GetCollection<RegistryChange>("registryChanges");
-            RegistryChanges.EnsureIndex(x => x.Id);
+            RegistryChanges.EnsureIndex(static x => x.Id);
             EnsureLatestStateSchema();
 
             Baselines = _database.GetCollection<BaselineMetadata>("baselines");
-            Baselines.EnsureIndex(x => x.Status);
-            Baselines.EnsureIndex(x => x.Source);
+            Baselines.EnsureIndex(static x => x.Status);
+            Baselines.EnsureIndex(static x => x.Source);
             BaselineMembers = _database.GetCollection<BaselineMember>("baselineMembers");
-            BaselineMembers.EnsureIndex(x => x.BaselineId);
-            BaselineMembers.EnsureIndex(x => x.Identity);
+            BaselineMembers.EnsureIndex(static x => x.BaselineId);
+            BaselineMembers.EnsureIndex(static x => x.Identity);
             ReconciliationResults = _database.GetCollection<ReconciliationResult>("reconciliationResults");
-            ReconciliationResults.EnsureIndex(x => x.BaselineId);
-            ReconciliationResults.EnsureIndex(x => x.DeliveredAt);
+            ReconciliationResults.EnsureIndex(static x => x.BaselineId);
+            ReconciliationResults.EnsureIndex(static x => x.DeliveredAt);
             EventOutbox = _database.GetCollection<EventOutboxRecord>("eventOutbox");
-            EventOutbox.EnsureIndex(x => x.DeliveredAt);
-            EventOutbox.EnsureIndex(x => x.NextAttemptAt);
+            EventOutbox.EnsureIndex(static x => x.DeliveredAt);
+            EventOutbox.EnsureIndex(static x => x.NextAttemptAt);
         }
 
         public ILiteCollection<BaselineMember> BaselineMembers { get; }
@@ -70,7 +70,9 @@ namespace WinFIMLog.Data
 
         internal bool LatestStateMigrationPerformed { get; private set; }
 
-        /// <summary>Creates normalized latest-state indexes and migrates legacy rows exactly once.</summary>
+        /// <summary>
+        /// Creates normalized latest-state indexes and migrates legacy rows exactly once.
+        /// </summary>
         /// <remarks>
         /// The persisted version marker prevents full collection scans on later startups. The
         /// migration of both projections and marker write are atomic; all later openings only
@@ -89,7 +91,7 @@ namespace WinFIMLog.Data
                         metadata.Upsert(new BsonDocument
                         {
                             ["_id"] = "latestState",
-                            ["version"] = LatestStateSchemaVersion
+                            ["version"] = LatestStateSchemaVersion,
                         });
                     }))
                 {
@@ -99,11 +101,13 @@ namespace WinFIMLog.Data
                 LatestStateMigrationPerformed = true;
             }
 
-            FileSystemChanges.EnsureIndex(x => x.NormalizedEntity, true);
-            RegistryChanges.EnsureIndex(x => x.NormalizedEntity, true);
+            FileSystemChanges.EnsureIndex(static x => x.NormalizedEntity, unique: true);
+            RegistryChanges.EnsureIndex(static x => x.NormalizedEntity, unique: true);
         }
 
-        /// <summary>Normalizes legacy identities and retains the newest case-insensitive duplicate.</summary>
+        /// <summary>
+        /// Normalizes legacy identities and retains the newest case-insensitive duplicate.
+        /// </summary>
         /// <remarks>
         /// The dictionary makes duplicate resolution expected O(n) while holding only one winner
         /// per identity. This is a versioned migration path, not an ordinary startup operation.

@@ -8,13 +8,15 @@ using WinFIMLog.IO.Security;
 
 namespace WinFIMLog.Snapshots
 {
-    /// <summary>Enumerates configured registry subtrees without relying on ETW state.</summary>
+    /// <summary>
+    /// Enumerates configured registry subtrees without relying on ETW state.
+    /// </summary>
     public sealed class RegistrySnapshotSource
     {
         private readonly Func<string, bool> isIncluded;
 
         public RegistrySnapshotSource(Func<string, bool>? isIncluded = null) =>
-            this.isIncluded = isIncluded ?? (_ => true);
+            this.isIncluded = isIncluded ?? (static _ => true);
 
         public static IReadOnlyList<string> ResolveRoots(IEnumerable<string> roots) =>
             RemoveOverlappingRoots(ExpandCurrentUserRoots(roots));
@@ -61,7 +63,7 @@ namespace WinFIMLog.Snapshots
 
                 var suffix = root.Length == prefix.Length ? string.Empty : root[prefix.Length..];
                 foreach (var sid in Registry.Users.GetSubKeyNames()
-                    .Where(name => name.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase) &&
+                    .Where(static name => name.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase) &&
                                    !name.EndsWith("_Classes", StringComparison.OrdinalIgnoreCase)))
                 {
                     yield return "HKEY_USERS\\" + sid + suffix;
@@ -70,9 +72,11 @@ namespace WinFIMLog.Snapshots
         }
 
         internal static string Identity(string path, SnapshotNodeType nodeType) =>
-            (nodeType == SnapshotNodeType.RegistryValue ? "VALUE|" : "KEY|") + path.ToUpperInvariant();
+            (nodeType is SnapshotNodeType.RegistryValue ? "VALUE|" : "KEY|") + path.ToUpperInvariant();
 
-        /// <summary>Removes roots already covered by a retained segment-delimited ancestor.</summary>
+        /// <summary>
+        /// Removes roots already covered by a retained segment-delimited ancestor.
+        /// </summary>
         /// <remarks>
         /// The hash set makes ancestor membership expected constant time for each path segment and
         /// preserves siblings such as SOFT and SOFTWARE. Do not replace this with an all-roots Any
@@ -80,8 +84,8 @@ namespace WinFIMLog.Snapshots
         /// </remarks>
         internal static IReadOnlyList<string> RemoveOverlappingRoots(IEnumerable<string> roots)
         {
-            var normalised = roots.Select(root => root.TrimEnd('\\'))
-                .Where(root => root.Length > 0)
+            var normalised = roots.Select(static root => root.TrimEnd('\\'))
+                .Where(static root => root.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.OrdinalIgnoreCase).ToArray();
             var retained = new List<string>(normalised.Length);
@@ -99,7 +103,11 @@ namespace WinFIMLog.Snapshots
                     }
                 }
 
-                if (hasAncestor) continue;
+                if (hasAncestor)
+                {
+                    continue;
+                }
+
                 retained.Add(root);
                 retainedSet.Add(root);
             }
@@ -114,14 +122,14 @@ namespace WinFIMLog.Snapshots
             "HKEY_USERS" => RegistryHive.Users,
             "HKEY_CLASSES_ROOT" => RegistryHive.ClassesRoot,
             "HKEY_CURRENT_CONFIG" => RegistryHive.CurrentConfig,
-            _ => throw new ArgumentException($"Unsupported registry hive: {hive}")
+            _ => throw new ArgumentException($"Unsupported registry hive: {hive}"),
         };
 
         private static string[] Safe(Func<string[]> action)
         { try { return action(); } catch { return []; } }
 
         private static byte[]? Serialise(object? value) => value switch
-        { null => null, byte[] bytes => bytes, string[] strings => Encoding.UTF8.GetBytes(string.Join("\0", strings)), _ => Encoding.UTF8.GetBytes(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty) };
+        { null => null, byte[] bytes => bytes, string[] strings => Encoding.UTF8.GetBytes(string.Join("\0", strings)), _ => Encoding.UTF8.GetBytes(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty), };
 
         private static BaselineMember Unavailable(string path, EvidenceAvailability state) =>
             Unavailable(path, SnapshotNodeType.RegistryKey, state);
@@ -132,10 +140,12 @@ namespace WinFIMLog.Snapshots
             Path = path,
             NodeType = nodeType,
             HashState = HashEvidenceState.NotApplicable,
-            AclState = state
+            AclState = state,
         };
 
-        /// <summary>Captures a Registry subtree with iterative depth-first traversal.</summary>
+        /// <summary>
+        /// Captures a Registry subtree with iterative depth-first traversal.
+        /// </summary>
         /// <remarks>
         /// Pending work stores paths rather than open RegistryKey handles. This keeps handle use
         /// constant with respect to sibling count while the explicit stack avoids recursion depth
@@ -150,7 +160,7 @@ namespace WinFIMLog.Snapshots
                 var work = pending.Pop();
                 try
                 {
-                    using var key = hive.OpenSubKey(work.SubKey, false);
+                    using var key = hive.OpenSubKey(work.SubKey, writable: false);
                     if (key is not null)
                     {
                         CaptureKeyNode(key, work.SubKey, work.Path, output, pending);
@@ -165,14 +175,17 @@ namespace WinFIMLog.Snapshots
         private void CaptureKeyNode(RegistryKey key, string subKey, string path, List<BaselineMember> output,
             Stack<(string SubKey, string Path)> pending)
         {
-            if (!isIncluded(path)) return;
+            if (!isIncluded(path))
+            {
+                return;
+            }
 
             var keyMember = new BaselineMember
             {
                 Identity = Identity(path, SnapshotNodeType.RegistryKey),
                 Path = path,
                 NodeType = SnapshotNodeType.RegistryKey,
-                HashState = HashEvidenceState.NotApplicable
+                HashState = HashEvidenceState.NotApplicable,
             };
             try { keyMember.AclEvidence = key.GetACL(); keyMember.AclState = EvidenceAvailability.Available; }
             catch (Exception exception) when (IsAccessDenied(exception)) { keyMember.AclState = EvidenceAvailability.AccessDenied; }
@@ -188,7 +201,7 @@ namespace WinFIMLog.Snapshots
 
                 try
                 {
-                    var value = key.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+                    var value = key.GetValue(valueName, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames);
                     output.Add(new BaselineMember
                     {
                         Identity = Identity(path + "\\" + valueName, SnapshotNodeType.RegistryValue),
@@ -198,7 +211,7 @@ namespace WinFIMLog.Snapshots
                         AclState = keyMember.AclState,
                         AclEvidence = keyMember.AclEvidence,
                         RegistryValueKind = key.GetValueKind(valueName).ToString(),
-                        RegistryValueData = Serialise(value)
+                        RegistryValueData = Serialise(value),
                     });
                 }
                 catch (Exception exception) when (IsAccessDenied(exception)) { output.Add(Unavailable(path + "\\" + valueName, SnapshotNodeType.RegistryValue, EvidenceAvailability.AccessDenied)); }
@@ -214,7 +227,7 @@ namespace WinFIMLog.Snapshots
                     continue;
                 }
 
-                pending.Push((subKey.Length == 0 ? childName : subKey + "\\" + childName,
+                pending.Push((subKey.Length is 0 ? childName : subKey + "\\" + childName,
                     path + "\\" + childName));
             }
         }

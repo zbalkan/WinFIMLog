@@ -24,16 +24,12 @@ namespace WinFIMLog
         private EffectiveSettings current = new();
 
         /// <summary>
-        ///     Creates the application settings managed by the host's dependency injection container.
+        /// Creates the application settings managed by the host's dependency injection container.
         /// </summary>
-        /// <exception cref="IOException">
-        /// </exception>
-        /// <exception cref="UnauthorizedAccessException">
-        /// </exception>
-        /// <exception cref="NotSupportedException">
-        /// </exception>
-        /// <exception cref="System.Security.SecurityException">
-        /// </exception>
+        /// <exception cref="IOException"></exception>
+        /// <exception cref="UnauthorizedAccessException"></exception>
+        /// <exception cref="NotSupportedException"></exception>
+        /// <exception cref="System.Security.SecurityException"></exception>
         public Settings()
         {
             _ = Directory.CreateDirectory(Directory.GetParent(DatabasePath)!.ToString());
@@ -60,17 +56,20 @@ namespace WinFIMLog
             Success = true;
         }
 
-        /// <summary>Maximum raw filesystem notifications held in memory.</summary>
+        /// <summary>
+        /// Maximum raw filesystem notifications held in memory.
+        /// </summary>
         public int CaptureQueueCapacity { get => ReadState().CaptureQueueCapacity; private set => WriteState().CaptureQueueCapacity = value; }
 
         /// <summary>
-        ///     Path to LiteDB database file
+        /// Path to LiteDB database file
         /// </summary>
-        /// <exception cref="PlatformNotSupportedException">
-        /// </exception>
+        /// <exception cref="PlatformNotSupportedException"></exception>
         public string DatabasePath => $"{Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)}\\FIM\\fim.db";
 
-        /// <summary>Maximum concurrent workers used by legacy filesystem discovery.</summary>
+        /// <summary>
+        /// Maximum concurrent workers used by legacy filesystem discovery.
+        /// </summary>
         public int DiscoveryConcurrency { get => ReadState().DiscoveryConcurrency; private set => WriteState().DiscoveryConcurrency = value; }
 
         /// <summary>
@@ -106,7 +105,9 @@ namespace WinFIMLog
 
         public string? FailureReason { get; }
 
-        /// <summary>Seconds between authoritative filesystem snapshots (default: six hours).</summary>
+        /// <summary>
+        /// Seconds between authoritative filesystem snapshots (default: six hours).
+        /// </summary>
         public int FileSystemSnapshotInterval { get => ReadState().FileSystemSnapshotInterval; private set => WriteState().FileSystemSnapshotInterval = value; }
 
         /// <summary>
@@ -132,44 +133,44 @@ namespace WinFIMLog
         ///     Filesystem directories to monitor. Wildcards for folder names are accepted.
         ///     Default: Empty list.
         /// </summary>
-        public string[] MonitoredPaths { get => (string[])ReadState().MonitoredPaths.Clone(); private set => WriteState().MonitoredPaths = value; }
+        public string[] MonitoredPaths { get => ReadState().MonitoredPaths.Clone() as string[]; private set => WriteState().MonitoredPaths = value; }
 
-        /// <summary>Seconds between authoritative registry snapshots (default: six hours).</summary>
+        /// <summary>
+        /// Seconds between authoritative registry snapshots (default: six hours).
+        /// </summary>
         public int RegistrySnapshotInterval { get => ReadState().RegistrySnapshotInterval; private set => WriteState().RegistrySnapshotInterval = value; }
 
-        /// <summary>SHA-256 identity of the canonical effective scope.</summary>
+        /// <summary>
+        /// SHA-256 identity of the canonical effective scope.
+        /// </summary>
         public string ScopeHash { get => ReadState().ScopeHash; private set => WriteState().ScopeHash = value; }
 
-        /// <summary>Seconds between wildcard scope re-resolution checks.</summary>
+        /// <summary>
+        /// Seconds between wildcard scope re-resolution checks.
+        /// </summary>
         public int ScopeReresolutionInterval { get => ReadState().ScopeReresolutionInterval; private set => WriteState().ScopeReresolutionInterval = value; }
 
         /// <summary>
-        ///     A flag that returns true if application loads the Settings successfully.
+        /// A flag that returns true if application loads the Settings successfully.
         /// </summary>
         public bool Success { get; }
 
-        /// <summary>FileSystemWatcher native buffer size in KiB (8-64).</summary>
+        /// <summary>
+        /// FileSystemWatcher native buffer size in KiB (8-64).
+        /// </summary>
         public int WatcherBufferSizeKB { get => ReadState().WatcherBufferSizeKB; private set => WriteState().WatcherBufferSizeKB = value; }
 
         public EffectiveSettings Capture() => Volatile.Read(ref current);
 
         /// <summary>
-        ///     Filters out the initial list
+        /// Filters out the initial list
         /// </summary>
-        /// <param name="paths">
-        ///     Initial list of file paths
-        /// </param>
-        /// <returns>
-        ///     Filtered out fil paths
-        /// </returns>
-        /// <exception cref="RegexMatchTimeoutException">
-        /// </exception>
-        /// <exception cref="OperationCanceledException">
-        /// </exception>
-        /// <exception cref="AggregateException">
-        /// </exception>
-        /// <exception cref="OverflowException">
-        /// </exception>
+        /// <param name="paths">Initial list of file paths</param>
+        /// <returns>Filtered out fil paths</returns>
+        /// <exception cref="RegexMatchTimeoutException"></exception>
+        /// <exception cref="OperationCanceledException"></exception>
+        /// <exception cref="AggregateException"></exception>
+        /// <exception cref="OverflowException"></exception>
         public List<string> FilterPaths(IEnumerable<string> paths)
         {
             var matches = FilterMonitoredPaths(paths);
@@ -185,7 +186,9 @@ namespace WinFIMLog
 
         public bool IsMonitoredPath(string path) => Capture().IsMonitoredPath(path);
 
-        /// <summary>Re-reads policy/preferences and atomically publishes a newly resolved scope.</summary>
+        /// <summary>
+        /// Re-reads policy/preferences and atomically publishes a newly resolved scope.
+        /// </summary>
         /// <returns>The previous and current hashes and whether effective scope changed.</returns>
         public (string PreviousHash, string CurrentHash, bool Changed) Reload()
         {
@@ -253,7 +256,7 @@ namespace WinFIMLog
         private ParallelQuery<string> FilterOutExcludedExtensions(ParallelQuery<string> matches)
         {
             var pattern = ReadState().ExcludedExtensionsPattern;
-            if (pattern == null)
+            if (pattern is null)
             {
                 return matches;
             }
@@ -265,7 +268,7 @@ namespace WinFIMLog
         private ParallelQuery<string> FilterOutExcludedPaths(ParallelQuery<string> matches)
         {
             var excludedPaths = ReadState().ExcludedPaths;
-            if (excludedPaths.Length == 0)
+            if (excludedPaths.Length is 0)
             {
                 return matches;
             }
@@ -275,13 +278,10 @@ namespace WinFIMLog
         }
 
         /// <summary>
-        ///     Generate the excluded extensions related RegEx pattern
+        /// Generate the excluded extensions related RegEx pattern
         /// </summary>
-        /// <returns>
-        ///     RegEx pattern
-        /// </returns>
-        /// <exception cref="OverflowException">
-        /// </exception>
+        /// <returns>RegEx pattern</returns>
+        /// <exception cref="OverflowException"></exception>
         private Regex? GenerateExcludedExtensionsPattern()
         {
             if (ExcludedExtensions.Length > 0)
@@ -296,13 +296,10 @@ namespace WinFIMLog
         }
 
         /// <summary>
-        ///     Generate the excluded keys related RegEx pattern
+        /// Generate the excluded keys related RegEx pattern
         /// </summary>
-        /// <returns>
-        ///     RegEx pattern
-        /// </returns>
-        /// <exception cref="OverflowException">
-        /// </exception>
+        /// <returns>RegEx pattern</returns>
+        /// <exception cref="OverflowException"></exception>
         private Regex? GenerateExcludedKeysPattern()
         {
             if (ExcludedKeys.Length > 0)
@@ -317,13 +314,10 @@ namespace WinFIMLog
         }
 
         /// <summary>
-        ///     Generate the excluded paths related RegEx pattern
+        /// Generate the excluded paths related RegEx pattern
         /// </summary>
-        /// <returns>
-        ///     RegEx pattern
-        /// </returns>
-        /// <exception cref="OverflowException">
-        /// </exception>
+        /// <returns>RegEx pattern</returns>
+        /// <exception cref="OverflowException"></exception>
         private Regex? GenerateExcludedPathsPattern()
         {
             if (ExcludedPaths.Length > 0)
@@ -338,13 +332,10 @@ namespace WinFIMLog
         }
 
         /// <summary>
-        ///     Generate the monitored keys related RegEx pattern
+        /// Generate the monitored keys related RegEx pattern
         /// </summary>
-        /// <returns>
-        ///     RegEx pattern
-        /// </returns>
-        /// <exception cref="OverflowException">
-        /// </exception>
+        /// <returns>RegEx pattern</returns>
+        /// <exception cref="OverflowException"></exception>
         private Regex GenerateMonitoredKeysPattern()
         {
             var sb = new StringBuilder(100);
@@ -355,13 +346,10 @@ namespace WinFIMLog
         }
 
         /// <summary>
-        ///     Generate the monitored paths related RegEx pattern
+        /// Generate the monitored paths related RegEx pattern
         /// </summary>
-        /// <returns>
-        ///     RegEx pattern
-        /// </returns>
-        /// <exception cref="OverflowException">
-        /// </exception>
+        /// <returns>RegEx pattern</returns>
+        /// <exception cref="OverflowException"></exception>
         private Regex GenerateMonitoredPathsPattern()
         {
             var sb = new StringBuilder(100);
@@ -379,8 +367,7 @@ namespace WinFIMLog
         ///     Ideally, when it is managed by Group Policy, we need to use a separate key to
         ///     prevent accidental overwrites.
         /// </remarks>
-        /// <exception cref="OverflowException">
-        /// </exception>
+        /// <exception cref="OverflowException"></exception>
         private void ReadOrCreateRegistrySettings()
         {
             if (string.IsNullOrEmpty(Registry.ReadStringValue("DatabasePath")))
@@ -407,8 +394,8 @@ namespace WinFIMLog
             MonitoredPaths = monitoredPaths
                 .Select(Environment.ExpandEnvironmentVariables) // Expand variables like %WINDIR%
                 .Select(FileSystem.ResolveWildcardPath) // Resolve wildcard in paths like "%SYSTEMDRIVE%\\Users\\*\\Downloads"
-                .SelectMany(x => x) // Flatten the list of paths, as resolving wildcard ends up with a list of paths
-                .Order().ToArray();
+                .SelectMany(static x => x) // Flatten the list of paths, as resolving wildcard ends up with a list of paths
+                .Order(StringComparer.OrdinalIgnoreCase).ToArray();
             WriteState().MonitoredPathsPattern = GenerateMonitoredPathsPattern();
 
             var excludedPaths = Registry.ReadMultiStringValue("ExcludedPaths");
@@ -437,8 +424,8 @@ namespace WinFIMLog
             ExcludedPaths = excludedPaths
                 .Select(Environment.ExpandEnvironmentVariables) // Expand variables like %WINDIR%
                 .Select(FileSystem.ResolveWildcardPath) // Resolve wildcard in paths like "%SYSTEMDRIVE%\\Users\\*\\Downloads"
-                .SelectMany(x => x) // Flatten the list of paths, as resolving wildcard ends up with a list of paths
-                .Order().ToArray();
+                .SelectMany(static x => x) // Flatten the list of paths, as resolving wildcard ends up with a list of paths
+                .Order(StringComparer.OrdinalIgnoreCase).ToArray();
             WriteState().ExcludedPathsPattern = GenerateExcludedPathsPattern();
 
             var excludedExtensions = Registry.ReadMultiStringValue("ExcludedExtensions");
@@ -447,7 +434,7 @@ namespace WinFIMLog
                 excludedExtensions = [".log", ".evtx", ".etl", ".wal", ".db-wal", ".db"];
                 Registry.WriteMultiStringValue("ExcludedExtensions", excludedExtensions);
             }
-            ExcludedExtensions = excludedExtensions.Order().ToArray();
+            ExcludedExtensions = excludedExtensions.Order(StringComparer.OrdinalIgnoreCase).ToArray();
             WriteState().ExcludedExtensionsPattern = GenerateExcludedExtensionsPattern();
 
             var registryMonitoring = Registry.ReadDwordValue("EnableRegistryMonitoring");
@@ -456,7 +443,7 @@ namespace WinFIMLog
                 Registry.WriteDwordValue("EnableRegistryMonitoring", 1);
                 registryMonitoring = 1;
             }
-            EnableRegistryMonitoring = registryMonitoring == 1;
+            EnableRegistryMonitoring = registryMonitoring is 1;
 
             var monitoredKeys = Registry.ReadMultiStringValue("MonitoredKeys");
             if (!Registry.EffectiveValueExists("MonitoredKeys"))
@@ -540,8 +527,8 @@ namespace WinFIMLog
                 excludedKeys = [string.Empty];
                 Registry.WriteMultiStringValue("ExcludedKeys", excludedKeys);
             }
-            ExcludedKeys = excludedKeys.Order().ToArray();
-            WriteState().ExcludedKeysPattern = ExcludedKeys.Length == 1 && ExcludedKeys[0]?.Length == 0 ? null : GenerateExcludedKeysPattern();
+            ExcludedKeys = excludedKeys.Order(StringComparer.OrdinalIgnoreCase).ToArray();
+            WriteState().ExcludedKeysPattern = ExcludedKeys.Length is 1 && (ExcludedKeys[0]?.Length) is 0 ? null : GenerateExcludedKeysPattern();
 
             ConfigurationValidator.Validate(monitoredPaths, excludedPaths, MonitoredKeys, ExcludedKeys);
             WriteState().RegistryScopeMatcher = new RegistryScopeMatcher(MonitoredKeys, ExcludedKeys);
@@ -618,7 +605,7 @@ namespace WinFIMLog
                 Registry.WriteDwordValue("EnableLocalDatabase", 1);
                 enableLocalDatabase = 1;
             }
-            EnableLocalDatabase = enableLocalDatabase == 1;
+            EnableLocalDatabase = enableLocalDatabase is 1;
 
             var hashLimitMb = Registry.ReadDwordValue("HashLimitMB");
             if (hashLimitMb == -1)

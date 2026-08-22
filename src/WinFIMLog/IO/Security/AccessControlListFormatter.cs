@@ -3,7 +3,9 @@ using System.Security.AccessControl;
 
 namespace WinFIMLog.IO.Security
 {
-    /// <summary>Renders a typed ACL as a human-readable key-value record without JSON serialization.</summary>
+    /// <summary>
+    /// Renders a typed ACL as a human-readable key-value record without JSON serialization.
+    /// </summary>
     internal static class AccessControlListFormatter
     {
         private static readonly AclTextCache AclTexts = new();
@@ -57,11 +59,11 @@ namespace WinFIMLog.IO.Security
             buffer.Append(identity is null ? "None" : ExtensionMethods.AccountNameOrSid(identity));
 
         private static void AppendAccessControlType(ref PooledCharBuffer buffer, AccessControlType type) =>
-            buffer.Append(type == AccessControlType.Allow ? "Allow" : "Deny");
+            buffer.Append(type is AccessControlType.Allow ? "Allow" : "Deny");
 
         private static void AppendInheritanceFlags(ref PooledCharBuffer buffer, InheritanceFlags flags)
         {
-            if (flags == InheritanceFlags.None)
+            if (flags is InheritanceFlags.None)
             {
                 buffer.Append("None");
                 return;
@@ -74,7 +76,7 @@ namespace WinFIMLog.IO.Security
 
         private static void AppendPropagationFlags(ref PooledCharBuffer buffer, PropagationFlags flags)
         {
-            if (flags == PropagationFlags.None)
+            if (flags is PropagationFlags.None)
             {
                 buffer.Append("None");
                 return;

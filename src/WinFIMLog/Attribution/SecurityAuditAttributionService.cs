@@ -14,7 +14,9 @@ using WinFIMLog.IO;
 
 namespace WinFIMLog.Attribution
 {
-    /// <summary>Consumes native 4663/4657 subject evidence for an explicitly enabled SACL tier.</summary>
+    /// <summary>
+    /// Consumes native 4663/4657 subject evidence for an explicitly enabled SACL tier.
+    /// </summary>
     internal sealed class SecurityAuditAttributionService : BackgroundService
     {
         private readonly ILocalEventSink eventSink;
@@ -45,12 +47,13 @@ namespace WinFIMLog.Attribution
             base.Dispose();
         }
 
-        public override Task StartAsync(CancellationToken cancellationToken)
+        public override async Task StartAsync(CancellationToken cancellationToken)
         {
             options.Validate();
             if (!options.Enabled)
             {
-                return base.StartAsync(cancellationToken);
+                await base.StartAsync(cancellationToken).ConfigureAwait(false);
+                return;
             }
 
             RequirePolicy(WindowsAuditPolicyConformance.FileSystemSubcategory, "File System");
@@ -68,7 +71,7 @@ namespace WinFIMLog.Attribution
                 health.CoverageGap("SACLAttribution", "Security", $"SecurityChannelUnavailable:{exception.GetType().Name}");
                 throw new InvalidOperationException("SACL attribution cannot read the Security channel.", exception);
             }
-            return base.StartAsync(cancellationToken);
+            await base.StartAsync(cancellationToken).ConfigureAwait(false);
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
@@ -77,8 +80,8 @@ namespace WinFIMLog.Attribution
         private bool IsDeclaredScope(string xml)
         {
             var document = XDocument.Parse(xml);
-            var eventData = document.Descendants().Where(element => element.Name.LocalName == "Data");
-            var objectName = eventData.FirstOrDefault(element =>
+            var eventData = document.Descendants().Where(static element => string.Equals(element.Name.LocalName, "Data", StringComparison.OrdinalIgnoreCase));
+            var objectName = eventData.FirstOrDefault(static element =>
                 (string?)element.Attribute("Name") is "ObjectName" or "KeyName")?.Value;
             if (string.IsNullOrWhiteSpace(objectName))
             {
@@ -91,7 +94,7 @@ namespace WinFIMLog.Attribution
 
         private void OnRecord(object? sender, EventRecordWrittenEventArgs args)
         {
-            if (args.EventException != null)
+            if (args.EventException is not null)
             {
                 health.CoverageGap("SACLAttribution", "Security", $"ReadFailure:{args.EventException.GetType().Name}");
                 return;
@@ -99,21 +102,21 @@ namespace WinFIMLog.Attribution
             using var record = args.EventRecord;
             // Preserve native XML: it contains SubjectUserSid/Name and, for 4657, old/new values.
             var xml = record?.ToXml();
-            if (xml == null || !IsDeclaredScope(xml))
+            if (xml is null || !IsDeclaredScope(xml))
             {
                 return;
             }
 
             var document = XDocument.Parse(xml);
-            var data = document.Descendants().Where(element => element.Name.LocalName == "Data" && element.Attribute("Name") != null)
-                .GroupBy(element => element.Attribute("Name")!.Value, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => (object?)group.Last().Value,
+            var data = document.Descendants().Where(static element => string.Equals(element.Name.LocalName, "Data", StringComparison.OrdinalIgnoreCase) && element.Attribute("Name") is not null)
+                .GroupBy(static element => element.Attribute("Name")!.Value, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(static group => group.Key, static group => group.Last().Value as object,
                     StringComparer.OrdinalIgnoreCase);
             try
             {
                 eventSink.Write(EventContract.Create(7797, "SecurityAuditAttribution",
-                    record?.RecordId?.ToString() ?? Guid.NewGuid().ToString("N"), settings.ScopeHash,
-                    new Dictionary<string, object?>
+                    record?.RecordId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? Guid.NewGuid().ToString("N"), settings.ScopeHash,
+                    new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                     {
                         ["nativeEventId"] = record?.Id,
                         ["provider"] = record?.ProviderName,
@@ -122,7 +125,7 @@ namespace WinFIMLog.Attribution
                         ["objectName"] = data.GetValueOrDefault("ObjectName") ?? data.GetValueOrDefault("KeyName"),
                         ["oldValue"] = data.GetValueOrDefault("OldValue"),
                         ["newValue"] = data.GetValueOrDefault("NewValue"),
-                        ["nativeEvidence"] = xml
+                        ["nativeEvidence"] = xml,
                     }));
             }
             catch (Exception exception)

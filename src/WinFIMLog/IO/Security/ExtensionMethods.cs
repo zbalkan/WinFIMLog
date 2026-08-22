@@ -8,10 +8,14 @@ using WinFIMLog.Utils;
 
 namespace WinFIMLog.IO.Security
 {
-    /// <summary>ACE and ACL related extension methods.</summary>
+    /// <summary>
+    /// ACE and ACL related extension methods.
+    /// </summary>
     public static class ExtensionMethods
     {
-        /// <summary>Gets a human-readable key-value ACL for a file-system path.</summary>
+        /// <summary>
+        /// Gets a human-readable key-value ACL for a file-system path.
+        /// </summary>
         public static string GetACL(this string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
@@ -27,7 +31,9 @@ namespace WinFIMLog.IO.Security
             }
         }
 
-        /// <summary>Gets a human-readable key-value ACL for a registry key.</summary>
+        /// <summary>
+        /// Gets a human-readable key-value ACL for a registry key.
+        /// </summary>
         public static string GetACL(this RegistryKey key)
         {
             ArgumentNullException.ThrowIfNull(key);
@@ -115,11 +121,11 @@ namespace WinFIMLog.IO.Security
         private static AccessControlList Capture(FileSecurity security)
         {
             ArgumentNullException.ThrowIfNull(security);
-            var rules = security.GetAccessRules(true, true, typeof(SecurityIdentifier));
+            var rules = security.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier));
             var accessControlList = new AccessControlList(rules.Count)
             {
                 Owner = GetSecurityIdentifierOrNull(() => security.GetOwner(typeof(SecurityIdentifier))),
-                PrimaryGroupOfOwner = GetSecurityIdentifierOrNull(() => security.GetGroup(typeof(SecurityIdentifier)))
+                PrimaryGroupOfOwner = GetSecurityIdentifierOrNull(() => security.GetGroup(typeof(SecurityIdentifier))),
             };
 
             try
@@ -141,11 +147,11 @@ namespace WinFIMLog.IO.Security
         private static AccessControlList Capture(RegistrySecurity security)
         {
             ArgumentNullException.ThrowIfNull(security);
-            var rules = security.GetAccessRules(true, true, typeof(SecurityIdentifier));
+            var rules = security.GetAccessRules(includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier));
             var accessControlList = new AccessControlList(rules.Count)
             {
                 Owner = GetSecurityIdentifierOrNull(() => security.GetOwner(typeof(SecurityIdentifier))),
-                PrimaryGroupOfOwner = GetSecurityIdentifierOrNull(() => security.GetGroup(typeof(SecurityIdentifier)))
+                PrimaryGroupOfOwner = GetSecurityIdentifierOrNull(() => security.GetGroup(typeof(SecurityIdentifier))),
             };
 
             try

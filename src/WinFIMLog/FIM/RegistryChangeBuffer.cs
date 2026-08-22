@@ -7,17 +7,17 @@ namespace WinFIMLog.FIM
 {
     public class RegistryChangeBuffer : IBuffer<RegistryChange>
     {
-        private readonly ConcurrentDictionary<string, RegistryChange> store = new();
+        private readonly ConcurrentDictionary<string, RegistryChange> store = new(StringComparer.OrdinalIgnoreCase);
 
-        public Task Add(RegistryChange change)
+        public async Task Add(RegistryChange change)
         {
             ArgumentNullException.ThrowIfNull(change);
 
             store[change.Id] = change;
-            return Task.CompletedTask;
+            await Task.CompletedTask;
         }
 
-        public Task AddRange(IEnumerable<RegistryChange> changes)
+        public async Task AddRange(IEnumerable<RegistryChange> changes)
         {
             ArgumentNullException.ThrowIfNull(changes);
 
@@ -28,7 +28,7 @@ namespace WinFIMLog.FIM
                 store[change.Id] = change;
             }
 
-            return Task.CompletedTask;
+            await Task.CompletedTask;
         }
 
         public int Count() => store.Count;
@@ -46,7 +46,7 @@ namespace WinFIMLog.FIM
                     break;
                 }
                 store.TryRemove(item.Key, out var message);
-                if (message != null) { result.Add(message); }
+                if (message is not null) { result.Add(message); }
 
                 counter++;
             }
@@ -60,7 +60,7 @@ namespace WinFIMLog.FIM
             foreach (var item in store)
             {
                 store.TryRemove(item.Key, out var message);
-                if (message != null) { result.Add(message); }
+                if (message is not null) { result.Add(message); }
             }
 
             return result;

@@ -12,15 +12,15 @@ namespace WinFIMLog.Health
         ILocalEventSink eventSink, SnapshotHealthState snapshots, EventOutboxRepository outbox) : IHealthReporter
     {
         public void ConfigurationChanged(string previousScopeHash, string newScopeHash) =>
-            Write(HealthEventId.ConfigurationChanged, "ConfigurationChanged", new Dictionary<string, object?>
+            Write(HealthEventId.ConfigurationChanged, "ConfigurationChanged", new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
             { ["previousScopeHash"] = previousScopeHash, ["newScopeHash"] = newScopeHash });
 
         public void CoverageGap(string source, string scope, string reason, long lostCount = 1) =>
-                    Write(HealthEventId.CoverageGap, "CoverageGap", new Dictionary<string, object?>
-                    { ["source"] = source, ["scope"] = scope, ["reason"] = reason, ["lostCount"] = lostCount }, true);
+                    Write(HealthEventId.CoverageGap, "CoverageGap", new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                    { ["source"] = source, ["scope"] = scope, ["reason"] = reason, ["lostCount"] = lostCount }, error: true);
 
         public void Heartbeat(HealthMetrics metrics) =>
-            Write(HealthEventId.Heartbeat, "Health", new Dictionary<string, object?>
+            Write(HealthEventId.Heartbeat, "Health", new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
             {
                 ["queueDepth"] = metrics.QueueDepth,
                 ["oldestItemAgeMs"] = metrics.OldestItemAge.TotalMilliseconds,
@@ -52,15 +52,15 @@ namespace WinFIMLog.Health
                 ,
                 ["databaseBytes"] = DatabaseBytes()
                 ,
-                ["databaseVolumeFreeBytes"] = DatabaseVolumeFreeBytes()
+                ["databaseVolumeFreeBytes"] = DatabaseVolumeFreeBytes(),
             });
 
         public void SinkFailure(string sink, string reason, int attempt) =>
-            Write(HealthEventId.SinkFailure, "SinkFailure", new Dictionary<string, object?>
-            { ["sink"] = sink, ["reason"] = reason, ["attempt"] = attempt }, true);
+            Write(HealthEventId.SinkFailure, "SinkFailure", new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            { ["sink"] = sink, ["reason"] = reason, ["attempt"] = attempt }, error: true);
 
         public void SourceRecovered(string source, string scope, string action) =>
-                            Write(HealthEventId.SourceRecovered, "SourceRecovered", new Dictionary<string, object?>
+                            Write(HealthEventId.SourceRecovered, "SourceRecovered", new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                             { ["source"] = source, ["scope"] = scope, ["action"] = action });
 
         private long? DatabaseBytes()

@@ -18,7 +18,7 @@ namespace WinFIMLog.FIM
             }
             catch
             {
-                return new ProcessAttributionResult(AttributionStatus.Unavailable, reportedProcessName, null, null);
+                return new ProcessAttributionResult(AttributionStatus.Unavailable, reportedProcessName, Username: null, UserSid: null);
             }
         }
     }

@@ -7,16 +7,16 @@ namespace WinFIMLog.FIM
 {
     public class FileSystemChangeBuffer : IBuffer<FileSystemChange>
     {
-        private readonly ConcurrentDictionary<string, FileSystemChange> store = new();
+        private readonly ConcurrentDictionary<string, FileSystemChange> store = new(StringComparer.OrdinalIgnoreCase);
 
-        public Task Add(FileSystemChange change)
+        public async Task Add(FileSystemChange change)
         {
             ArgumentNullException.ThrowIfNull(change);
             store[change.Id] = change;
-            return Task.CompletedTask;
+            await Task.CompletedTask;
         }
 
-        public Task AddRange(IEnumerable<FileSystemChange> changes)
+        public async Task AddRange(IEnumerable<FileSystemChange> changes)
         {
             ArgumentNullException.ThrowIfNull(changes);
 
@@ -27,7 +27,7 @@ namespace WinFIMLog.FIM
                 store[change.Id] = change;
             }
 
-            return Task.CompletedTask;
+            await Task.CompletedTask;
         }
 
         public int Count() => store.Count;
@@ -46,7 +46,7 @@ namespace WinFIMLog.FIM
                 }
 
                 store.TryRemove(item.Key, out var message);
-                if (message != null) { result.Add(message); }
+                if (message is not null) { result.Add(message); }
 
                 counter++;
             }
@@ -59,7 +59,7 @@ namespace WinFIMLog.FIM
             foreach (var item in store)
             {
                 store.TryRemove(item.Key, out var message);
-                if (message != null) { result.Add(message); }
+                if (message is not null) { result.Add(message); }
             }
 
             return result;

@@ -14,10 +14,10 @@ using NtKeywords = Microsoft.Diagnostics.Tracing.Parsers.KernelTraceEventParser.
 namespace WinFIMLog.Jobs
 {
     /// <summary>
-    ///     A class capturing Registry events.
+    /// A class capturing Registry events.
     /// </summary>
     /// <see href="https://github.com/lowleveldesign/lowleveldesign-blog-samples/blob/master/monitoring-registry-activity-with-etw/Program.fs" />
-    internal partial class RegistryMonitorJob : IMonitor
+    internal class RegistryMonitorJob : IMonitor
     {
         private const string ETWSessionName = "RegistryWatcher";
 
@@ -49,9 +49,9 @@ namespace WinFIMLog.Jobs
         }
 
         /// <summary>
-        ///     Start monitoring selected Registry keys
+        /// Start monitoring selected Registry keys
         /// </summary>
-        public Task RunAsync(CancellationToken cancellationToken) => RunAsync(null, cancellationToken);
+        public Task RunAsync(CancellationToken cancellationToken) => RunAsync(sourceStarted: null, cancellationToken);
 
         public async Task RunAsync(Action? sourceStarted, CancellationToken cancellationToken)
         {
@@ -67,7 +67,7 @@ namespace WinFIMLog.Jobs
                 await using var cancellationRegistration = cancellationToken.Register(() => session.Stop());
                 _logger.LogInformation("Started ETW session '{SessionName}' for Registry changes.", ETWSessionName);
                 sourceStarted?.Invoke();
-                await using var lossPoll = new Timer(_ => ReportEventLoss(session), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+                await using var lossPoll = new Timer(_ => ReportEventLoss(session), state: null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
                 await Task.Run(session.Source.Process, CancellationToken.None);
                 ReportEventLoss(session);
             }
@@ -84,10 +84,9 @@ namespace WinFIMLog.Jobs
         }
 
         /// <summary>
-        ///     Stop monitoring selected Registry keys
+        /// Stop monitoring selected Registry keys
         /// </summary>
-        /// <exception cref="AggregateException">
-        /// </exception>
+        /// <exception cref="AggregateException"></exception>
         private void CleanupExistingSession()
         {
             try
@@ -97,7 +96,7 @@ namespace WinFIMLog.Jobs
                 {
                     using var session = new TraceEventSession(ETWSessionName, TraceEventSessionOptions.Attach)
                     {
-                        StopOnDispose = true
+                        StopOnDispose = true,
                     };
                     _logger.LogInformation("Cleaned up lingering ETW session 'RegistryWatcher' from a previous run.");
                 }
@@ -113,7 +112,7 @@ namespace WinFIMLog.Jobs
             var session = new TraceEventSession(ETWSessionName)
             {
                 StopOnDispose = true,
-                BufferSizeMB = SessionBufferSizeMegabytes
+                BufferSizeMB = SessionBufferSizeMegabytes,
             };
 
             try
@@ -151,7 +150,7 @@ namespace WinFIMLog.Jobs
             string? eventValueName)
         {
             var segmentCount = CountSegments(cachedKeyName, eventKeyName, eventValueName);
-            if (segmentCount == 0)
+            if (segmentCount is 0)
             {
                 return string.Empty;
             }
@@ -297,7 +296,7 @@ namespace WinFIMLog.Jobs
                     Debug.WriteLine($"Processing event: {ev.EventName} for {keyName}");
                     var change = new RegistryChange(ev, keyName)
                     {
-                        ScopeHash = configuration.ScopeHash
+                        ScopeHash = configuration.ScopeHash,
                     };
 
                     _messageStore.Add(change);

@@ -4,25 +4,25 @@ using NUlid;
 namespace WinFIMLog.Snapshots
 {
     public enum BaselineApplicability
-    { Current, Superseded }
+    { Current, Superseded, }
 
     public enum BaselineSource
-    { FileSystem, Registry }
+    { FileSystem, Registry, }
 
     public enum BaselineStatus
-    { Building, Reconciling, Complete, Invalid }
+    { Building, Reconciling, Complete, Invalid, }
 
     public enum EvidenceAvailability
-    { Available, AccessDenied, Vanished, Failed }
+    { Available, AccessDenied, Vanished, Failed, }
 
     public enum HashEvidenceState
-    { Hashed, SkippedBySizeCap, Locked, AccessDenied, Vanished, Failed, NotApplicable }
+    { Hashed, SkippedBySizeCap, Locked, AccessDenied, Vanished, Failed, NotApplicable, }
 
     public enum ReconciliationChange
-    { Created, Changed, Deleted }
+    { Created, Changed, Deleted, }
 
     public enum SnapshotNodeType
-    { File, Directory, ReparsePoint, RegistryKey, RegistryValue }
+    { File, Directory, ReparsePoint, RegistryKey, RegistryValue, }
 
     public sealed class BaselineMember
     {
@@ -37,7 +37,7 @@ namespace WinFIMLog.Snapshots
             RegistryValueKind, RegistryValueData is null ? "" : Convert.ToBase64String(RegistryValueData));
 
         public HashEvidenceState HashState { get; set; }
-        public string Id { get; set; } = Ulid.NewUlid().ToString();
+        public string Id { get; set; } = Ulid.NewUlid().ToString(format: null, System.Globalization.CultureInfo.InvariantCulture);
 
         // Phase 4 D4 deliberately uses normalised path identity.
         public string Identity { get; set; } = string.Empty;
@@ -61,7 +61,7 @@ namespace WinFIMLog.Snapshots
         public DateTimeOffset? CompletedAt { get; set; }
         public string ConsistencyMethod { get; set; } = string.Empty;
         public string? EndCursor { get; set; }
-        public string Id { get; set; } = Ulid.NewUlid().ToString();
+        public string Id { get; set; } = Ulid.NewUlid().ToString(format: null, System.Globalization.CultureInfo.InvariantCulture);
         public string? InvalidReason { get; set; }
         public long ItemCount { get; set; }
         public int ObservationPasses { get; set; }
@@ -81,7 +81,7 @@ namespace WinFIMLog.Snapshots
         public DateTimeOffset? DeliveredAt { get; set; }
         public int DeliveryAttempts { get; set; }
         public DateTimeOffset DetectedAt { get; set; }
-        public string Id { get; set; } = Ulid.NewUlid().ToString();
+        public string Id { get; set; } = Ulid.NewUlid().ToString(format: null, System.Globalization.CultureInfo.InvariantCulture);
         public string Identity { get; set; } = string.Empty;
         public string? NewPath { get; set; }
         public string? OldPath { get; set; }

@@ -4,7 +4,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace WinFIMLog.Snapshots
 {
-    internal static partial class FileLinkCount
+    internal static class FileLinkCount
     {
         public static int? TryGet(string path)
         {

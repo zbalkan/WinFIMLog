@@ -29,7 +29,10 @@ public sealed class FileSystemDiscoveryJobTests
 
     private static IEnumerable<string> CreatePaths(int count)
     {
-        for (var index = 0; index < count; index++) yield return index.ToString();
+        for (var index = 0; index < count; index++)
+        {
+            yield return index.ToString();
+        }
     }
 
     private static void UpdateMaximum(ref int maximum, int candidate)
@@ -38,7 +41,11 @@ public sealed class FileSystemDiscoveryJobTests
         while (candidate > observed)
         {
             var replaced = Interlocked.CompareExchange(ref maximum, candidate, observed);
-            if (replaced == observed) return;
+            if (replaced == observed)
+            {
+                return;
+            }
+
             observed = replaced;
         }
     }

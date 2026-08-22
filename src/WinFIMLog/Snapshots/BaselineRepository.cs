@@ -5,7 +5,9 @@ using WinFIMLog.Data;
 
 namespace WinFIMLog.Snapshots
 {
-    /// <summary>Owns the baseline lifecycle and its atomic completion boundary.</summary>
+    /// <summary>
+    /// Owns the baseline lifecycle and its atomic completion boundary.
+    /// </summary>
     public sealed class BaselineRepository
     {
         private readonly ILiteDbContext context;
@@ -24,7 +26,7 @@ namespace WinFIMLog.Snapshots
                 AlgorithmVersion = algorithmVersion,
                 StartedAt = DateTimeOffset.UtcNow,
                 Status = BaselineStatus.Building,
-                StartCursor = startCursor
+                StartCursor = startCursor,
             };
             if (!context.ExecuteTransaction(() =>
             {
@@ -38,13 +40,15 @@ namespace WinFIMLog.Snapshots
             return baseline;
         }
 
-        /// <summary>Retains two complete generations and removes abandoned staging data.</summary>
+        /// <summary>
+        /// Retains two complete generations and removes abandoned staging data.
+        /// </summary>
         public void CompactAfterCompletion(BaselineMetadata completed, int generationsToKeep = 2)
         {
             var keep = context.Baselines.Query()
                 .Where(x => x.Source == completed.Source && x.Status == BaselineStatus.Complete)
-                .OrderByDescending(x => x.CompletedAt).Limit(Math.Max(1, generationsToKeep))
-                .ToList().Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
+                .OrderByDescending(static x => x.CompletedAt).Limit(Math.Max(1, generationsToKeep))
+                .ToList().Select(static x => x.Id).ToHashSet(StringComparer.Ordinal);
             foreach (var baseline in context.Baselines.Find(x => x.Source == completed.Source).ToList())
             {
                 if (keep.Contains(baseline.Id))
@@ -83,7 +87,7 @@ namespace WinFIMLog.Snapshots
                     x.SourceIdentity == sourceIdentity && x.SchemaVersion == schemaVersion &&
                     x.AlgorithmVersion == algorithmVersion && x.Status == BaselineStatus.Complete &&
                     x.Applicability == BaselineApplicability.Current)
-                .OrderByDescending(x => x.CompletedAt).FirstOrDefault();
+                .OrderByDescending(static x => x.CompletedAt).FirstOrDefault();
 
         public void MarkInvalid(BaselineMetadata baseline, string reason)
         {
@@ -99,18 +103,18 @@ namespace WinFIMLog.Snapshots
                     context.BaselineMembers.Find(x => x.BaselineId == baselineId).ToList();
 
         public IReadOnlyList<ReconciliationResult> PendingResults(int limit = 500) =>
-            context.ReconciliationResults.Query().Where(x => x.DeliveredAt == null).Limit(limit).ToList();
+            context.ReconciliationResults.Query().Where(static x => x.DeliveredAt == null).Limit(limit).ToList();
 
         public IReadOnlyList<ReconciliationResult> ReconcileAndComplete(BaselineMetadata baseline, IEnumerable<BaselineMember> members,
             string? endCursor = null)
         {
-            if (baseline.Status != BaselineStatus.Building)
+            if (baseline.Status is not BaselineStatus.Building)
             {
                 throw new InvalidOperationException("Only a building baseline can be completed.");
             }
 
             var materialised = members.ToList();
-            if (materialised.GroupBy(x => x.Identity, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1))
+            if (materialised.GroupBy(static x => x.Identity, StringComparer.OrdinalIgnoreCase).Any(static x => x.Count() > 1))
             {
                 throw new InvalidOperationException("A baseline cannot contain duplicate identities.");
             }
@@ -161,11 +165,13 @@ namespace WinFIMLog.Snapshots
             return results;
         }
 
-        /// <summary>Completes a cursorless scan after the coordinator establishes convergence.</summary>
+        /// <summary>
+        /// Completes a cursorless scan after the coordinator establishes convergence.
+        /// </summary>
         public IReadOnlyList<ReconciliationResult> ReconcileAndCompleteAfterConvergence(BaselineMetadata baseline,
             IEnumerable<BaselineMember> convergedMembers)
         {
-            if (baseline.Status != BaselineStatus.Building && baseline.Status != BaselineStatus.Reconciling)
+            if (baseline.Status is not (BaselineStatus.Building or BaselineStatus.Reconciling))
             {
                 throw new InvalidOperationException("The baseline is not being built.");
             }
@@ -197,7 +203,7 @@ namespace WinFIMLog.Snapshots
                 Change = change,
                 OldPath = oldPath,
                 NewPath = newPath,
-                DetectedAt = when
+                DetectedAt = when,
             };
 
         private List<ReconciliationResult> Diff(string baselineId, BaselineMetadata? previous, List<BaselineMember> current)
@@ -207,15 +213,15 @@ namespace WinFIMLog.Snapshots
                 return [];
             }
 
-            var before = Members(previous.Id).ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
-            var after = current.ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
+            var before = Members(previous.Id).ToDictionary(static x => x.Identity, StringComparer.OrdinalIgnoreCase);
+            var after = current.ToDictionary(static x => x.Identity, StringComparer.OrdinalIgnoreCase);
             var now = DateTimeOffset.UtcNow;
             var output = new List<ReconciliationResult>();
             foreach (var pair in after)
             {
                 if (!before.TryGetValue(pair.Key, out var old))
                 {
-                    output.Add(Result(baselineId, pair.Key, ReconciliationChange.Created, null, pair.Value.Path, previous.Id, now));
+                    output.Add(Result(baselineId, pair.Key, ReconciliationChange.Created, oldPath: null, pair.Value.Path, previous.Id, now));
                 }
                 else if (!string.Equals(old.Fingerprint, pair.Value.Fingerprint, StringComparison.Ordinal))
                 {
@@ -224,7 +230,7 @@ namespace WinFIMLog.Snapshots
             }
             foreach (var pair in before.Where(x => !after.ContainsKey(x.Key)))
             {
-                output.Add(Result(baselineId, pair.Key, ReconciliationChange.Deleted, pair.Value.Path, null, previous.Id, now));
+                output.Add(Result(baselineId, pair.Key, ReconciliationChange.Deleted, pair.Value.Path, newPath: null, previous.Id, now));
             }
 
             return output;
@@ -235,8 +241,8 @@ namespace WinFIMLog.Snapshots
         {
             foreach (var item in context.Baselines.Find(x => x.Source == source && x.Status == BaselineStatus.Complete).ToList())
             {
-                if (item.ScopeHash == scopeHash && item.SourceIdentity == identity &&
-                    item.SchemaVersion == schema && item.AlgorithmVersion == algorithm)
+                if (string.Equals(item.ScopeHash, scopeHash, StringComparison.OrdinalIgnoreCase) && string.Equals(item.SourceIdentity, identity, StringComparison.OrdinalIgnoreCase) &&
+                    item.SchemaVersion == schema && string.Equals(item.AlgorithmVersion, algorithm, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }

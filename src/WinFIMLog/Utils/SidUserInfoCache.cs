@@ -22,7 +22,7 @@ namespace WinFIMLog.Utils
             using var owner = process.Owner();
             var sid = owner.User?.Value;
             var now = DateTime.UtcNow;
-            if (sid != null && Entries.TryGetValue(sid, out var cached) && cached.ExpiresAt > now)
+            if (sid is not null && Entries.TryGetValue(sid, out var cached) && cached.ExpiresAt > now)
             {
                 return cached.User;
             }
@@ -34,7 +34,7 @@ namespace WinFIMLog.Utils
                 owner.IsAuthenticated,
                 owner.IsSystem);
 
-            if (sid != null)
+            if (sid is not null)
             {
                 Entries[sid] = new CacheEntry(user, now.Add(Lifetime));
                 RemoveExpiredEntries(now);

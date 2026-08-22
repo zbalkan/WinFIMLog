@@ -14,12 +14,12 @@ namespace WinFIMLog.IO
         private readonly Action<string, string, EventLogEntryType, int> writeEntry;
 
         public WindowsEventLogSink() : this(EventLog.WriteEntry, EventLog.SourceExists,
-            source => EventLog.LogNameFromSourceName(source, "."),
-            (source, logName) => EventLog.CreateEventSource(new EventSourceCreationData(source, logName)))
+            static source => EventLog.LogNameFromSourceName(source, "."),
+            static (source, logName) => EventLog.CreateEventSource(new EventSourceCreationData(source, logName)))
         { }
 
         internal WindowsEventLogSink(Action<string, string, EventLogEntryType, int> writeEntry) :
-            this(writeEntry, _ => true, _ => null, (_, _) => { })
+            this(writeEntry, static _ => true, static _ => null, static (_, _) => { })
         { }
 
         internal WindowsEventLogSink(Action<string, string, EventLogEntryType, int> writeEntry,

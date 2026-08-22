@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -12,7 +13,7 @@ using WinFIMLog.Health;
 
 namespace WinFIMLog
 {
-    internal partial class BufferConsumer : BackgroundService
+    internal class BufferConsumer : BackgroundService
     {
         private const int BUCKET_SIZE = 500;
 
@@ -98,7 +99,9 @@ namespace WinFIMLog
             }
         }
 
-        /// <summary>Returns only the newest change for each case-insensitive entity identity.</summary>
+        /// <summary>
+        /// Returns only the newest change for each case-insensitive entity identity.
+        /// </summary>
         /// <remarks>
         /// A dictionary provides expected constant-time replacement and retains one reference per
         /// entity. Do not replace it with GroupBy/OrderBy: that allocates grouping and sort buffers
@@ -131,7 +134,7 @@ namespace WinFIMLog
                     var records = new List<(EventContract Record, bool Error)>(fsChanges.Count);
                     foreach (var change in fsChanges)
                     {
-                        if (change.ChangeCategory != ChangeCategory.Discovery)
+                        if (change.ChangeCategory is not ChangeCategory.Discovery)
                         {
                             records.Add((FindingEventFactory.FileSystem(change), false));
                         }
@@ -157,7 +160,7 @@ namespace WinFIMLog
                             }
                         }
                     }), "LiteDBOutbox");
-                    Debug.WriteLine($"Successfully persisted and enqueued {fsCount} items.");
+                    Debug.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Successfully persisted and enqueued {fsCount} items."));
                 }
                 catch
                 {
@@ -219,7 +222,7 @@ namespace WinFIMLog
                             }
                         }
                     }), "LiteDBOutbox");
-                    Debug.WriteLine($"Successfully persisted and enqueued {regCount} items.");
+                    Debug.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Successfully persisted and enqueued {regCount} items."));
                 }
                 catch
                 {
@@ -233,7 +236,7 @@ namespace WinFIMLog
             return false;
         }
 
-        private void Retry(Func<int> write, string sink)
+        private async Task RetryAsync(Func<int> write, string sink)
         {
             Exception? last = null;
             for (var attempt = 1; attempt <= 3; attempt++)
@@ -245,13 +248,15 @@ namespace WinFIMLog
                     _health.SinkFailure(sink, exception.GetType().Name, attempt);
                     if (attempt < 3)
                     {
-                        Thread.Sleep(TimeSpan.FromMilliseconds(100 * (1 << (attempt - 1))));
+                        await Task
+                            .Delay(TimeSpan.FromMilliseconds(100 * (1 << (attempt - 1))))
+                            .ConfigureAwait(false);
                     }
                 }
             }
             throw new InvalidOperationException($"{sink} write failed after retries; batch was not acknowledged.", last);
         }
 
-        private void Retry(Action write, string sink) => Retry(() => { write(); return 1; }, sink);
+        private async void Retry(Action write, string sink) => await RetryAsync(() => { write(); return 1; }, sink).ConfigureAwait(false);
     }
 }

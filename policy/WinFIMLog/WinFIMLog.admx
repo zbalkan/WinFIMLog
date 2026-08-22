@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitions revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="winfimlog" namespace="WinFIMLog.Policies" />
+    <using prefix="windows" namespace="Microsoft.Policies.Windows" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <categories>
+    <category name="WinFIMLogCategory" displayName="$(string.WinFIMLogCategory)" />
+  </categories>
+  <policies>
+    <policy name="TpmIntegrityMode" class="Machine" displayName="$(string.TpmIntegrityMode)"
+            explainText="$(string.TpmIntegrityMode_Help)" key="SOFTWARE\Policies\WinFIMLog"
+            valueName="TpmIntegrityMode">
+      <parentCategory ref="WinFIMLogCategory" />
+      <supportedOn ref="windows:SUPPORTED_WindowsVista" />
+      <enabledValue><decimal value="1" /></enabledValue>
+      <disabledValue><decimal value="0" /></disabledValue>
+    </policy>
+  </policies>
+</policyDefinitions>

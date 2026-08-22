@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Configuration;
+using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Tests;
 
@@ -42,6 +43,26 @@ public sealed class SettingsAtomicPublicationTests
         enabled.EnableRegistryMonitoring = true;
 
         Assert.IsTrue(Settings.GenerationChanged(disabled, enabled));
+    }
+
+    [TestMethod]
+    public void Tpm_integrity_mode_is_a_generation_change_even_when_scope_hash_is_unchanged()
+    {
+        var disabled = Generation("same-scope", @"C:\A");
+        var enabled = Generation("same-scope", @"C:\A");
+        enabled.TpmIntegrityMode = TpmIntegrityMode.PlatformRsaPssSha256;
+
+        Assert.IsTrue(Settings.GenerationChanged(disabled, enabled));
+    }
+
+    [TestMethod]
+    public void Tpm_integrity_public_key_change_is_a_generation_change_even_when_scope_hash_is_unchanged()
+    {
+        var first = Generation("same-scope", @"C:\A");
+        var second = Generation("same-scope", @"C:\A");
+        second.TpmIntegrityPublicKey = [1, 2, 3, 4];
+
+        Assert.IsTrue(Settings.GenerationChanged(first, second));
     }
 
     internal static EffectiveSettings GenerationForTest(string hash, string path) => Generation(hash, path);

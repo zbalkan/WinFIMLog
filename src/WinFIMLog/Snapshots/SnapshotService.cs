@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WinFIMLog.Data;
 using WinFIMLog.Health;
+using WinFIMLog.Integrity;
 
 namespace WinFIMLog.Snapshots
 {
@@ -23,10 +24,12 @@ namespace WinFIMLog.Snapshots
         private readonly RetentionOptions retention;
         private readonly Settings settings;
         private readonly SnapshotHealthState state;
+        private readonly ITpmBaselineIntegrity tpmIntegrity;
 
         public SnapshotService(BaselineRepository repository, Settings settings,
             ILogger<SnapshotService> logger, IHealthReporter health, SnapshotHealthState state,
-            IOptions<RetentionOptions> retention, FileSystemBaselineAvailability fileSystemBaselineAvailability)
+            IOptions<RetentionOptions> retention, FileSystemBaselineAvailability fileSystemBaselineAvailability,
+            ITpmBaselineIntegrity tpmIntegrity)
         {
             this.repository = repository;
             this.settings = settings;
@@ -35,6 +38,7 @@ namespace WinFIMLog.Snapshots
             this.state = state;
             this.retention = retention.Value;
             this.fileSystemBaselineAvailability = fileSystemBaselineAvailability;
+            this.tpmIntegrity = tpmIntegrity;
         }
 
         internal int PendingFileSystemRequests => fileSystemRequests.Reader.Count;
@@ -61,8 +65,10 @@ namespace WinFIMLog.Snapshots
         internal async Task<bool> RunFileSystemSnapshot(CancellationToken cancellationToken)
         {
             var configuration = settings.Capture();
+            var tpmEnabled = IsTpmIntegrityAvailable(configuration, FallbackAlgorithmFor(BaselineSource.FileSystem));
             var baseline = repository.Begin(BaselineSource.FileSystem, configuration.ScopeHash,
-                SourceIdentityProvider.FileSystem(configuration.MonitoredPaths));
+                SourceIdentityProvider.FileSystem(configuration.MonitoredPaths),
+                algorithm: tpmEnabled ? BaselineAlgorithm.TpmRsaPssSha256 : FallbackAlgorithmFor(BaselineSource.FileSystem));
             try
             {
                 var source = new FileSystemSnapshotSource(configuration.HashLimitMB, configuration.IsMonitoredPath);
@@ -71,6 +77,10 @@ namespace WinFIMLog.Snapshots
                 cancellationToken.ThrowIfCancellationRequested();
                 baseline.ConsistencyMethod = "CursorlessConsecutiveAgreement";
                 baseline.ObservationPasses = observation.Passes;
+                if (tpmEnabled && !tpmIntegrity.TrySeal(baseline, observation.Members, out var tpmReason))
+                {
+                    ApplyTpmFallback(baseline, configuration.ScopeHash, tpmReason);
+                }
                 _ = repository.ReconcileAndCompleteAfterConvergence(baseline, observation.Members);
                 fileSystemBaselineAvailability.Refresh(configuration);
                 logger.LogInformation("Completed filesystem baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}",
@@ -87,6 +97,7 @@ namespace WinFIMLog.Snapshots
         internal async Task<bool> RunRegistrySnapshot(CancellationToken cancellationToken)
         {
             var configuration = settings.Capture();
+            var tpmEnabled = IsTpmIntegrityAvailable(configuration, FallbackAlgorithmFor(BaselineSource.Registry));
             IReadOnlyList<string> resolvedRoots;
             try { resolvedRoots = RegistrySnapshotSource.ResolveRoots(configuration.MonitoredKeys); }
             catch (Exception exception)
@@ -95,13 +106,18 @@ namespace WinFIMLog.Snapshots
                 return false;
             }
             var baseline = repository.Begin(BaselineSource.Registry, configuration.ScopeHash,
-                SourceIdentityProvider.RegistryResolved(resolvedRoots), algorithmVersion: "registry-v2");
+                SourceIdentityProvider.RegistryResolved(resolvedRoots),
+                algorithm: tpmEnabled ? BaselineAlgorithm.TpmRsaPssSha256 : FallbackAlgorithmFor(BaselineSource.Registry));
             baseline.ConsistencyMethod = "ResolvedLoadedHiveManifest";
             baseline.ObservationPasses = 1;
             try
             {
                 var members = await Task.Run(() => new RegistrySnapshotSource(configuration.IsMonitoredKey)
                     .CaptureResolved(resolvedRoots), cancellationToken);
+                if (tpmEnabled && !tpmIntegrity.TrySeal(baseline, members, out var tpmReason))
+                {
+                    ApplyTpmFallback(baseline, configuration.ScopeHash, tpmReason);
+                }
                 _ = repository.ReconcileAndComplete(baseline, members);
                 logger.LogInformation("Completed registry baseline {BaselineId} with {ItemCount} members for ScopeHash {ScopeHash}",
                     baseline.Id, baseline.ItemCount, baseline.ScopeHash);
@@ -117,6 +133,45 @@ namespace WinFIMLog.Snapshots
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.WhenAll(
                                     RunSourceLoop(BaselineSource.FileSystem, fileSystemRequests.Reader, stoppingToken),
             RunSourceLoop(BaselineSource.Registry, registryRequests.Reader, stoppingToken));
+
+        internal static BaselineAlgorithm FallbackAlgorithmFor(BaselineSource source) => source switch
+        {
+            BaselineSource.FileSystem => BaselineAlgorithm.Sha256,
+            BaselineSource.Registry => BaselineAlgorithm.RegistryV2,
+            _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unsupported baseline source.")
+        };
+
+        private bool IsTpmIntegrityAvailable(EffectiveSettings configuration, BaselineAlgorithm fallbackAlgorithm)
+        {
+            if (configuration.TpmIntegrityMode != TpmIntegrityMode.PlatformRsaPssSha256)
+            {
+                return false;
+            }
+
+            if (tpmIntegrity.TryPrepare(out var reason))
+            {
+                return true;
+            }
+
+            health.TpmIntegrityUnavailable(configuration.ScopeHash, reason, fallbackAlgorithm);
+            logger.LogError("TPM integrity policy is enabled but unavailable. Falling back to {FallbackAlgorithm}: {Reason}",
+                fallbackAlgorithm, reason);
+            return false;
+        }
+
+        private void ApplyTpmFallback(BaselineMetadata baseline, string scopeHash, string reason)
+        {
+            var fallbackAlgorithm = FallbackAlgorithmFor(baseline.Source);
+            baseline.Algorithm = fallbackAlgorithm;
+            baseline.IntegrityAlgorithm = null;
+            baseline.IntegrityManifestHash = null;
+            baseline.IntegrityPublicKey = null;
+            baseline.IntegritySignature = null;
+            repository.RestoreFallbackApplicability(baseline);
+            health.TpmIntegrityUnavailable(scopeHash, reason, fallbackAlgorithm);
+            logger.LogError("TPM integrity signing failed. Baseline {BaselineId} will use {FallbackAlgorithm}: {Reason}",
+                baseline.Id, fallbackAlgorithm, reason);
+        }
 
         private static Channel<SnapshotRequest> BoundedRequests() => Channel.CreateBounded<SnapshotRequest>(
             new BoundedChannelOptions(1)

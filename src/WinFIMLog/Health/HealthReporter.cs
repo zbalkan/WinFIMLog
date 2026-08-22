@@ -59,6 +59,11 @@ namespace WinFIMLog.Health
             Write(HealthEventId.SinkFailure, "SinkFailure", new Dictionary<string, object?>
             { ["sink"] = sink, ["reason"] = reason, ["attempt"] = attempt }, true);
 
+        public void TpmIntegrityUnavailable(string scope, string reason,
+            BaselineAlgorithm fallbackAlgorithm = BaselineAlgorithm.Sha256) =>
+            Write(HealthEventId.TpmIntegrityUnavailable, "TpmIntegrityUnavailable", new Dictionary<string, object?>
+            { ["scope"] = scope, ["reason"] = reason, ["fallbackAlgorithm"] = (int)fallbackAlgorithm }, true);
+
         public void SourceRecovered(string source, string scope, string action) =>
                             Write(HealthEventId.SourceRecovered, "SourceRecovered", new Dictionary<string, object?>
                             { ["source"] = source, ["scope"] = scope, ["action"] = action });

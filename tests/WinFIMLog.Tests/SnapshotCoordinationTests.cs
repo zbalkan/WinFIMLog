@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Data;
 using WinFIMLog.Health;
+using WinFIMLog.Integrity;
 using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Tests;
@@ -23,7 +24,8 @@ public sealed class SnapshotCoordinationTests
             var repository = new BaselineRepository(context);
             var service = new SnapshotService(repository, settings,
                 NullLogger<SnapshotService>.Instance, new RecordingHealth(), new SnapshotHealthState(),
-                Options.Create(new RetentionOptions()), new FileSystemBaselineAvailability(repository, settings));
+                Options.Create(new RetentionOptions()), new FileSystemBaselineAvailability(repository, settings),
+                new UnavailableTpmIntegrity());
 
             for (var index = 0; index < 10_000; index++)
             {
@@ -49,12 +51,30 @@ public sealed class SnapshotCoordinationTests
     }
 
     [TestMethod]
+    public void Tpm_fallback_algorithm_matches_the_snapshot_source()
+    {
+        Assert.AreEqual(BaselineAlgorithm.Sha256, SnapshotService.FallbackAlgorithmFor(BaselineSource.FileSystem));
+        Assert.AreEqual(BaselineAlgorithm.RegistryV2, SnapshotService.FallbackAlgorithmFor(BaselineSource.Registry));
+    }
+
+    [TestMethod]
     public void Snapshot_retry_is_exponential_and_bounded_below_the_periodic_interval()
     {
         Assert.AreEqual(TimeSpan.FromSeconds(1), SnapshotService.RetryDelay(1));
         Assert.AreEqual(TimeSpan.FromSeconds(8), SnapshotService.RetryDelay(4));
         Assert.AreEqual(TimeSpan.FromSeconds(256), SnapshotService.RetryDelay(20));
         Assert.IsLessThan(TimeSpan.FromHours(6), SnapshotService.RetryDelay(20));
+    }
+
+    private sealed class UnavailableTpmIntegrity : ITpmBaselineIntegrity
+    {
+        public bool TryPrepare(out string reason) { reason = "UnavailableForTest"; return false; }
+
+        public bool TrySeal(BaselineMetadata baseline, System.Collections.Generic.IReadOnlyCollection<BaselineMember> members,
+            out string reason) { reason = "UnavailableForTest"; return false; }
+
+        public bool TryVerify(BaselineMetadata baseline, System.Collections.Generic.IReadOnlyCollection<BaselineMember> members,
+            out string reason) { reason = "UnavailableForTest"; return false; }
     }
 
     private sealed class RecordingHealth : IHealthReporter

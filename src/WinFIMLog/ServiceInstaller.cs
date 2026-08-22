@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using WinFIMLog.Integrity;
 
 namespace WinFIMLog
 {
@@ -181,10 +182,22 @@ namespace WinFIMLog
         {
             var removeFiles = HasOption(args, "--remove-files");
             var installDirectory = GetOption(args, "--install-dir") ?? GetDefaultInstallDirectory();
-
-            if (ServiceExists())
+            var serviceExists = ServiceExists();
+            if (serviceExists)
             {
                 RunSc("stop", ServiceName);
+            }
+
+            // Key retirement is the assurance boundary for a TPM-hardened deployment. Do not
+            // remove the service if its key could not be deleted; a stopped service is safer than
+            // claiming a successful clearance while TPM material remains available.
+            if (!TpmBaselineIntegrity.TryRetire(new Settings(), out var retirementReason))
+            {
+                throw new InvalidOperationException(retirementReason);
+            }
+
+            if (serviceExists)
+            {
                 var removalScript = Path.Combine(installDirectory, "uninstall-event-channels.ps1");
                 if (File.Exists(removalScript))
                 {

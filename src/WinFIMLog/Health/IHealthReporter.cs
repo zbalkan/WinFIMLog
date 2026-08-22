@@ -1,3 +1,5 @@
+using WinFIMLog.Snapshots;
+
 namespace WinFIMLog.Health
 {
     public interface IHealthReporter
@@ -9,6 +11,9 @@ namespace WinFIMLog.Health
         void Heartbeat(HealthMetrics metrics) { }
 
         void SinkFailure(string sink, string reason, int attempt);
+
+        void TpmIntegrityUnavailable(string scope, string reason,
+            BaselineAlgorithm fallbackAlgorithm = BaselineAlgorithm.Sha256) { }
 
         void SourceRecovered(string source, string scope, string action);
     }

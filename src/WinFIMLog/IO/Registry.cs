@@ -83,11 +83,18 @@ namespace WinFIMLog.IO
                 : multiStringValue.Where(path => !string.IsNullOrEmpty(path)).ToArray();
         }
 
-        /// <summary> Translates the Registry value data from string to <see cref="string[]">
-        /// </summary> <param name="value">Name of the Registry value</param> <returns><see
-        /// cref="string"></returns> <exception cref="ArgumentException"></exception> <exception
-        /// cref="System.Security.SecurityException"></exception> <exception
-        /// cref="System.IO.IOException"></exception> <exception cref="UnauthorizedAccessException"></exception>
+        /// <summary>Reads a binary registry value, returning an empty array when absent or mistyped.</summary>
+        public static byte[] ReadBinaryValue(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                throw new ArgumentException("Value cannot be null or empty.", nameof(value));
+            }
+
+            return ReadEffectiveValue(value) is byte[] binaryValue ? (byte[])binaryValue.Clone() : [];
+        }
+
+        /// <summary>Reads a string registry value, returning an empty string when absent or mistyped.</summary>
         public static string ReadStringValue(string value)
         {
             if (string.IsNullOrEmpty(value))
@@ -156,6 +163,18 @@ namespace WinFIMLog.IO
             ArgumentNullException.ThrowIfNull(valueData);
 
             Root.SetValue(value, valueData);
+        }
+
+        /// <summary>Saves binary registry data without text encoding.</summary>
+        public static void WriteBinaryValue(string value, byte[] valueData)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                throw new ArgumentException("Value cannot be null or empty.", nameof(value));
+            }
+
+            ArgumentNullException.ThrowIfNull(valueData);
+            Root.SetValue(value, valueData, RegistryValueKind.Binary);
         }
 
         private static object? ReadEffectiveValue(string value)

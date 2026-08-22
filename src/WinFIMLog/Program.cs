@@ -10,6 +10,7 @@ using WinFIMLog.Events;
 using WinFIMLog.FIM;
 using WinFIMLog.Health;
 using WinFIMLog.IO;
+using WinFIMLog.Integrity;
 using WinFIMLog.Jobs;
 using WinFIMLog.Snapshots;
 using WinFIMLog.Utils;
@@ -75,6 +76,7 @@ namespace WinFIMLog
                     _ = services.AddHostedService<EventOutboxPublisher>();
                     _ = services.AddHostedService<StorageMaintenanceService>();
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
+                    _ = services.AddSingleton<ITpmBaselineIntegrity, TpmBaselineIntegrity>();
                     _ = services.AddSingleton<BaselineRepository>();
                     _ = services.AddSingleton<FileSystemBaselineAvailability>();
                     // Reject invalid settings before any source or snapshot hosted service starts.

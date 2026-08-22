@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using WinFIMLog.Configuration;
+using WinFIMLog.Snapshots;
 
 namespace WinFIMLog
 {
@@ -10,6 +11,8 @@ namespace WinFIMLog
         internal int DiscoveryConcurrency { get; set; } = 2;
         internal bool EnableLocalDatabase { get; set; } = true;
         internal bool EnableRegistryMonitoring { get; set; }
+        internal TpmIntegrityMode TpmIntegrityMode { get; set; }
+        internal byte[] TpmIntegrityPublicKey { get; set; } = [];
         internal string[] ExcludedExtensions { get; set; } = [];
         internal Regex? ExcludedExtensionsPattern { get; set; }
         internal string[] ExcludedKeys { get; set; } = [];

@@ -5,6 +5,7 @@ using LiteDB;
 using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.Data;
+using WinFIMLog.Integrity;
 using WinFIMLog.Snapshots;
 
 namespace WinFIMLog.Tests;
@@ -19,15 +20,15 @@ public sealed class BaselineRepositoryTests
     [TestMethod]
     public void Applicability_change_supersedes_but_preserves_old_complete_baseline()
     {
-        var old = repository.Begin(BaselineSource.Registry, "old-scope", "hive", algorithmVersion: "registry-v1");
+        var old = repository.Begin(BaselineSource.Registry, "old-scope", "hive", algorithm: BaselineAlgorithm.RegistryV2);
         repository.ReconcileAndComplete(old, [Member("A", "one")]);
 
-        _ = repository.Begin(BaselineSource.Registry, "new-scope", "hive", algorithmVersion: "registry-v1");
+        _ = repository.Begin(BaselineSource.Registry, "new-scope", "hive", algorithm: BaselineAlgorithm.RegistryV2);
 
         var historical = context.Baselines.FindById(new BsonValue(old.Id));
         Assert.AreEqual(BaselineStatus.Complete, historical.Status);
         Assert.AreEqual(BaselineApplicability.Superseded, historical.Applicability);
-        Assert.IsNull(repository.LatestComplete(BaselineSource.Registry, "old-scope", "hive", algorithmVersion: "registry-v1"));
+        Assert.IsNull(repository.LatestComplete(BaselineSource.Registry, "old-scope", "hive", algorithm: BaselineAlgorithm.RegistryV2));
     }
 
     [TestCleanup]
@@ -110,6 +111,53 @@ public sealed class BaselineRepositoryTests
     }
 
     [TestMethod]
+    public void Prior_baseline_that_fails_tpm_verification_is_not_used_for_reconciliation()
+    {
+        var verifiedRepository = new BaselineRepository(context, new RejectingIntegrity());
+        var first = verifiedRepository.Begin(BaselineSource.FileSystem, "scope", "volume");
+        verifiedRepository.ReconcileAndComplete(first, [Member("A", "one")]);
+
+        var second = verifiedRepository.Begin(BaselineSource.FileSystem, "scope", "volume");
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            verifiedRepository.ReconcileAndComplete(second, [Member("A", "two")]));
+
+        StringAssert.Contains(exception.Message, "TPM integrity verification");
+        Assert.AreEqual(BaselineStatus.Building, second.Status);
+        Assert.IsEmpty(repository.Members(second.Id));
+    }
+
+    [TestMethod]
+    public void Filesystem_tpm_signing_fallback_restores_prior_sha256_lineage()
+    {
+        AssertFallbackRestoresComparableLineage(BaselineSource.FileSystem, BaselineAlgorithm.Sha256);
+    }
+
+    [TestMethod]
+    public void Registry_tpm_signing_fallback_restores_prior_registry_lineage()
+    {
+        AssertFallbackRestoresComparableLineage(BaselineSource.Registry, BaselineAlgorithm.RegistryV2);
+    }
+
+    [TestMethod]
+    public void Compaction_retains_source_native_fallback_separately_from_tpm_lineage()
+    {
+        var fallback = repository.Begin(BaselineSource.FileSystem, "scope", "identity",
+            algorithm: BaselineAlgorithm.Sha256);
+        repository.ReconcileAndComplete(fallback, [Member("A", "one")]);
+
+        for (var index = 0; index < 2; index++)
+        {
+            var tpm = repository.Begin(BaselineSource.FileSystem, "scope", "identity",
+                algorithm: BaselineAlgorithm.TpmRsaPssSha256);
+            repository.ReconcileAndComplete(tpm, [Member("A", $"tpm-{index}")]);
+            repository.CompactAfterCompletion(tpm, generationsToKeep: 2);
+        }
+
+        Assert.IsNotNull(context.Baselines.FindById(fallback.Id));
+        Assert.HasCount(1, repository.Members(fallback.Id));
+    }
+
+    [TestMethod]
     public void Duplicate_identity_cannot_be_published_as_complete()
     {
         var baseline = repository.Begin(BaselineSource.FileSystem, "scope", "volume");
@@ -140,11 +188,11 @@ public sealed class BaselineRepositoryTests
     public void Resolved_hive_manifest_change_starts_lineage_without_mass_deletion()
     {
         var first = repository.Begin(BaselineSource.Registry, "scope", "HKEY_USERS\\S-1-1",
-            algorithmVersion: "registry-v1");
+            algorithm: BaselineAlgorithm.RegistryV2);
         repository.ReconcileAndComplete(first, [Member("HKEY_USERS\\S-1-1\\RUN", "one")]);
 
         var second = repository.Begin(BaselineSource.Registry, "scope", "HKEY_USERS\\S-1-2",
-            algorithmVersion: "registry-v1");
+            algorithm: BaselineAlgorithm.RegistryV2);
         var results = repository.ReconcileAndComplete(second,
             [Member("HKEY_USERS\\S-1-2\\RUN", "two")]);
 
@@ -152,6 +200,35 @@ public sealed class BaselineRepositoryTests
         Assert.AreEqual(BaselineApplicability.Superseded,
             context.Baselines.FindById(new BsonValue(first.Id)).Applicability);
         Assert.AreEqual(BaselineApplicability.Current, second.Applicability);
+    }
+
+    private void AssertFallbackRestoresComparableLineage(BaselineSource source, BaselineAlgorithm fallbackAlgorithm)
+    {
+        var first = repository.Begin(source, "scope", "identity", algorithm: fallbackAlgorithm);
+        repository.ReconcileAndComplete(first, [Member("A", "one")]);
+
+        var tpmCandidate = repository.Begin(source, "scope", "identity",
+            algorithm: BaselineAlgorithm.TpmRsaPssSha256);
+        Assert.IsNull(repository.LatestComplete(source, "scope", "identity", algorithm: fallbackAlgorithm));
+
+        tpmCandidate.Algorithm = fallbackAlgorithm;
+        repository.RestoreFallbackApplicability(tpmCandidate);
+        var results = repository.ReconcileAndComplete(tpmCandidate, [Member("A", "two")]);
+
+        Assert.HasCount(1, results);
+        Assert.AreEqual(ReconciliationChange.Changed, results[0].Change);
+        Assert.AreEqual(first.Id, results[0].PreviousBaselineId);
+    }
+
+    private sealed class RejectingIntegrity : ITpmBaselineIntegrity
+    {
+        public bool TryPrepare(out string reason) { reason = "NotUsed"; return false; }
+
+        public bool TrySeal(BaselineMetadata baseline, System.Collections.Generic.IReadOnlyCollection<BaselineMember> members,
+            out string reason) { reason = "NotUsed"; return false; }
+
+        public bool TryVerify(BaselineMetadata baseline, System.Collections.Generic.IReadOnlyCollection<BaselineMember> members,
+            out string reason) { reason = "RejectedForTest"; return false; }
     }
 
     private static BaselineMember Member(string identity, string hash) => new()

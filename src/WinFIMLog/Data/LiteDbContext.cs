@@ -13,6 +13,7 @@ namespace WinFIMLog.Data
 {
     public partial class LiteDbContext : ILiteDbContext
     {
+        private const int BaselineSchemaVersion = 2;
         private const int LatestStateSchemaVersion = 1;
 
         /// <summary>
@@ -47,6 +48,7 @@ namespace WinFIMLog.Data
             EnsureLatestStateSchema();
 
             Baselines = _database.GetCollection<BaselineMetadata>("baselines");
+            EnsureBaselineSchema();
             Baselines.EnsureIndex(x => x.Status);
             Baselines.EnsureIndex(x => x.Source);
             BaselineMembers = _database.GetCollection<BaselineMember>("baselineMembers");
@@ -101,6 +103,85 @@ namespace WinFIMLog.Data
 
             FileSystemChanges.EnsureIndex(x => x.NormalizedEntity, true);
             RegistryChanges.EnsureIndex(x => x.NormalizedEntity, true);
+        }
+
+        /// <summary>Migrates legacy textual baseline algorithms and evidence encodings once.</summary>
+        private void EnsureBaselineSchema()
+        {
+            var metadata = _database.GetCollection<BsonDocument>("databaseMetadata");
+            var schema = metadata.FindById("baseline");
+            if (schema is not null && schema["version"].AsInt32 >= BaselineSchemaVersion)
+            {
+                return;
+            }
+
+            var baselines = _database.GetCollection<BsonDocument>("baselines");
+            if (!ExecuteTransaction(() =>
+                {
+                    foreach (var baseline in baselines.FindAll().ToList())
+                    {
+                        if (baseline.TryGetValue("AlgorithmVersion", out var legacyAlgorithm) && legacyAlgorithm.IsString)
+                        {
+                            var algorithm = legacyAlgorithm.AsString;
+                            baseline["Algorithm"] = (int)MapLegacyAlgorithm(algorithm);
+                            if (algorithm == "registry-v1")
+                            {
+                                // V1 and V2 describe different evidence contracts. Preserve the
+                                // row for audit history, but never reconcile V2 evidence against it.
+                                baseline["Status"] = (int)BaselineStatus.Invalid;
+                                baseline["InvalidReason"] = "Legacy registry-v1 evidence is not comparable with RegistryV2.";
+                            }
+                            baseline.Remove("AlgorithmVersion");
+                        }
+
+                        if (baseline.TryGetValue("IntegrityAlgorithm", out var integrityAlgorithm) && integrityAlgorithm.IsString)
+                        {
+                            baseline["IntegrityAlgorithm"] = (int)MapLegacyAlgorithm(integrityAlgorithm.AsString);
+                        }
+
+                        MigrateHexBytes(baseline, "IntegrityManifestHash");
+                        MigrateBase64Bytes(baseline, "IntegrityPublicKey");
+                        MigrateBase64Bytes(baseline, "IntegritySignature");
+                        baseline.Remove("IntegrityKeyName");
+                        baselines.Update(baseline);
+                    }
+
+                    metadata.Upsert(new BsonDocument
+                    {
+                        ["_id"] = "baseline",
+                        ["version"] = BaselineSchemaVersion
+                    });
+                }))
+            {
+                throw new InvalidOperationException("Could not migrate baseline algorithm and evidence storage.");
+            }
+        }
+
+        private static BaselineAlgorithm MapLegacyAlgorithm(string value) => value switch
+        {
+            "sha256-v1" => BaselineAlgorithm.Sha256,
+            // registry-v1 is mapped only to satisfy the typed storage contract. The migration
+            // marks that row invalid before it can be selected as RegistryV2 evidence.
+            "registry-v1" or "registry-v2" => BaselineAlgorithm.RegistryV2,
+            "tpm-rsa-pss-sha256-v1" or "sha256-v1+tpm-rsa-pss-v1" or "registry-v2+tpm-rsa-pss-v1" =>
+                BaselineAlgorithm.TpmRsaPssSha256,
+            _ => throw new InvalidOperationException("Unsupported legacy baseline algorithm value.")
+        };
+
+        private static void MigrateBase64Bytes(BsonDocument document, string field)
+        {
+            if (document.TryGetValue(field, out var value) && value.IsString)
+            {
+                document[field] = Convert.FromBase64String(value.AsString);
+            }
+        }
+
+        private static void MigrateHexBytes(BsonDocument document, string field)
+        {
+            if (document.TryGetValue(field, out var value) && value.IsString)
+            {
+                document[field] = Convert.FromHexString(value.AsString);
+            }
         }
 
         /// <summary>Normalizes legacy identities and retains the newest case-insensitive duplicate.</summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using WinFIMLog.Data;
+using WinFIMLog.Integrity;
 
 namespace WinFIMLog.Snapshots
 {
@@ -9,11 +10,16 @@ namespace WinFIMLog.Snapshots
     public sealed class BaselineRepository
     {
         private readonly ILiteDbContext context;
+        private readonly ITpmBaselineIntegrity? integrity;
 
-        public BaselineRepository(ILiteDbContext context) => this.context = context;
+        public BaselineRepository(ILiteDbContext context, ITpmBaselineIntegrity? integrity = null)
+        {
+            this.context = context;
+            this.integrity = integrity;
+        }
 
         public BaselineMetadata Begin(BaselineSource source, string scopeHash, string sourceIdentity,
-            int schemaVersion = 1, string algorithmVersion = "sha256-v1", string? startCursor = null)
+            int schemaVersion = 1, BaselineAlgorithm algorithm = BaselineAlgorithm.Sha256, string? startCursor = null)
         {
             var baseline = new BaselineMetadata
             {
@@ -21,14 +27,14 @@ namespace WinFIMLog.Snapshots
                 ScopeHash = scopeHash,
                 SourceIdentity = sourceIdentity,
                 SchemaVersion = schemaVersion,
-                AlgorithmVersion = algorithmVersion,
+                Algorithm = algorithm,
                 StartedAt = DateTimeOffset.UtcNow,
                 Status = BaselineStatus.Building,
                 StartCursor = startCursor
             };
             if (!context.ExecuteTransaction(() =>
             {
-                SupersedeInapplicable(source, scopeHash, sourceIdentity, schemaVersion, algorithmVersion);
+                SupersedeInapplicable(source, scopeHash, sourceIdentity, schemaVersion, algorithm);
                 context.Baselines.Insert(baseline);
             }))
             {
@@ -41,10 +47,14 @@ namespace WinFIMLog.Snapshots
         /// <summary>Retains two complete generations and removes abandoned staging data.</summary>
         public void CompactAfterCompletion(BaselineMetadata completed, int generationsToKeep = 2)
         {
-            var keep = context.Baselines.Query()
-                .Where(x => x.Source == completed.Source && x.Status == BaselineStatus.Complete)
-                .OrderByDescending(x => x.CompletedAt).Limit(Math.Max(1, generationsToKeep))
-                .ToList().Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
+            // Retention is per comparable lineage. TPM and source-native baselines must not evict
+            // one another because the native lineage is required when TPM signing later fails.
+            var keep = context.Baselines.Find(x => x.Source == completed.Source &&
+                    x.Status == BaselineStatus.Complete).ToList()
+                .GroupBy(x => (x.ScopeHash, x.SourceIdentity, x.SchemaVersion, x.Algorithm))
+                .SelectMany(group => group.OrderByDescending(x => x.CompletedAt)
+                    .Take(Math.Max(1, generationsToKeep)))
+                .Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
             foreach (var baseline in context.Baselines.Find(x => x.Source == completed.Source).ToList())
             {
                 if (keep.Contains(baseline.Id))
@@ -77,13 +87,37 @@ namespace WinFIMLog.Snapshots
         public BaselineMetadata? Find(string baselineId) => context.Baselines.FindById(baselineId);
 
         public BaselineMetadata? LatestComplete(BaselineSource source, string scopeHash, string sourceIdentity,
-                            int schemaVersion = 1, string algorithmVersion = "sha256-v1") =>
+                            int schemaVersion = 1, BaselineAlgorithm algorithm = BaselineAlgorithm.Sha256) =>
             context.Baselines.Query()
                 .Where(x => x.Source == source && x.ScopeHash == scopeHash &&
                     x.SourceIdentity == sourceIdentity && x.SchemaVersion == schemaVersion &&
-                    x.AlgorithmVersion == algorithmVersion && x.Status == BaselineStatus.Complete &&
+                    x.Algorithm == algorithm && x.Status == BaselineStatus.Complete &&
                     x.Applicability == BaselineApplicability.Current)
                 .OrderByDescending(x => x.CompletedAt).FirstOrDefault();
+
+        /// <summary>
+        ///     Reinstates the latest complete baseline for a fallback algorithm after a new TPM
+        ///     baseline was started but could not be sealed. Begin supersedes incompatible
+        ///     lineages eagerly, so this restores the previous comparable baseline before diffing.
+        /// </summary>
+        public void RestoreFallbackApplicability(BaselineMetadata fallback)
+        {
+            var previous = context.Baselines.Query()
+                .Where(x => x.Id != fallback.Id && x.Source == fallback.Source && x.ScopeHash == fallback.ScopeHash &&
+                    x.SourceIdentity == fallback.SourceIdentity && x.SchemaVersion == fallback.SchemaVersion &&
+                    x.Algorithm == fallback.Algorithm && x.Status == BaselineStatus.Complete)
+                .OrderByDescending(x => x.CompletedAt).FirstOrDefault();
+            if (previous is null || previous.Applicability == BaselineApplicability.Current)
+            {
+                return;
+            }
+
+            previous.Applicability = BaselineApplicability.Current;
+            if (!context.ExecuteTransaction(() => context.Baselines.Update(previous)))
+            {
+                throw new InvalidOperationException("Could not restore the fallback baseline applicability.");
+            }
+        }
 
         public void MarkInvalid(BaselineMetadata baseline, string reason)
         {
@@ -116,7 +150,7 @@ namespace WinFIMLog.Snapshots
             }
 
             var previous = LatestComplete(baseline.Source, baseline.ScopeHash, baseline.SourceIdentity,
-                baseline.SchemaVersion, baseline.AlgorithmVersion);
+                baseline.SchemaVersion, baseline.Algorithm);
             var results = Diff(baseline.Id, previous, materialised);
             baseline.Status = BaselineStatus.Reconciling;
             if (!context.ExecuteTransaction(() => context.Baselines.Update(baseline)))
@@ -207,7 +241,13 @@ namespace WinFIMLog.Snapshots
                 return [];
             }
 
-            var before = Members(previous.Id).ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
+            var priorMembers = Members(previous.Id);
+            if (integrity is not null && !integrity.TryVerify(previous, priorMembers, out var integrityReason))
+            {
+                throw new InvalidOperationException($"The prior baseline {previous.Id} failed TPM integrity verification: {integrityReason}");
+            }
+
+            var before = priorMembers.ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
             var after = current.ToDictionary(x => x.Identity, StringComparer.OrdinalIgnoreCase);
             var now = DateTimeOffset.UtcNow;
             var output = new List<ReconciliationResult>();
@@ -231,12 +271,12 @@ namespace WinFIMLog.Snapshots
         }
 
         private void SupersedeInapplicable(BaselineSource source, string scopeHash, string identity,
-            int schema, string algorithm)
+            int schema, BaselineAlgorithm algorithm)
         {
             foreach (var item in context.Baselines.Find(x => x.Source == source && x.Status == BaselineStatus.Complete).ToList())
             {
                 if (item.ScopeHash == scopeHash && item.SourceIdentity == identity &&
-                    item.SchemaVersion == schema && item.AlgorithmVersion == algorithm)
+                    item.SchemaVersion == schema && item.Algorithm == algorithm)
                 {
                     continue;
                 }

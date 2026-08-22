@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitionResources">
+  <displayName>WinFIMLog Policy Definitions</displayName>
+  <description>Policy definitions for WinFIMLog.</description>
+  <resources>
+    <stringTable>
+      <string id="WinFIMLogCategory">WinFIMLog</string>
+      <string id="TpmIntegrityMode">Enable TPM-backed baseline integrity hardening</string>
+      <string id="TpmIntegrityMode_Help">This policy writes the TpmIntegrityMode REG_DWORD value. Enabled sets PlatformRsaPssSha256 (1); disabled sets Disabled (0). When active, WinFIMLog creates or opens a non-exportable machine RSA key in the Microsoft Platform Crypto Provider and signs each completed baseline manifest. The associated public key is stored as binary data through the WinFIMLog settings model and is resolved using the established Group Policy, local preference, and legacy registry precedence. If a compatible TPM or the Platform Crypto Provider is unavailable, WinFIMLog writes error event 7798 and uses the source-native fallback algorithm: Sha256 (1) for filesystem or RegistryV2 (2) for registry. The event includes the selected fallbackAlgorithm integer.</string>
+    </stringTable>
+    <presentationTable />
+  </resources>
+</policyDefinitionResources>

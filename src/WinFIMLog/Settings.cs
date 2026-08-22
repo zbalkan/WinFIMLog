@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using WinFIMLog.Configuration;
 using WinFIMLog.IO;
+using WinFIMLog.Snapshots;
 
 namespace WinFIMLog
 {
@@ -85,6 +86,18 @@ namespace WinFIMLog
         ///     Default: false.
         /// </summary>
         public bool EnableRegistryMonitoring { get => ReadState().EnableRegistryMonitoring; private set => WriteState().EnableRegistryMonitoring = value; }
+
+        /// <summary>
+        ///     DWORD-backed TPM baseline integrity mode. Policy values take precedence over local
+        ///     preferences through the standard effective-settings resolution path.
+        /// </summary>
+        public TpmIntegrityMode TpmIntegrityMode { get => ReadState().TpmIntegrityMode; private set => WriteState().TpmIntegrityMode = value; }
+
+        /// <summary>
+        ///     The TPM baseline-signing public key selected through the same policy, preference,
+        ///     and legacy-registry precedence as all other effective settings.
+        /// </summary>
+        public byte[] TpmIntegrityPublicKey => (byte[])ReadState().TpmIntegrityPublicKey.Clone();
 
         /// <summary>
         ///     File extensions to exclude from monitoring.
@@ -191,34 +204,56 @@ namespace WinFIMLog
         {
             lock (reloadLock)
             {
-                var previousState = Capture();
-                var previous = previousState.ScopeHash;
-                try
-                {
-                    building.Value = new EffectiveSettings();
-                    ReadOrCreateRegistrySettings();
-                    var next = building.Value!;
-                    if (previousState.CaptureQueueCapacity != next.CaptureQueueCapacity)
-                    {
-                        throw new ConfigurationValidationException(
-                            "CaptureQueueCapacity is fixed at startup; restart the service to apply this change.");
-                    }
+                return ReloadWithinLock();
+            }
+        }
 
-                    Volatile.Write(ref current, next);
-                    building.Value = null;
-                    return (previous, next.ScopeHash, GenerationChanged(previousState, next));
-                }
-                catch
+        /// <summary>
+        ///     Stores the locally generated TPM signing public key in the preference registry key,
+        ///     then republishes the fully resolved settings generation. Any Group Policy value
+        ///     continues to take precedence through the normal registry-resolution path.
+        /// </summary>
+        internal void StoreTpmIntegrityPublicKey(byte[] publicKey)
+        {
+            ArgumentNullException.ThrowIfNull(publicKey);
+            lock (reloadLock)
+            {
+                Registry.WriteBinaryValue("TpmIntegrityPublicKey", publicKey);
+                _ = ReloadWithinLock();
+            }
+        }
+
+        private (string PreviousHash, string CurrentHash, bool Changed) ReloadWithinLock()
+        {
+            var previousState = Capture();
+            var previous = previousState.ScopeHash;
+            try
+            {
+                building.Value = new EffectiveSettings();
+                ReadOrCreateRegistrySettings();
+                var next = building.Value!;
+                if (previousState.CaptureQueueCapacity != next.CaptureQueueCapacity)
                 {
-                    building.Value = null;
-                    throw;
+                    throw new ConfigurationValidationException(
+                        "CaptureQueueCapacity is fixed at startup; restart the service to apply this change.");
                 }
+
+                Volatile.Write(ref current, next);
+                building.Value = null;
+                return (previous, next.ScopeHash, GenerationChanged(previousState, next));
+            }
+            catch
+            {
+                building.Value = null;
+                throw;
             }
         }
 
         internal static bool GenerationChanged(EffectiveSettings left, EffectiveSettings right) => !(
             left.EnableLocalDatabase == right.EnableLocalDatabase &&
             left.EnableRegistryMonitoring == right.EnableRegistryMonitoring &&
+            left.TpmIntegrityMode == right.TpmIntegrityMode &&
+            left.TpmIntegrityPublicKey.SequenceEqual(right.TpmIntegrityPublicKey) &&
             left.HashLimitMB == right.HashLimitMB && left.HeartbeatInterval == right.HeartbeatInterval &&
             left.CaptureQueueCapacity == right.CaptureQueueCapacity &&
             left.DiscoveryConcurrency == right.DiscoveryConcurrency &&
@@ -457,6 +492,32 @@ namespace WinFIMLog
                 registryMonitoring = 1;
             }
             EnableRegistryMonitoring = registryMonitoring == 1;
+
+            var tpmIntegrityMode = Registry.ReadDwordValue("TpmIntegrityMode");
+            if (tpmIntegrityMode == -1)
+            {
+                var legacyEnablement = Registry.ReadDwordValue("EnableTpmIntegrity");
+                tpmIntegrityMode = legacyEnablement == 1
+                    ? (int)TpmIntegrityMode.PlatformRsaPssSha256
+                    : (int)TpmIntegrityMode.Disabled;
+                Registry.WriteDwordValue("TpmIntegrityMode", tpmIntegrityMode);
+            }
+            if (!Enum.IsDefined((TpmIntegrityMode)tpmIntegrityMode))
+            {
+                throw new InvalidOperationException("TpmIntegrityMode is not a supported DWORD value.");
+            }
+            TpmIntegrityMode = (TpmIntegrityMode)tpmIntegrityMode;
+            var publicKey = Registry.ReadBinaryValue("TpmIntegrityPublicKey");
+            if (publicKey.Length == 0)
+            {
+                var legacyPublicKey = Registry.ReadStringValue("TpmIntegrityPublicKey");
+                if (!string.IsNullOrEmpty(legacyPublicKey))
+                {
+                    publicKey = Convert.FromBase64String(legacyPublicKey);
+                    Registry.WriteBinaryValue("TpmIntegrityPublicKey", publicKey);
+                }
+            }
+            WriteState().TpmIntegrityPublicKey = publicKey;
 
             var monitoredKeys = Registry.ReadMultiStringValue("MonitoredKeys");
             if (!Registry.EffectiveValueExists("MonitoredKeys"))

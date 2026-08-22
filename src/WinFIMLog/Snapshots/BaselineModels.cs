@@ -9,6 +9,21 @@ namespace WinFIMLog.Snapshots
     public enum BaselineSource
     { FileSystem, Registry }
 
+    /// <summary>Stable persisted baseline algorithm identifiers.</summary>
+    public enum BaselineAlgorithm : int
+    {
+        Sha256 = 1,
+        RegistryV2 = 2,
+        TpmRsaPssSha256 = 3
+    }
+
+    /// <summary>DWORD-backed policy and preference values for optional TPM integrity hardening.</summary>
+    public enum TpmIntegrityMode : int
+    {
+        Disabled = 0,
+        PlatformRsaPssSha256 = 1
+    }
+
     public enum BaselineStatus
     { Building, Reconciling, Complete, Invalid }
 
@@ -56,13 +71,17 @@ namespace WinFIMLog.Snapshots
 
     public sealed class BaselineMetadata
     {
-        public string AlgorithmVersion { get; set; } = "sha256-v1";
+        public BaselineAlgorithm Algorithm { get; set; } = BaselineAlgorithm.Sha256;
         public BaselineApplicability Applicability { get; set; } = BaselineApplicability.Current;
         public DateTimeOffset? CompletedAt { get; set; }
         public string ConsistencyMethod { get; set; } = string.Empty;
         public string? EndCursor { get; set; }
         public string Id { get; set; } = Ulid.NewUlid().ToString();
         public string? InvalidReason { get; set; }
+        public BaselineAlgorithm? IntegrityAlgorithm { get; set; }
+        public byte[]? IntegrityManifestHash { get; set; }
+        public byte[]? IntegrityPublicKey { get; set; }
+        public byte[]? IntegritySignature { get; set; }
         public long ItemCount { get; set; }
         public int ObservationPasses { get; set; }
         public int SchemaVersion { get; set; } = 1;

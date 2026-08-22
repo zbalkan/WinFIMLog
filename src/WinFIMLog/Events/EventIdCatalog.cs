@@ -23,6 +23,7 @@ namespace WinFIMLog.Events
         internal const ushort BaselineFinding = 7795;
         internal const ushort Aggregation = 7796;
         internal const ushort SecurityAuditAttribution = 7797;
+        internal const ushort TpmIntegrityUnavailable = 7798;
 
         private static readonly IReadOnlyDictionary<ushort, string> RecordTypes =
             new Dictionary<ushort, string>
@@ -40,7 +41,8 @@ namespace WinFIMLog.Events
                 [ConfigurationChanged] = "ConfigurationChanged",
                 [BaselineFinding] = "BaselineFinding",
                 [Aggregation] = "Aggregation",
-                [SecurityAuditAttribution] = "SecurityAuditAttribution"
+                [SecurityAuditAttribution] = "SecurityAuditAttribution",
+                [TpmIntegrityUnavailable] = "TpmIntegrityUnavailable"
             };
 
         internal static void Validate(ushort eventId, string recordType)
@@ -54,7 +56,7 @@ namespace WinFIMLog.Events
 
         internal static EventLogEntryType EntryType(ushort eventId, bool errorFallback = false) => eventId switch
         {
-            CoverageGap or SinkFailure or ServiceError => EventLogEntryType.Error,
+            CoverageGap or SinkFailure or ServiceError or TpmIntegrityUnavailable => EventLogEntryType.Error,
             ConfigurationChanged or BaselineFinding => EventLogEntryType.Warning,
             _ when errorFallback => EventLogEntryType.Error,
             _ => EventLogEntryType.Information

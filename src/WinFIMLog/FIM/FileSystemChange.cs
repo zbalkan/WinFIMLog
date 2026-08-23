@@ -11,7 +11,7 @@ using static WinFIMLog.IO.FileSystem;
 namespace WinFIMLog.FIM
 {
     [BsonSourceGenerated]
-    public class FileSystemChange : Change
+    public sealed class FileSystemChange : Change
     {
         public string CurrentHash { get; set; }
         public long? CurrentSizeBytes { get; set; }

@@ -10,7 +10,7 @@ using WinFIMLog.Utils;
 namespace WinFIMLog.FIM
 {
     [BsonSourceGenerated]
-    public partial class RegistryChange : Change
+    public sealed class RegistryChange : Change
     {
         internal RegistryChange()
         { }

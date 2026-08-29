@@ -106,4 +106,69 @@ namespace WinFIMLog.Snapshots
         public string? OldPath { get; set; }
         public string? PreviousBaselineId { get; set; }
     }
+
+    /// <summary>Persisted cursor state for USN Journal reading (Tier 0.5 supplementary source)</summary>
+    public sealed class UsnJournalCursor
+    {
+        /// <summary>Unique identifier for this cursor record</summary>
+        public string Id { get; set; } = Ulid.NewUlid().ToString();
+
+        /// <summary>Volume identifier (from GetVolumeInformation)</summary>
+        public string VolumeSerialNumber { get; set; } = string.Empty;
+
+        /// <summary>Drive letter (e.g., 'C', 'D')</summary>
+        public char DriveLetter { get; set; }
+
+        /// <summary>Journal ID from USN_JOURNAL_DATA (detects journal recreation)</summary>
+        public ulong JournalId { get; set; }
+
+        /// <summary>Last successfully read USN from journal</summary>
+        public long LastReadUsn { get; set; }
+
+        /// <summary>When this cursor was last updated</summary>
+        public DateTimeOffset LastUpdated { get; set; }
+
+        /// <summary>Track consecutive failed read attempts</summary>
+        public int ConsecutiveReadFailures { get; set; }
+
+        /// <summary>Whether this cursor is still valid (false if journal inaccessible)</summary>
+        public bool IsValid { get; set; } = true;
+
+        /// <summary>Counter for gap events detected (journal wraps)</summary>
+        public int GapsDetected { get; set; }
+
+        /// <summary>When a gap was last detected</summary>
+        public DateTimeOffset? LastGapDetectedAt { get; set; }
+    }
+
+    /// <summary>Gap event recording for USN Journal coverage gaps (circular buffer wraps, cursor age-out)</summary>
+    public sealed class UsnJournalGap
+    {
+        /// <summary>Unique identifier for this gap event</summary>
+        public string Id { get; set; } = Ulid.NewUlid().ToString();
+
+        /// <summary>Volume identifier (from GetVolumeInformation)</summary>
+        public string VolumeSerialNumber { get; set; } = string.Empty;
+
+        /// <summary>Drive letter (e.g., 'C', 'D')</summary>
+        public char DriveLetter { get; set; }
+
+        /// <summary>First USN that may be missing from the gap</summary>
+        public long? StartUsnMissing { get; set; }
+
+        /// <summary>Last valid USN before the gap was detected</summary>
+        public long? EndUsnRecovered { get; set; }
+
+        /// <summary>When this gap was detected</summary>
+        public DateTimeOffset DetectedAt { get; set; }
+
+        /// <summary>Reason for the gap: "JournalWrap", "CursorAgeOut", "FirstRun", "VolumeUnmount"</summary>
+        public string Reason { get; set; } = string.Empty;
+
+        /// <summary>Next USN to resume reading from (after recovery)</summary>
+        public long ResumeFromUsn { get; set; }
+
+        /// <summary>Estimated number of records lost in this gap (approximate)</summary>
+        public int EstimatedRecordsLost { get; set; }
+    }
 }

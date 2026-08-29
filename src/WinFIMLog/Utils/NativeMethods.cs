@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using System.Security;
+using Microsoft.Win32.SafeHandles;
 
 namespace WinFIMLog.Utils
 {
@@ -139,11 +140,9 @@ namespace WinFIMLog.Utils
         }
 
         /// <summary>Invokes FSCTL_READ_USN_JOURNAL or FSCTL_QUERY_USN_JOURNAL on a volume</summary>
-        [LibraryImport("kernel32", SetLastError = true), SuppressUnmanagedCodeSecurity]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static partial bool DeviceIoControl(
-            SafeHandle hDevice,
+        [DllImport("kernel32", SetLastError = true), SuppressUnmanagedCodeSecurity]
+        public static extern bool DeviceIoControl(
+            IntPtr hDevice,
             uint dwIoControlCode,
             ref ReadUsnJournalData lpInBuffer,
             uint nInBufferSize,
@@ -154,11 +153,9 @@ namespace WinFIMLog.Utils
         );
 
         /// <summary>Overload for querying journal metadata</summary>
-        [LibraryImport("kernel32", SetLastError = true), SuppressUnmanagedCodeSecurity]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static partial bool DeviceIoControl(
-            SafeHandle hDevice,
+        [DllImport("kernel32", SetLastError = true), SuppressUnmanagedCodeSecurity]
+        public static extern bool DeviceIoControl(
+            IntPtr hDevice,
             uint dwIoControlCode,
             IntPtr lpInBuffer,
             uint nInBufferSize,
@@ -168,40 +165,41 @@ namespace WinFIMLog.Utils
             IntPtr lpOverlapped
         );
 
-        /// <summary>Opens a file by its file ID on a volume</summary>
-        [LibraryImport("kernel32", SetLastError = true, StringMarshalling = StringMarshalling.Utf16), SuppressUnmanagedCodeSecurity]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static partial SafeFileHandle CreateFileW(
+        /// <summary>Opens a file or directory (for volume handle)</summary>
+        [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode), SuppressUnmanagedCodeSecurity]
+        public static extern IntPtr CreateFileW(
             string lpFileName,
             uint dwDesiredAccess,
             uint dwShareMode,
             IntPtr lpSecurityAttributes,
             uint dwCreationDisposition,
             uint dwFlagsAndAttributes,
-            SafeHandle? hTemplateFile
+            IntPtr hTemplateFile
         );
 
         /// <summary>Gets the final path name for a file handle</summary>
-        [LibraryImport("kernel32", SetLastError = true, StringMarshalling = StringMarshalling.Utf16), SuppressUnmanagedCodeSecurity]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static partial uint GetFinalPathNameByHandleW(
-            SafeFileHandle hFile,
-            char[] lpszFilePath,
+        [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode), SuppressUnmanagedCodeSecurity]
+        public static extern uint GetFinalPathNameByHandleW(
+            IntPtr hFile,
+            [Out] char[] lpszFilePath,
             uint cchFilePath,
             uint dwFlags
         );
 
         /// <summary>Creates a file or opens an existing file by file ID (Windows Vista+)</summary>
-        [LibraryImport("kernel32", SetLastError = true, StringMarshalling = StringMarshalling.Utf16), SuppressUnmanagedCodeSecurity]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static partial SafeFileHandle OpenFileById(
-            SafeFileHandle hVolumeHandle,
+        [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode), SuppressUnmanagedCodeSecurity]
+        public static extern IntPtr OpenFileById(
+            IntPtr hVolumeHandle,
             ref FileIdFull lpFileID,
             uint dwDesiredAccess,
             uint dwShareMode,
             IntPtr lpSecurityAttributes,
             uint dwFlagsAndAttributes
         );
+
+        /// <summary>Closes a file or volume handle</summary>
+        [DllImport("kernel32", SetLastError = true), SuppressUnmanagedCodeSecurity]
+        public static extern bool CloseHandle(IntPtr hObject);
 
         // Access flags for file operations
         public const uint GENERIC_READ = 0x80000000;

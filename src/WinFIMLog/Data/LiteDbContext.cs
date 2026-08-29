@@ -13,7 +13,7 @@ namespace WinFIMLog.Data
 {
     public partial class LiteDbContext : ILiteDbContext
     {
-        private const int BaselineSchemaVersion = 2;
+        private const int BaselineSchemaVersion = 3;  // Incremented for USN Journal cursors and gaps
         private const int LatestStateSchemaVersion = 1;
 
         /// <summary>
@@ -57,6 +57,14 @@ namespace WinFIMLog.Data
             ReconciliationResults = _database.GetCollection<ReconciliationResult>("reconciliationResults");
             ReconciliationResults.EnsureIndex(x => x.BaselineId);
             ReconciliationResults.EnsureIndex(x => x.DeliveredAt);
+
+            // USN Journal (Tier 0.5) collections for supplementary historical source
+            UsnJournalCursors = _database.GetCollection<UsnJournalCursor>("usnJournalCursors");
+            UsnJournalCursors.EnsureIndex(x => new { x.VolumeSerialNumber, x.DriveLetter });
+            UsnJournalGaps = _database.GetCollection<UsnJournalGap>("usnJournalGaps");
+            UsnJournalGaps.EnsureIndex(x => new { x.VolumeSerialNumber, x.DriveLetter });
+            UsnJournalGaps.EnsureIndex(x => x.DetectedAt);
+
             EventOutbox = _database.GetCollection<EventOutboxRecord>("eventOutbox");
             EventOutbox.EnsureIndex(x => x.DeliveredAt);
             EventOutbox.EnsureIndex(x => x.NextAttemptAt);
@@ -69,6 +77,10 @@ namespace WinFIMLog.Data
 
         public ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
         public ILiteCollection<RegistryChange> RegistryChanges { get; }
+
+        // USN Journal (Tier 0.5) supplementary collections
+        public ILiteCollection<UsnJournalCursor> UsnJournalCursors { get; }
+        public ILiteCollection<UsnJournalGap> UsnJournalGaps { get; }
 
         internal bool LatestStateMigrationPerformed { get; private set; }
 

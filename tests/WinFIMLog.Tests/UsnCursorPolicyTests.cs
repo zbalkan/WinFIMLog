@@ -99,7 +99,6 @@ public sealed class UsnCursorPolicyTests
     {
         JournalId = journalId,
         LastReadUsn = lastReadUsn,
-        DriveLetter = 'C',
         VolumeKey = "DEADBEEF|C",
         IsValid = true
     };

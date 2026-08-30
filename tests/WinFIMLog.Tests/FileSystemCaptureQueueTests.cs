@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WinFIMLog.FIM;
+using WinFIMLog.USN;
 using WinFIMLog.Health;
 
 namespace WinFIMLog.Tests;
@@ -15,7 +16,7 @@ public sealed class FileSystemCaptureQueueTests
     public async Task Completion_drains_every_admitted_item_before_reader_finishes()
     {
         var metrics = new HealthMetrics();
-        var queue = new FileSystemCaptureQueue(4, metrics, new RecordingReporter());
+        var queue = new FileSystemCaptureQueue(4, metrics, new RecordingReporter(), new UsnReplayCoordinator());
         Assert.IsTrue(queue.TryAdmit(new("C:\\", "C:\\one", ChangeCategory.Created, DateTimeOffset.UtcNow)));
         Assert.IsTrue(queue.TryAdmit(new("C:\\", "C:\\two", ChangeCategory.Changed, DateTimeOffset.UtcNow)));
         queue.CompleteWriter();
@@ -37,7 +38,7 @@ public sealed class FileSystemCaptureQueueTests
     public async Task FailedEnrichmentIsCountedSeparately()
     {
         var metrics = new HealthMetrics();
-        var queue = new FileSystemCaptureQueue(1, metrics, new RecordingReporter());
+        var queue = new FileSystemCaptureQueue(1, metrics, new RecordingReporter(), new UsnReplayCoordinator());
         queue.TryAdmit(new("C:\\", "C:\\one", ChangeCategory.Created, DateTimeOffset.UtcNow));
         _ = await queue.ReadAsync(CancellationToken.None);
         queue.Complete(succeeded: false);
@@ -50,7 +51,7 @@ public sealed class FileSystemCaptureQueueTests
     {
         var metrics = new HealthMetrics();
         var reporter = new RecordingReporter();
-        var queue = new FileSystemCaptureQueue(1, metrics, reporter);
+        var queue = new FileSystemCaptureQueue(1, metrics, reporter, new UsnReplayCoordinator());
         var first = new RawFileSystemNotification("C:\\", "C:\\one", ChangeCategory.Changed, DateTimeOffset.UtcNow);
         var second = new RawFileSystemNotification("C:\\", "C:\\two", ChangeCategory.Changed, DateTimeOffset.UtcNow);
 

@@ -12,13 +12,9 @@ namespace WinFIMLog
         internal bool EnableLocalDatabase { get; set; } = true;
         internal bool EnableRegistryMonitoring { get; set; }
 
-        /// <summary>Tier 0.5 NTFS change journal source. Opt-in until the ADR-0016 gate is recorded.</summary>
+        /// <summary>Tier 0.5 journal replay. Opt-in until the ADR-0020 gate is recorded.</summary>
         internal bool EnableUsnJournalMonitoring { get; set; }
 
-        internal int UsnJournalPollIntervalSeconds { get; set; } = 6;
-
-        /// <summary>How long a watcher observation suppresses a matching journal record.</summary>
-        internal int UsnCorrelationWindowSeconds { get; set; } = 30;
         internal TpmIntegrityMode TpmIntegrityMode { get; set; }
         internal byte[] TpmIntegrityPublicKey { get; set; } = [];
         internal string[] ExcludedExtensions { get; set; } = [];

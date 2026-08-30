@@ -1,4 +1,4 @@
-# ADR-0020 — NTFS change journal as a Tier 0.5 source
+# ADR-0020 — NTFS change journal replay as a Tier 0.5 source
 
 * Status: Accepted
 * Date: 2026-08-30
@@ -6,69 +6,75 @@
 
 ## Context
 
-ADR-0005 and ADR-0014 state that snapshot-first does not promise detection of activity that
-creates and deletes an object entirely between scans. That limitation is structural for Tier 0:
-the object is gone by scan time, so no snapshot can observe it. It is not covered by Tier 1
-either, because a `FileSystemWatcher` notification for it is lost outright when the watcher
-overflows or the service is not running.
+ADR-0014 states the limitation precisely:
 
-For a security-driven deployment that class of activity — staging a payload and removing it —
-is exactly what monitoring is for.
+> Activity which creates and deletes an object entirely between snapshots may be absent **if the
+> notification source also misses it.**
 
-ADR-0001 rejected a hybrid durable journal, on the grounds that it "would require durable append
-and source cursors before acknowledging every source event, which neither `FileSystemWatcher` nor
-the current registry ETW source can supply end to end." That reasoning holds for those sources
-and does not extend to the NTFS change journal: NTFS itself provides the durable append as part
-of the transaction, and the journal exposes a position that can be persisted and resumed.
+Tier 0 structurally cannot see such activity, because the object is gone by scan time. Tier 1
+normally does see it: `FileSystemWatcher` reports the create and the delete while it is healthy.
+The gap therefore opens only where Tier 1 misses, and those windows are already detected and
+reported: watcher failure or overflow (`FileSystemMonitorJob`), capture-queue shedding
+(`FileSystemCaptureQueue`), and the service downtime before start.
+
+For a security-driven deployment that gap matters — staging a payload and removing it during a
+watcher overflow is exactly what an attacker would want to be invisible.
+
+ADR-0001 rejected a hybrid durable journal because it "would require durable append and source
+cursors before acknowledging every source event, which neither `FileSystemWatcher` nor the current
+registry ETW source can supply end to end." That reasoning holds for those sources and does not
+extend to the NTFS change journal: NTFS provides the durable append as part of the transaction,
+and the journal exposes a position that can be persisted and resumed.
 
 ## Decision
 
-The NTFS change journal is admitted as **Tier 0.5**, a filesystem-only source subordinate to
-Tier 0 and secondary to Tier 1.
+The change journal is admitted as **Tier 0.5**: a filesystem-only source that replays the journal
+across windows where Tier 1 coverage was lost, and is otherwise inert.
 
-* It **never** advances, completes or invalidates a Tier 0 baseline, and never suppresses a
+* Replay is **event-driven, not polled**. It runs on service start and on the coverage gaps the
+  health contract already reports. With no gap reported, no volume handle is opened and no journal
+  read occurs.
+* A continuously-polled journal was rejected. Because Tier 1 covers transient activity while it is
+  healthy, polling would reproduce Tier 1's stream and then need a correlation index to discard it
+  — machinery larger than the source it serves, for coverage already held.
+* Tier 0.5 **never** advances, completes or invalidates a Tier 0 baseline, and never suppresses a
   snapshot reconciliation result. Tier 0 remains the sole completeness authority.
-* It publishes a record only when no `FileSystemWatcher` observation for the same normalized path
-  and category was admitted inside a correlation window. Tier 1 wins every duplicate, because
-  Tier 1 observations carry process attribution and journal records carry none.
-* Journal findings carry **no content hash, no ACL evidence and no attribution** when the object
-  no longer exists. They are namespace evidence, marked `observationSource: UsnJournal`, and must
-  not be read as equivalent to snapshot or watcher evidence.
-* Cursor invalidation — journal recreation, or a cursor trimmed out of the retained ring — is a
-  coverage gap under ADR-0003: it is persisted, reported, and triggers a Tier 0 snapshot request
-  rather than being absorbed.
-* A record whose parent directory was itself deleted cannot be resolved to a path and therefore
-  cannot be scope-matched. Such records are published with `pathUnresolved` set rather than
-  dropped, because discarding them would discard the activity this source exists to observe.
-* The source is **opt-in** (`EnableUsnJournalMonitoring`, default `0`) until the ADR-0016
-  qualification below is recorded.
+* Journal findings carry **no content hash, no ACL evidence and no attribution** once the object is
+  gone. They are namespace evidence, marked `observationSource: UsnJournal`, and must not be read
+  as equivalent to snapshot or watcher evidence.
+* A replay may re-report an operation Tier 1 also reported, at the boundary of a gap. **This
+  duplicate is accepted.** Consumers already deduplicate by `RecordId` under ADR-0008, and
+  suppressing it costs more than it saves.
+* Cursor invalidation — a recreated journal, or a position trimmed out of the retained ring — is a
+  coverage gap under ADR-0003: reported through `IHealthReporter`, not absorbed. Loss is not
+  persisted to the database; the Event Log is the delivery boundary under ADR-0007.
+* A record whose parent directory was itself deleted cannot be resolved to a path, so it cannot be
+  scope-matched. It is published with `pathUnresolved` set rather than dropped, because discarding
+  it would discard the activity this source exists to observe.
+* A single replay is capped. Reaching the cap is itself reported as a gap.
+* The source is **opt-in** (`EnableUsnJournalMonitoring`, default `0`) until the gate below is
+  recorded.
 
 ## Consequences for the amended records
 
-* **ADR-0001** — the rejection of a hybrid durable journal is scoped to notification sources.
-  The change journal is admitted as a bounded exception which is still not completeness authority.
-* **ADR-0005** — the tier model gains Tier 0.5. The statement that snapshot-first does not promise
-  detection of create-delete activity between scans now holds only where Tier 0.5 does not apply:
-  non-NTFS volumes, volumes with no active journal, downtime exceeding journal retention, and
-  records whose path cannot be resolved.
-* **ADR-0014** — the create-delete and downtime limitations are narrowed to those same cases. A
-  new limitation is added: Tier 0.5 findings carry no hash, ACL or attribution.
+* **ADR-0001** — the rejection of a hybrid durable journal is scoped to notification sources. The
+  change journal is admitted as a bounded exception which is still not completeness authority.
+* **ADR-0005** — the tier model gains Tier 0.5, which covers lost-coverage windows on NTFS volumes.
+* **ADR-0014** — the create-delete and downtime limitations are narrowed to where replay does not
+  reach. A new limitation is added: Tier 0.5 findings carry no hash, ACL or attribution.
 * **ADR-0016** — a qualification gate is added below.
 
 ## Qualification gate
 
-Tier 0.5 stays opt-in until these are recorded for the lowest supported host, because the journal
-is read per volume rather than per monitored path: the cost scales with total volume write
-activity, not with the size of the monitored scope.
+Replay reads a whole volume's journal for the window, filtering to scope afterwards, so its cost
+scales with volume write activity during the gap rather than with the size of the monitored scope.
 
-* Sustained and burst records read per second, and the proportion discarded by scope filtering.
-* CPU and working set during a write storm of Windows Update scale, per volume.
-* Path-resolution cache hit rate and eviction rate.
-* Correlation suppression rate. A persistently low rate means Tier 1 is lossier than assumed and
-  is a finding in itself; a persistently high one means Tier 0.5 is mostly redundant on that host.
-* Added database growth from cursor and gap records.
-* End-to-end latency from the filesystem operation to Event Log emission, including the settle
-  delay that gives Tier 1 first claim.
+* Wall-clock duration and records read for a replay of a representative gap, and the proportion
+  discarded by scope filtering.
+* Peak working set during replay, and path-resolution failures as a share of records.
+* Confirmation that steady state is genuinely idle: no handle opened and no read issued while no
+  gap is reported.
+* Frequency with which the replay record cap is reached on the busiest supported volume.
 
-A profile is supported only when scope-filtered reads keep pace with the configured poll interval
-and the correlation tracker does not reach its capacity backstop.
+A profile is supported when a replay of the worst observed gap completes well inside the snapshot
+interval and steady-state idle is confirmed.

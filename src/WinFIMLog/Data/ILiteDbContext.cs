@@ -16,9 +16,7 @@ namespace WinFIMLog.Data
         ILiteCollection<ReconciliationResult> ReconciliationResults { get; }
         ILiteCollection<RegistryChange> RegistryChanges { get; }
 
-        // USN Journal (Tier 0.5) supplementary collections
         ILiteCollection<UsnJournalCursor> UsnJournalCursors { get; }
-        ILiteCollection<UsnJournalGap> UsnJournalGaps { get; }
 
         bool ExecuteTransaction(Action action);
     }

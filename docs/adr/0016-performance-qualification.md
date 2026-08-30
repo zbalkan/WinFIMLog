@@ -33,9 +33,9 @@ and queue lag returns to zero after the burst.
 ## Tier 0.5 journal gate
 
 The NTFS change journal source (ADR-0020) ships opt-in and stays opt-in until its own
-measurements are recorded. Its cost scales with total volume write activity rather than with
-monitored scope, because the journal is read per volume and filtered afterwards. ADR-0020 lists
-the required measurements and the pass condition.
+measurements are recorded. It is event-driven rather than polled, so the profile to record is the
+cost of one replay of a representative coverage gap, plus confirmation that steady state issues no
+journal read at all. ADR-0020 lists the measurements and the pass condition.
 
 ## Supported publish mode
 

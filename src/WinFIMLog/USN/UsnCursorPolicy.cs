@@ -24,7 +24,7 @@ namespace WinFIMLog.USN
         /// <summary>True when records between the stored cursor and the start point were lost.</summary>
         public bool IsGap => Action is UsnCursorAction.JournalWrap or UsnCursorAction.CursorAgeOut;
 
-        /// <summary>Stable reason string persisted on <see cref="UsnJournalGap"/>.</summary>
+        /// <summary>Stable reason string reported with the coverage gap.</summary>
         public string Reason => Action.ToString();
     }
 

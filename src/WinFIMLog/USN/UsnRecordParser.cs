@@ -5,14 +5,10 @@ using WinFIMLog.Utils;
 
 namespace WinFIMLog.USN
 {
-    /// <summary>Parses binary USN_RECORD_V2 entries from the NTFS change journal buffer.</summary>
+    /// <summary>Parses USN_RECORD_V2 entries out of a journal read buffer.</summary>
     /// <remarks>
-    /// USN records are variable-length structures containing:
-    /// - Fixed header (UsnRecord structure, ~56 bytes)
-    /// - Variable-length UTF-16LE filename (at offset FileNameOffset)
-    ///
-    /// Records are returned by FSCTL_READ_USN_JOURNAL in a buffer and must be parsed sequentially.
-    /// Each record's length is specified in the RecordLength field, allowing efficient parsing.
+    /// Each record is a 60-byte header followed by a variable-length UTF-16LE filename, and carries
+    /// its own length, so records are walked sequentially from the start of the buffer.
     /// </remarks>
     public sealed class UsnRecordParser
     {
@@ -24,12 +20,6 @@ namespace WinFIMLog.USN
             this.buffer = buffer ?? throw new ArgumentNullException(nameof(buffer));
             this.position = 0;
         }
-
-        /// <summary>Gets the current position in the buffer (bytes consumed).</summary>
-        public int Position => position;
-
-        /// <summary>Gets whether there are more records to parse.</summary>
-        public bool HasMore => position < buffer.Length;
 
         /// <summary>Attempts to parse the next USN record from the buffer.</summary>
         /// <param name="record">Output: the parsed USN record</param>
@@ -80,17 +70,10 @@ namespace WinFIMLog.USN
                 // Populate output record
                 record = new ParsedUsnRecord
                 {
-                    RecordLength = nativeRecord.RecordLength,
-                    MajorVersion = nativeRecord.MajorVersion,
-                    MinorVersion = nativeRecord.MinorVersion,
-                    FileReferenceNumber = nativeRecord.FileReferenceNumber,
                     ParentDirectoryReferenceNumber = nativeRecord.ParentDirectoryReferenceNumber,
                     Usn = nativeRecord.Usn,
                     TimeStamp = nativeRecord.TimeStamp,
                     Reason = nativeRecord.Reason,
-                    SourceInfo = nativeRecord.SourceInfo,
-                    SecurityId = nativeRecord.SecurityId,
-                    FileAttributes = nativeRecord.FileAttributes,
                     Filename = filename
                 };
 
@@ -105,39 +88,15 @@ namespace WinFIMLog.USN
             }
         }
 
-        /// <summary>Resets the parser position to the beginning of the buffer.</summary>
-        public void Reset() => position = 0;
-
-        /// <summary>Parses all available records from the buffer.</summary>
-        /// <returns>List of parsed USN records</returns>
-        public System.Collections.Generic.List<ParsedUsnRecord> ParseAll()
-        {
-            Reset();
-            var records = new System.Collections.Generic.List<ParsedUsnRecord>();
-
-            while (TryReadNext(out var record, out _))
-            {
-                records.Add(record);
-            }
-
-            return records;
-        }
     }
 
     /// <summary>Represents a successfully parsed USN_RECORD_V2 entry.</summary>
     public sealed class ParsedUsnRecord
     {
-        public uint RecordLength { get; set; }
-        public ushort MajorVersion { get; set; }
-        public ushort MinorVersion { get; set; }
-        public ulong FileReferenceNumber { get; set; }
         public ulong ParentDirectoryReferenceNumber { get; set; }
         public long Usn { get; set; }
         public long TimeStamp { get; set; }  // 100-nanosecond intervals since 1/1/1601
         public uint Reason { get; set; }
-        public uint SourceInfo { get; set; }
-        public uint SecurityId { get; set; }
-        public uint FileAttributes { get; set; }
         public string Filename { get; set; } = string.Empty;
 
         /// <summary>Converts TimeStamp (FILETIME) to DateTime in UTC.</summary>
@@ -152,11 +111,5 @@ namespace WinFIMLog.USN
                 return DateTime.UnixEpoch;
             }
         }
-
-        /// <summary>Gets the file reference as a string (for display).</summary>
-        public string FileRefString => $"0x{FileReferenceNumber:X16}";
-
-        /// <summary>Gets the parent directory reference as a string (for display).</summary>
-        public string ParentRefString => $"0x{ParentDirectoryReferenceNumber:X16}";
     }
 }

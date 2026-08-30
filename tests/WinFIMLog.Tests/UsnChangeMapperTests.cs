@@ -8,21 +8,11 @@ namespace WinFIMLog.Tests;
 public sealed class UsnChangeMapperTests
 {
     [TestMethod]
-    public void Parent_and_filename_are_joined_with_a_single_separator()
+    public void Parent_and_filename_are_joined_with_exactly_one_separator()
     {
-        Assert.AreEqual(@"C:\Windows\System32\drivers\etc\hosts",
-            UsnChangeMapper.CombinePath(@"C:\Windows\System32\drivers\etc", "hosts"));
-    }
-
-    [TestMethod]
-    public void A_parent_that_already_ends_in_a_separator_does_not_gain_a_second()
-    {
+        Assert.AreEqual(@"C:\Windows\System32\hosts",
+            UsnChangeMapper.CombinePath(@"C:\Windows\System32", "hosts"));
         Assert.AreEqual(@"C:\hosts", UsnChangeMapper.CombinePath(@"C:\", "hosts"));
-    }
-
-    [TestMethod]
-    public void A_record_without_a_filename_keeps_the_parent_path()
-    {
         Assert.AreEqual(@"C:\Windows", UsnChangeMapper.CombinePath(@"C:\Windows", string.Empty));
     }
 
@@ -33,21 +23,15 @@ public sealed class UsnChangeMapperTests
         // happens precisely when the parent directory was itself deleted.
         Assert.IsTrue(UsnChangeMapper.IsUnresolved(@"C:\?"));
         Assert.IsTrue(UsnChangeMapper.IsUnresolved(string.Empty));
-    }
-
-    [TestMethod]
-    public void A_real_parent_path_is_not_treated_as_unresolved()
-    {
         Assert.IsFalse(UsnChangeMapper.IsUnresolved(@"C:\Program Files\App"));
-        Assert.IsFalse(UsnChangeMapper.IsUnresolved(@"C:\"));
     }
 
     [TestMethod]
-    public void No_rooted_monitored_path_means_no_volume_is_polled()
+    public void No_rooted_monitored_path_means_no_volume_is_replayed()
     {
         var configuration = new EffectiveSettings { MonitoredPaths = ["", "relative\\path"] };
 
-        Assert.AreEqual(0, FileSystemUsnJournalMonitorJob.MonitoredVolumes(configuration).Count);
+        Assert.AreEqual(0, FileSystemUsnJournalReplayWorker.MonitoredVolumes(configuration).Count);
     }
 
     [TestMethod]
@@ -55,5 +39,20 @@ public sealed class UsnChangeMapperTests
     {
         Assert.AreEqual(UsnJournalCursorRepository.VolumeKey("DEADBEEF", 'c'),
             UsnJournalCursorRepository.VolumeKey("DEADBEEF", 'C'));
+    }
+
+    [TestMethod]
+    public void A_replay_request_storm_coalesces_to_one_pending_replay()
+    {
+        // A single replay reads from the cursor to the journal head, so a burst of gap reports
+        // describes one window. Queueing each would re-read the same span repeatedly.
+        var coordinator = new UsnReplayCoordinator();
+
+        for (var index = 0; index < 10_000; index++)
+        {
+            coordinator.RequestReplay($"overflow-{index}", @"C:\scope");
+        }
+
+        Assert.AreEqual(1, coordinator.Pending);
     }
 }

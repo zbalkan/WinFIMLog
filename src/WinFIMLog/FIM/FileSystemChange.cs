@@ -22,13 +22,19 @@ namespace WinFIMLog.FIM
         public string PreviousHash { get; set; }
         public long? PreviousSizeBytes { get; set; }
 
+        /// <summary>Tier 1 notification source; carries best-effort process attribution.</summary>
+        public const string FileSystemWatcherSource = "FileSystemWatcher";
+
+        /// <summary>Tier 0.5 journal replay; never carries attribution.</summary>
+        public const string UsnJournalSource = "UsnJournal";
+
         /// <summary>Which source observed this change.</summary>
         /// <remarks>
         /// Tier 1 <c>FileSystemWatcher</c> observations carry attribution; <c>UsnJournal</c>
         /// observations never do, and exist to cover activity Tier 1 missed entirely. Consumers use
         /// this to weight a finding rather than to deduplicate, which already happened upstream.
         /// </remarks>
-        public string ObservationSource { get; set; } = ObservationSources.FileSystemWatcher;
+        public string ObservationSource { get; set; } = FileSystemWatcherSource;
 
         /// <summary>Journal position of a USN-sourced observation, for correlation with other tools.</summary>
         public long? UsnValue { get; set; }

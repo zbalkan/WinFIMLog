@@ -76,9 +76,9 @@ namespace WinFIMLog
                     // Registered first so the durable publisher stops after every producer.
                     _ = services.AddHostedService<EventOutboxPublisher>();
                     _ = services.AddHostedService<StorageMaintenanceService>();
+                    _ = services.AddSingleton<UsnReplayCoordinator>();
+                    _ = services.AddSingleton<IUsnReplayCoordinator>(provider => provider.GetRequiredService<UsnReplayCoordinator>());
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
-                    _ = services.AddSingleton(provider => new UsnCorrelationTracker(
-                        TimeSpan.FromSeconds(provider.GetRequiredService<Settings>().UsnCorrelationWindowSeconds)));
                     _ = services.AddSingleton<UsnJournalCursorRepository>();
                     _ = services.AddSingleton<ITpmBaselineIntegrity, TpmBaselineIntegrity>();
                     _ = services.AddSingleton<BaselineRepository>();
@@ -97,6 +97,9 @@ namespace WinFIMLog
                     _ = services.AddHostedService<BufferConsumer>();
                     _ = services.AddHostedService<FileSystemEnrichmentWorker>();
                     _ = services.AddHostedService<JobOrchestrator>();
+                    // Tier 0.5 replay only runs where it is enabled; the coordinator above always
+                    // exists so gap reporting never has to branch on configuration.
+                    _ = services.AddHostedService<FileSystemUsnJournalReplayWorker>();
                 })
                 .UseWindowsService();
     }

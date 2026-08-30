@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using WinFIMLog.Health;
+using WinFIMLog.USN;
 
 namespace WinFIMLog.FIM
 {
@@ -14,15 +15,19 @@ namespace WinFIMLog.FIM
         private readonly Channel<RawFileSystemNotification> _channel;
         private readonly IHealthReporter _health;
         private readonly HealthMetrics _metrics;
+        private readonly IUsnReplayCoordinator _replays;
 
-        public FileSystemCaptureQueue(Settings settings, HealthMetrics metrics, IHealthReporter health)
-            : this(settings.CaptureQueueCapacity, metrics, health) { }
+        public FileSystemCaptureQueue(Settings settings, HealthMetrics metrics, IHealthReporter health,
+            IUsnReplayCoordinator replays)
+            : this(settings.CaptureQueueCapacity, metrics, health, replays) { }
 
-        public FileSystemCaptureQueue(int capacity, HealthMetrics metrics, IHealthReporter health)
+        public FileSystemCaptureQueue(int capacity, HealthMetrics metrics, IHealthReporter health,
+            IUsnReplayCoordinator replays)
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
             _metrics = metrics;
             _health = health;
+            _replays = replays;
             _channel = Channel.CreateBounded<RawFileSystemNotification>(new BoundedChannelOptions(capacity)
             {
                 // Wait mode makes TryWrite return false rather than silently discarding a write.
@@ -72,6 +77,7 @@ namespace WinFIMLog.FIM
 
             _metrics.DroppedItem();
             _health.CoverageGap("FileSystemWatcher", notification.Scope, "CaptureQueueFull");
+            _replays.RequestReplay("CaptureQueueFull", notification.Scope);
             return false;
         }
     }

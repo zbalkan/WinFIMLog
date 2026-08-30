@@ -1,237 +1,131 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.Utils;
 
 namespace WinFIMLog.USN
 {
-    /// <summary>
-    /// LRU cache for resolving file paths from NTFS file reference numbers using OpenFileById.
-    /// </summary>
+    /// <summary>Resolves parent directory paths from NTFS file reference numbers.</summary>
     /// <remarks>
-    /// USN records contain FileReferenceNumber and ParentDirectoryReferenceNumber (file IDs).
-    /// Path resolution requires opening each parent directory by ID (via OpenFileById), which
-    /// is expensive. This cache significantly improves performance by caching parent directory
-    /// paths, since multiple files in the same directory share the same parent reference.
+    /// A journal record names its parent directory by file id, not by path, so every record needs an
+    /// <c>OpenFileById</c> plus <c>GetFinalPathNameByHandle</c> pair to become a path. Caching by
+    /// parent reference collapses that to one resolution per directory rather than one per file,
+    /// which is the difference that makes a replay of a busy volume affordable.
     ///
-    /// Typical hit rate: 70-90% for active directory trees (many siblings share one parent).
-    /// Cache size: ~4 MB for 20,000 entries at ~200 bytes per path.
-    ///
-    /// Cache hits are O(1) dictionary lookup.
-    /// Cache misses trigger OpenFileById system call (~10-50µs per call).
+    /// Resolution fails when the parent directory has itself been deleted. That is not an error
+    /// case to suppress: it is the transient activity Tier 0.5 exists to catch, so the caller gets a
+    /// marked placeholder rather than nothing.
     /// </remarks>
     public sealed class DirectoryPathCache : IDisposable
     {
         private const int MaxCacheSize = 20_000;
-        private const int EvictionBatchSize = 1_000;
+        private const int MaxPathChars = 260;
 
-        private readonly Dictionary<ulong, string> pathCache = new(MaxCacheSize);
-        private readonly Queue<ulong> evictionOrder = new();
+        private readonly Dictionary<ulong, string> pathCache = new();
         private readonly char driveLetter;
         private readonly IntPtr volumeHandle;
-        private readonly ILogger<DirectoryPathCache>? logger;
+        private readonly ILogger? logger;
 
-        // Statistics (for diagnostics and performance tuning)
-        private long hits;
-        private long misses;
-        private long resolutionFailures;
-
-        public DirectoryPathCache(char driveLetter, IntPtr volumeHandle, ILogger<DirectoryPathCache>? logger = null)
+        public DirectoryPathCache(char driveLetter, IntPtr volumeHandle, ILogger? logger = null)
         {
             this.driveLetter = char.ToUpperInvariant(driveLetter);
             this.volumeHandle = volumeHandle;
             this.logger = logger;
         }
 
-        /// <summary>Gets the number of cache hits (successful path retrievals).</summary>
-        public long Hits => hits;
-
-        /// <summary>Gets the number of cache misses (paths not cached, resolved via API).</summary>
-        public long Misses => misses;
-
-        /// <summary>Gets the number of failed path resolutions.</summary>
-        public long ResolutionFailures => resolutionFailures;
-
-        /// <summary>Gets the current cache size (number of entries).</summary>
-        public int CacheSize => pathCache.Count;
-
-        /// <summary>Gets the cache hit rate as a percentage (0-100).</summary>
-        public double HitRate
-        {
-            get
-            {
-                var total = hits + misses;
-                return total == 0 ? 0.0 : (100.0 * hits) / total;
-            }
-        }
-
-        /// <summary>
-        /// Attempts to get the path for a file reference (parent directory).
-        /// </summary>
-        /// <remarks>
-        /// Returns cached path if available. Otherwise attempts to resolve via OpenFileById.
-        /// Failures (deleted parent, access denied) return a placeholder path.
-        /// </remarks>
+        /// <summary>Path of a parent directory, or a placeholder when it can no longer be reached.</summary>
         public string GetPath(ulong parentFileRef)
         {
             if (parentFileRef == 0)
-                return $"{driveLetter}:\\";  // Root directory
+            {
+                return $@"{driveLetter}:\";
+            }
 
-            // Try cache lookup first
             lock (pathCache)
             {
-                if (pathCache.TryGetValue(parentFileRef, out var cachedPath))
+                if (pathCache.TryGetValue(parentFileRef, out var cached))
                 {
-                    hits++;
-                    return cachedPath;
+                    return cached;
                 }
             }
 
-            // Cache miss: resolve via native API
-            misses++;
-            var resolvedPath = ResolvePathViaOpenFileById(parentFileRef);
-
-            // Add to cache if successful
-            if (resolvedPath != null)
+            var resolved = Resolve(parentFileRef);
+            if (resolved is null)
             {
-                lock (pathCache)
-                {
-                    AddToCacheUnlocked(parentFileRef, resolvedPath);
-                }
-            }
-            else
-            {
-                resolutionFailures++;
+                return $@"{driveLetter}:\?";
             }
 
-            return resolvedPath ?? $"{driveLetter}:\\?";
-        }
-
-        /// <summary>Clears all cached paths (safe to call if volume unmounts).</summary>
-        public void Clear()
-        {
             lock (pathCache)
             {
-                pathCache.Clear();
-                evictionOrder.Clear();
-            }
-        }
-
-        /// <summary>Gets diagnostics string for logging.</summary>
-        public string GetDiagnostics()
-        {
-            lock (pathCache)
-            {
-                return $"DirectoryPathCache({driveLetter}:) Size={pathCache.Count} Hits={hits} Misses={misses} " +
-                       $"Failures={resolutionFailures} HitRate={HitRate:F1}%";
-            }
-        }
-
-        private void AddToCacheUnlocked(ulong fileRef, string path)
-        {
-            // Evict if necessary
-            if (pathCache.Count >= MaxCacheSize)
-            {
-                EvictBatchUnlocked();
-            }
-
-            pathCache[fileRef] = path;
-            evictionOrder.Enqueue(fileRef);
-        }
-
-        private void EvictBatchUnlocked()
-        {
-            for (int i = 0; i < EvictionBatchSize; i++)
-            {
-                if (evictionOrder.TryDequeue(out var oldRef))
+                // Clearing on overflow costs re-resolution of a working set that is about to turn
+                // over anyway. Keeping an eviction order to avoid that is not worth its own bugs.
+                if (pathCache.Count >= MaxCacheSize)
                 {
-                    pathCache.Remove(oldRef);
+                    pathCache.Clear();
                 }
+
+                pathCache[parentFileRef] = resolved;
             }
+
+            return resolved;
         }
 
-        /// <summary>
-        /// Resolves a file reference to a full path using OpenFileById.
-        /// </summary>
-        /// <remarks>
-        /// Calls Windows API: OpenFileById -> GetFinalPathNameByHandle
-        /// Returns null on failure (file deleted, access denied, etc.)
-        /// </remarks>
-        private string? ResolvePathViaOpenFileById(ulong fileRef)
+        private string? Resolve(ulong fileRef)
         {
-            IntPtr fileHandle = IntPtr.Zero;
+            var handle = IntPtr.Zero;
             try
             {
-                // Convert 64-bit file reference to FILE_ID_FULL structure
                 var fileId = new NativeMethods.FileIdFull
                 {
                     LowPart = fileRef & 0xFFFFFFFFUL,
                     HighPart = (long)((fileRef >> 32) & 0xFFFFFFFFUL)
                 };
 
-                // OpenFileById on volume handle
-                fileHandle = NativeMethods.OpenFileById(
-                    volumeHandle,
-                    ref fileId,
-                    NativeMethods.GENERIC_READ,
-                    NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE,
-                    IntPtr.Zero,
-                    NativeMethods.FILE_FLAG_BACKUP_SEMANTICS
-                );
+                handle = NativeMethods.OpenFileById(volumeHandle, ref fileId, NativeMethods.GENERIC_READ,
+                    NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE, IntPtr.Zero,
+                    NativeMethods.FILE_FLAG_BACKUP_SEMANTICS);
 
-                if (fileHandle == IntPtr.Zero || fileHandle == new IntPtr(-1))
+                if (handle == IntPtr.Zero || handle == new IntPtr(-1))
                 {
-                    logger?.LogDebug("OpenFileById failed for file ref 0x{FileRef:X16} on drive {Drive}", fileRef, driveLetter);
                     return null;
                 }
 
-                // GetFinalPathNameByHandle to get the full path
-                var pathBuffer = new char[260];  // MAX_PATH
-                var pathLength = NativeMethods.GetFinalPathNameByHandleW(
-                    fileHandle,
-                    pathBuffer,
-                    (uint)pathBuffer.Length,
-                    NativeMethods.VOLUME_NAME_DOS
-                );
+                var buffer = new char[MaxPathChars];
+                var length = NativeMethods.GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Length,
+                    NativeMethods.VOLUME_NAME_DOS);
 
-                if (pathLength == 0)
+                if (length == 0)
                 {
-                    logger?.LogDebug("GetFinalPathNameByHandle failed for file ref 0x{FileRef:X16} on drive {Drive}", fileRef, driveLetter);
                     return null;
                 }
 
-                // Trim to actual length and strip device path prefix if present
-                var path = new string(pathBuffer, 0, (int)Math.Min(pathLength, pathBuffer.Length - 1));
+                var path = new string(buffer, 0, (int)Math.Min(length, buffer.Length - 1));
 
-                // Handle "\\?\" prefix from GetFinalPathNameByHandle
-                if (path.StartsWith("\\\\?\\", StringComparison.OrdinalIgnoreCase))
-                {
-                    path = path.Substring(4);
-                }
-
-                return path;
+                // GetFinalPathNameByHandle returns the extended-length form; monitored scopes are
+                // configured in the ordinary form, so the prefix has to come off before matching.
+                return path.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase) ? path[4..] : path;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                logger?.LogDebug(ex, "Exception resolving file ref 0x{FileRef:X16} on drive {Drive}", fileRef, driveLetter);
+                logger?.LogDebug(exception, "Could not resolve file reference {FileRef:X16} on {Drive}:",
+                    fileRef, driveLetter);
                 return null;
             }
             finally
             {
-                if (fileHandle != IntPtr.Zero && fileHandle != new IntPtr(-1))
+                if (handle != IntPtr.Zero && handle != new IntPtr(-1))
                 {
-                    NativeMethods.CloseHandle(fileHandle);
+                    NativeMethods.CloseHandle(handle);
                 }
             }
         }
 
         public void Dispose()
         {
-            Clear();
-            GC.SuppressFinalize(this);
+            lock (pathCache)
+            {
+                pathCache.Clear();
+            }
         }
     }
 }

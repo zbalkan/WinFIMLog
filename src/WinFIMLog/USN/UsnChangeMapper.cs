@@ -60,7 +60,7 @@ namespace WinFIMLog.USN
             }
 
             change.ScopeHash = configuration.ScopeHash;
-            change.ObservationSource = ObservationSources.UsnJournal;
+            change.ObservationSource = FileSystemChange.UsnJournalSource;
             change.UsnValue = record.Usn;
             change.UsnReason = UsnReasonMapper.FormatReasonFlags(record.Reason);
             change.PathUnresolved = unresolved;

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using WinFIMLog.FIM;
 using WinFIMLog.Utils;
 
@@ -57,49 +58,24 @@ namespace WinFIMLog.USN
             return ChangeCategory.Changed;
         }
 
-        /// <summary>
-        /// Gets a human-readable string representation of the reason flags bitmap.
-        /// </summary>
-        /// <param name="reasonFlags">The USN reason flags bitmap</param>
-        /// <returns>Comma-separated string of reason flag names</returns>
+        /// <summary>Names every reason flag set on a record.</summary>
+        /// <remarks>
+        /// Retained alongside the category because the priority rules above deliberately collapse a
+        /// multi-reason record to one value, and the discarded detail is what tells an analyst
+        /// whether a delete followed a create or a plain overwrite.
+        /// </remarks>
         public static string FormatReasonFlags(uint reasonFlags)
         {
-            var reasons = new System.Collections.Generic.List<string>(8);
+            if (reasonFlags == 0)
+            {
+                return "(no flags)";
+            }
 
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.DataOverwrite) != 0)
-                reasons.Add("DataOverwrite");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.DataExtend) != 0)
-                reasons.Add("DataExtend");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.DataTruncation) != 0)
-                reasons.Add("DataTruncation");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.NameChange) != 0)
-                reasons.Add("NameChange");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.NameChangeNew) != 0)
-                reasons.Add("NameChangeNew");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.BasicInfoChange) != 0)
-                reasons.Add("BasicInfoChange");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.SecurityChange) != 0)
-                reasons.Add("SecurityChange");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.FileCreate) != 0)
-                reasons.Add("FileCreate");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.FileDelete) != 0)
-                reasons.Add("FileDelete");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.RenameOldName) != 0)
-                reasons.Add("RenameOldName");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.RenameNewName) != 0)
-                reasons.Add("RenameNewName");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.IntegrityChange) != 0)
-                reasons.Add("IntegrityChange");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.ObjectIdChange) != 0)
-                reasons.Add("ObjectIdChange");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.ReparsePointChange) != 0)
-                reasons.Add("ReparsePointChange");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.CompressionChange) != 0)
-                reasons.Add("CompressionChange");
-            if ((reasonFlags & (uint)NativeMethods.UsnReasonFlags.EncryptionChange) != 0)
-                reasons.Add("EncryptionChange");
+            var names = Enum.GetValues<NativeMethods.UsnReasonFlags>()
+                .Where(flag => (reasonFlags & (uint)flag) != 0)
+                .Select(flag => flag.ToString());
 
-            return reasons.Count == 0 ? "(no flags)" : string.Join(" | ", reasons);
+            return string.Join(" | ", names);
         }
     }
 }

@@ -13,8 +13,9 @@ best-effort attribution. The following limitations remain explicit.
 
 * Activity which creates and deletes an object entirely between snapshots may
   be absent if the notification source also misses it. Tier 0.5 (ADR-0020)
-  covers this on NTFS volumes with an active journal; it remains uncovered on
-  other volumes, where the journal is inactive, and where the record's path
+  replays the journal across the windows where the notification source is known
+  to have missed; it remains uncovered on non-NTFS volumes, where the journal is
+  inactive or has already discarded the window, and where the record's path
   cannot be resolved. WinFIMLog does not own a replayable audit history.
 * Service downtime and boot activity have no live notification coverage.
   Persistent filesystem or registry state left by that activity is detected by
@@ -24,7 +25,9 @@ best-effort attribution. The following limitations remain explicit.
 * Tier 0.5 findings carry no content hash, no ACL evidence and no attribution
   when the object no longer exists. They are namespace evidence, marked
   `observationSource: UsnJournal`, and a record whose parent directory was also
-  deleted carries `pathUnresolved` and an unmatched placeholder path.
+  deleted carries `pathUnresolved` and an unmatched placeholder path. A replay
+  can also re-report an operation Tier 1 already reported at a gap boundary;
+  consumers deduplicate these by `RecordId` as they do any other retry.
 * A failed or interrupted snapshot is retained as `Building` or `Invalid` and
   is never completeness evidence. Detection is delayed until a later successful
   snapshot.

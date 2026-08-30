@@ -89,9 +89,6 @@ namespace WinFIMLog
 
         public bool EnableUsnJournalMonitoring { get => ReadState().EnableUsnJournalMonitoring; private set => WriteState().EnableUsnJournalMonitoring = value; }
 
-        public int UsnJournalPollIntervalSeconds { get => ReadState().UsnJournalPollIntervalSeconds; private set => WriteState().UsnJournalPollIntervalSeconds = value; }
-
-        public int UsnCorrelationWindowSeconds { get => ReadState().UsnCorrelationWindowSeconds; private set => WriteState().UsnCorrelationWindowSeconds = value; }
 
         /// <summary>
         ///     DWORD-backed TPM baseline integrity mode. Policy values take precedence over local
@@ -259,8 +256,6 @@ namespace WinFIMLog
             left.EnableLocalDatabase == right.EnableLocalDatabase &&
             left.EnableRegistryMonitoring == right.EnableRegistryMonitoring &&
             left.EnableUsnJournalMonitoring == right.EnableUsnJournalMonitoring &&
-            left.UsnJournalPollIntervalSeconds == right.UsnJournalPollIntervalSeconds &&
-            left.UsnCorrelationWindowSeconds == right.UsnCorrelationWindowSeconds &&
             left.TpmIntegrityMode == right.TpmIntegrityMode &&
             left.TpmIntegrityPublicKey.SequenceEqual(right.TpmIntegrityPublicKey) &&
             left.HashLimitMB == right.HashLimitMB && left.HeartbeatInterval == right.HeartbeatInterval &&
@@ -502,8 +497,8 @@ namespace WinFIMLog
             }
             EnableRegistryMonitoring = registryMonitoring == 1;
 
-            // Tier 0.5 ships opt-in. Enabling it before the ADR-0016 load profile is recorded would
-            // put an unmeasured volume-wide read on every host, so the absent-value default is off.
+            // Tier 0.5 ships opt-in. Enabling it before the ADR-0020 gate is recorded would put an
+            // unmeasured journal read on every host, so the absent-value default is off.
             var usnMonitoring = Registry.ReadDwordValue("EnableUsnJournalMonitoring");
             if (usnMonitoring == -1)
             {
@@ -511,35 +506,6 @@ namespace WinFIMLog
                 usnMonitoring = 0;
             }
             EnableUsnJournalMonitoring = usnMonitoring == 1;
-
-            var usnPollInterval = Registry.ReadDwordValue("UsnJournalPollIntervalSeconds");
-            if (usnPollInterval == -1)
-            {
-                usnPollInterval = 6;
-                Registry.WriteDwordValue("UsnJournalPollIntervalSeconds", usnPollInterval);
-            }
-            if (usnPollInterval is < 2 or > 60)
-            {
-                throw new InvalidOperationException("UsnJournalPollIntervalSeconds must be between 2 and 60.");
-            }
-
-            UsnJournalPollIntervalSeconds = usnPollInterval;
-
-            var usnCorrelationWindow = Registry.ReadDwordValue("UsnCorrelationWindowSeconds");
-            if (usnCorrelationWindow == -1)
-            {
-                usnCorrelationWindow = 30;
-                Registry.WriteDwordValue("UsnCorrelationWindowSeconds", usnCorrelationWindow);
-            }
-            // The window must outlast a poll cycle in both directions, otherwise a watcher observation
-            // expires before the journal read that would have been suppressed by it arrives.
-            if (usnCorrelationWindow < usnPollInterval * 2)
-            {
-                throw new InvalidOperationException(
-                    "UsnCorrelationWindowSeconds must be at least twice UsnJournalPollIntervalSeconds.");
-            }
-
-            UsnCorrelationWindowSeconds = usnCorrelationWindow;
 
             var tpmIntegrityMode = Registry.ReadDwordValue("TpmIntegrityMode");
             if (tpmIntegrityMode == -1)

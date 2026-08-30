@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -43,7 +44,7 @@ public sealed class UsnRecordParserTests
         Assert.AreEqual(0x1234UL, record.ParentDirectoryReferenceNumber);
         Assert.AreEqual((uint)NativeMethods.UsnReasonFlags.FileCreate, record.Reason);
         Assert.AreEqual(timestamp, record.GetDateTimeUtc());
-        Assert.IsFalse(parser.HasMore);
+        Assert.IsFalse(parser.TryReadNext(out _, out _));
     }
 
     [TestMethod]
@@ -54,7 +55,7 @@ public sealed class UsnRecordParserTests
         var third = BuildRecord(30, 2, "third.txt", (uint)NativeMethods.UsnReasonFlags.DataOverwrite);
 
         var buffer = Concat(first, second, third);
-        var records = new UsnRecordParser(buffer).ParseAll();
+        var records = ParseAll(buffer);
 
         Assert.AreEqual(3, records.Count);
         CollectionAssert.AreEqual(new long[] { 10, 20, 30 },
@@ -74,7 +75,7 @@ public sealed class UsnRecordParserTests
         Buffer.BlockCopy(complete, 0, truncated, 0, complete.Length);
         Buffer.BlockCopy(partial, 0, truncated, complete.Length, 24);
 
-        var records = new UsnRecordParser(truncated).ParseAll();
+        var records = ParseAll(truncated);
 
         Assert.AreEqual(1, records.Count);
         Assert.AreEqual("complete.txt", records[0].Filename);
@@ -96,6 +97,18 @@ public sealed class UsnRecordParserTests
         BitConverter.GetBytes((ushort)512).CopyTo(buffer, 56);
 
         Assert.IsFalse(new UsnRecordParser(buffer).TryReadNext(out _, out _));
+    }
+
+    private static List<ParsedUsnRecord> ParseAll(byte[] buffer)
+    {
+        var parser = new UsnRecordParser(buffer);
+        var records = new List<ParsedUsnRecord>();
+        while (parser.TryReadNext(out var record, out _))
+        {
+            records.Add(record);
+        }
+
+        return records;
     }
 
     internal static byte[] BuildRecord(long usn, ulong parentRef, string filename, uint reason,

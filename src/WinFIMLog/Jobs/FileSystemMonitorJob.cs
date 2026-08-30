@@ -9,6 +9,7 @@ using WinFIMLog.Configuration;
 using WinFIMLog.FIM;
 using WinFIMLog.Health;
 using WinFIMLog.Snapshots;
+using WinFIMLog.USN;
 
 namespace WinFIMLog.Jobs
 {
@@ -19,13 +20,14 @@ namespace WinFIMLog.Jobs
         private readonly ILogger _logger;
         private readonly Settings _settings;
         private readonly ISnapshotCoordinator _snapshots;
+        private readonly IUsnReplayCoordinator _replays;
         private readonly Lock _watcherLock = new();
         private readonly List<FileSystemWatcher> _watchers;
         private bool _disposedValue;
         private bool _stopping;
 
         public FileSystemMonitorJob(ILogger logger, FileSystemCaptureQueue capture, IHealthReporter health,
-            Settings settings, ISnapshotCoordinator snapshots)
+            Settings settings, ISnapshotCoordinator snapshots, IUsnReplayCoordinator replays)
         {
             _logger = logger;
             _watchers = [];
@@ -33,6 +35,7 @@ namespace WinFIMLog.Jobs
             _health = health;
             _settings = settings;
             _snapshots = snapshots;
+            _replays = replays;
         }
 
         /// <summary>Applies watcher additions and removals for the newly resolved scope.</summary>
@@ -220,6 +223,10 @@ namespace WinFIMLog.Jobs
             if (restartFailure is not null)
             { _health.CoverageGap("FileSystemWatcher", scope, $"RestartFailed:{restartFailure.GetType().Name}"); return; }
             _snapshots.RequestFileSystemSnapshot("Watcher source failure", scope);
+
+            // Tier 0 settles persistent state; the journal is the only source that can still recover
+            // objects created and deleted inside the window the watcher just lost.
+            _replays.RequestReplay("WatcherSourceFailure", scope);
             _health.SourceRecovered("FileSystemWatcher", scope, "WatcherRecreated;ReconciliationStarted");
         }
 

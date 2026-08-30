@@ -15,12 +15,13 @@ Tier 1 notification sources reduce latency and may provide process attribution.
 They never advance or complete a Tier 0 baseline, and overlap with a snapshot
 does not suppress the snapshot reconciliation result.
 
-Tier 0.5, added by ADR-0020, is the NTFS change journal. It covers create-delete
-activity wholly between scans on NTFS volumes with an active journal, publishing
-only what Tier 1 did not report. Like Tier 1 it never advances or completes a
-Tier 0 baseline. Snapshot-first still does not promise detection of create-delete
-activity where Tier 0.5 does not apply: non-NTFS volumes, absent journals,
-downtime exceeding journal retention, and records whose path cannot be resolved.
+Tier 0.5, added by ADR-0020, replays the NTFS change journal across windows where
+Tier 1 coverage was lost: watcher failure, admission shedding and service
+downtime. It is event-driven, not polled, and is inert while Tier 1 is healthy.
+Like Tier 1 it never advances or completes a Tier 0 baseline. Snapshot-first
+still does not promise detection of create-delete activity where replay does not
+reach: non-NTFS volumes, absent journals, downtime or gaps exceeding journal
+retention, and records whose path cannot be resolved.
 
 Cursorless filesystem scans require two consecutive complete observations to agree.
 A scope that does not converge within the bounded pass limit is invalid and retried.

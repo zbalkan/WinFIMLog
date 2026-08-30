@@ -60,9 +60,9 @@ namespace WinFIMLog.Data
 
             // USN Journal (Tier 0.5) collections for supplementary historical source
             UsnJournalCursors = _database.GetCollection<UsnJournalCursor>("usnJournalCursors");
-            UsnJournalCursors.EnsureIndex(x => new { x.VolumeSerialNumber, x.DriveLetter });
+            UsnJournalCursors.EnsureIndex(x => x.VolumeKey, unique: true);
             UsnJournalGaps = _database.GetCollection<UsnJournalGap>("usnJournalGaps");
-            UsnJournalGaps.EnsureIndex(x => new { x.VolumeSerialNumber, x.DriveLetter });
+            UsnJournalGaps.EnsureIndex(x => x.VolumeKey);
             UsnJournalGaps.EnsureIndex(x => x.DetectedAt);
 
             EventOutbox = _database.GetCollection<EventOutboxRecord>("eventOutbox");

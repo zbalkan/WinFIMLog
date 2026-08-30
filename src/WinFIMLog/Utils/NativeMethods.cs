@@ -201,6 +201,26 @@ namespace WinFIMLog.Utils
         [DllImport("kernel32", SetLastError = true), SuppressUnmanagedCodeSecurity]
         public static extern bool CloseHandle(IntPtr hObject);
 
+        /// <summary>Reads volume identity, used to key a journal cursor independently of drive letter</summary>
+        [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode), SuppressUnmanagedCodeSecurity]
+        public static extern bool GetVolumeInformationW(
+            string lpRootPathName,
+            [Out] char[]? lpVolumeNameBuffer,
+            uint nVolumeNameSize,
+            out uint lpVolumeSerialNumber,
+            out uint lpMaximumComponentLength,
+            out uint lpFileSystemFlags,
+            [Out] char[]? lpFileSystemNameBuffer,
+            uint nFileSystemNameSize
+        );
+
+        // Journal-specific error codes returned through Marshal.GetLastWin32Error.
+        public const int ERROR_JOURNAL_DELETE_IN_PROGRESS = 1178;
+        public const int ERROR_JOURNAL_NOT_ACTIVE = 1179;
+        public const int ERROR_JOURNAL_ENTRY_DELETED = 1181;
+        public const int ERROR_INVALID_FUNCTION = 1;
+        public const int ERROR_HANDLE_EOF = 38;
+
         // Access flags for file operations
         public const uint GENERIC_READ = 0x80000000;
         public const uint FILE_SHARE_READ = 0x00000001;

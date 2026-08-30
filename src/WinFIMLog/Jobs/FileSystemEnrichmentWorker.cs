@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.Data;
 using WinFIMLog.FIM;
+using WinFIMLog.USN;
 
 namespace WinFIMLog.Jobs
 {
@@ -18,14 +19,17 @@ namespace WinFIMLog.Jobs
         private readonly ILogger<FileSystemEnrichmentWorker> _logger;
         private readonly IBuffer<FileSystemChange> _output;
         private readonly Settings _settings;
+        private readonly UsnCorrelationTracker _correlation;
 
         public FileSystemEnrichmentWorker(FileSystemCaptureQueue capture, ILiteDbContext context,
-            IBuffer<FileSystemChange> output, Settings settings, ILogger<FileSystemEnrichmentWorker> logger)
+            IBuffer<FileSystemChange> output, Settings settings, UsnCorrelationTracker correlation,
+            ILogger<FileSystemEnrichmentWorker> logger)
         {
             _capture = capture;
             _context = context;
             _output = output;
             _settings = settings;
+            _correlation = correlation;
             _logger = logger;
             _attribution = new FileSystemEventAttributionMonitor(logger, settings);
         }
@@ -90,6 +94,17 @@ namespace WinFIMLog.Jobs
 
             change.OldPath = raw.OldPath;
             change.NewPath = raw.NewPath;
+            change.ObservationSource = ObservationSources.FileSystemWatcher;
+
+            // Claim the observation before enrichment rather than after. Enrichment can block on
+            // hashing a large file, and a journal poll landing in that window must still see that
+            // Tier 1 owns this operation, otherwise it publishes an unattributed duplicate.
+            _correlation.RecordWatcherObservation(raw.FullPath, raw.Category, raw.CapturedAt);
+            if (raw.OldPath is not null)
+            {
+                // A rename is reported by the journal against both names.
+                _correlation.RecordWatcherObservation(raw.OldPath, raw.Category, raw.CapturedAt);
+            }
 
             // Correlation waiting, hashing, ACL access and database reads all happen here, never
             // on the native watcher callback thread.

@@ -13,6 +13,7 @@ using WinFIMLog.IO;
 using WinFIMLog.Integrity;
 using WinFIMLog.Jobs;
 using WinFIMLog.Snapshots;
+using WinFIMLog.USN;
 using WinFIMLog.Utils;
 
 namespace WinFIMLog
@@ -76,6 +77,8 @@ namespace WinFIMLog
                     _ = services.AddHostedService<EventOutboxPublisher>();
                     _ = services.AddHostedService<StorageMaintenanceService>();
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
+                    _ = services.AddSingleton(provider => new UsnCorrelationTracker(
+                        TimeSpan.FromSeconds(provider.GetRequiredService<Settings>().UsnCorrelationWindowSeconds)));
                     _ = services.AddSingleton<ITpmBaselineIntegrity, TpmBaselineIntegrity>();
                     _ = services.AddSingleton<BaselineRepository>();
                     _ = services.AddSingleton<FileSystemBaselineAvailability>();

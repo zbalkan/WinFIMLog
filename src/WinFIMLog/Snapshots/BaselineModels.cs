@@ -119,6 +119,14 @@ namespace WinFIMLog.Snapshots
         /// <summary>Drive letter (e.g., 'C', 'D')</summary>
         public char DriveLetter { get; set; }
 
+        /// <summary>Single indexed key for the volume; one cursor exists per volume.</summary>
+        /// <remarks>
+        /// Serial and letter are combined into one persisted field because LiteDB derives an index
+        /// name from the indexed expression and caps it at 32 characters, which a two-field
+        /// composite exceeds.
+        /// </remarks>
+        public string VolumeKey { get; set; } = string.Empty;
+
         /// <summary>Journal ID from USN_JOURNAL_DATA (detects journal recreation)</summary>
         public ulong JournalId { get; set; }
 
@@ -152,6 +160,9 @@ namespace WinFIMLog.Snapshots
 
         /// <summary>Drive letter (e.g., 'C', 'D')</summary>
         public char DriveLetter { get; set; }
+
+        /// <summary>Single indexed key for the volume, matching <see cref="UsnJournalCursor.VolumeKey"/>.</summary>
+        public string VolumeKey { get; set; } = string.Empty;
 
         /// <summary>First USN that may be missing from the gap</summary>
         public long? StartUsnMissing { get; set; }

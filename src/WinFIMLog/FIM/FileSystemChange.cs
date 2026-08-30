@@ -22,6 +22,31 @@ namespace WinFIMLog.FIM
         public string PreviousHash { get; set; }
         public long? PreviousSizeBytes { get; set; }
 
+        /// <summary>Which source observed this change.</summary>
+        /// <remarks>
+        /// Tier 1 <c>FileSystemWatcher</c> observations carry attribution; <c>UsnJournal</c>
+        /// observations never do, and exist to cover activity Tier 1 missed entirely. Consumers use
+        /// this to weight a finding rather than to deduplicate, which already happened upstream.
+        /// </remarks>
+        public string ObservationSource { get; set; } = ObservationSources.FileSystemWatcher;
+
+        /// <summary>Journal position of a USN-sourced observation, for correlation with other tools.</summary>
+        public long? UsnValue { get; set; }
+
+        /// <summary>Decoded USN reason flags, retained because the category collapses them to one value.</summary>
+        public string? UsnReason { get; set; }
+
+        /// <summary>
+        /// True when the path could not be resolved and <see cref="FullPath"/> holds a placeholder.
+        /// </summary>
+        /// <remarks>
+        /// A USN record for an object whose parent directory was itself deleted cannot be resolved
+        /// to a real path. Those records are still published, because they are exactly the transient
+        /// activity the journal source exists to catch, but they cannot be scope-matched and must not
+        /// be read as a confirmed path.
+        /// </remarks>
+        public bool PathUnresolved { get; set; }
+
         /// <summary> Generates new file system change record from parameters </summary>
         /// <param name="path">The path to filekey</param>
         /// <param name="category"><see cref="ChangeCategory"></param>

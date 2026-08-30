@@ -100,22 +100,34 @@ namespace WinFIMLog.Utils
             public uint SourceInfo;
             public uint SecurityId;
             public uint FileAttributes;
-            public uint FileNameLength;
-            public uint FileNameOffset;
+
+            // WORD in the Win32 definition, not DWORD. Widening these shifts the filename fields and
+            // the struct size, which silently misparses every record.
+            public ushort FileNameLength;
+
+            public ushort FileNameOffset;
             // Variable-length filename follows (UTF-16LE)
         }
 
-        /// <summary>READ_USN_JOURNAL_DATA structure for FSCTL_READ_USN_JOURNAL</summary>
+        /// <summary>Byte length of USN_RECORD_V2 up to, but excluding, the filename.</summary>
+        public const int UsnRecordV2HeaderBytes = 60;
+
+        /// <summary>READ_USN_JOURNAL_DATA_V1 structure for FSCTL_READ_USN_JOURNAL</summary>
+        /// <remarks>
+        /// <c>UsnJournalID</c> is mandatory: the driver rejects a read that does not name the journal
+        /// it is reading, which is what makes journal recreation detectable rather than silent.
+        /// </remarks>
         [StructLayout(LayoutKind.Sequential)]
         public struct ReadUsnJournalData
         {
-            public ulong StartUsn;
+            public long StartUsn;
             public uint ReasonMask;
-            public uint ReturnOnlyOnChange;
+            public uint ReturnOnlyOnClose;
             public ulong Timeout;
-            public ulong MaximumLength;
-            public ulong MinMajorVersion;
-            public ulong MaxMajorVersion;
+            public ulong BytesToWaitFor;
+            public ulong UsnJournalID;
+            public ushort MinMajorVersion;
+            public ushort MaxMajorVersion;
         }
 
         /// <summary>USN_JOURNAL_DATA structure returned by FSCTL_QUERY_USN_JOURNAL</summary>

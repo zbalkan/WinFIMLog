@@ -40,12 +40,12 @@ namespace WinFIMLog.USN
             record = new ParsedUsnRecord();
             filename = string.Empty;
 
-            // Need at least the fixed header size
-            if (position + Marshal.SizeOf<NativeMethods.UsnRecord>() > buffer.Length)
+            // The declared header is 60 bytes. Marshal.SizeOf would report the CLR's padded size,
+            // which is larger and would reject a final record that is entirely valid.
+            const int headerSize = NativeMethods.UsnRecordV2HeaderBytes;
+            if (position + headerSize > buffer.Length)
                 return false;
 
-            // Marshal the fixed header
-            var headerSize = Marshal.SizeOf<NativeMethods.UsnRecord>();
             var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
             try
             {

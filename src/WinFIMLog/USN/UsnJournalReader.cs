@@ -156,11 +156,17 @@ namespace WinFIMLog.USN
 
             var input = new NativeMethods.ReadUsnJournalData
             {
-                StartUsn = unchecked((ulong)startUsn),
+                StartUsn = startUsn,
                 ReasonMask = AllReasons,
-                ReturnOnlyOnChange = 0,
+
+                // Reporting the change when it happens matters more than waiting for the writing
+                // handle to close; a transient file may never be closed cleanly at all.
+                ReturnOnlyOnClose = 0,
                 Timeout = 0,
-                MaximumLength = ReadBufferBytes,
+
+                // Return whatever is available instead of blocking until a byte threshold is met.
+                BytesToWaitFor = 0,
+                UsnJournalID = JournalId,
                 MinMajorVersion = 2,
                 MaxMajorVersion = 2
             };

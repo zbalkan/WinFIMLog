@@ -129,18 +129,6 @@ namespace WinFIMLog.Jobs
             var decision = UsnCursorPolicy.Decide(stored, journal.UsnJournalID,
                 journal.FirstUsn, journal.LowestValidUsn, journal.NextUsn);
 
-            if (decision.IsGap)
-            {
-                // Loss is reported and reconciled, never absorbed (ADR-0003). The journal cannot say
-                // what was in the lost span, so a Tier 0 snapshot resolves persistent state.
-                _repository.RecordGap(volumeKey, reader.VolumeSerialNumber, driveLetter,
-                    decision.Reason, stored?.LastReadUsn, decision.StartUsn);
-                _health.CoverageGap(SourceName, $"{driveLetter}:", decision.Reason);
-                _snapshots.RequestFileSystemSnapshot($"UsnJournal{decision.Reason}", $"{driveLetter}:");
-                _logger.LogWarning("USN journal coverage gap on {Drive}: ({Reason}); resuming at USN {Usn}",
-                    driveLetter, decision.Reason, decision.StartUsn);
-            }
-
             var result = reader.Read(decision.StartUsn, settleThreshold);
             if (result.Status != UsnReadStatus.Succeeded)
             {
@@ -151,6 +139,22 @@ namespace WinFIMLog.Jobs
                 }
 
                 return;
+            }
+
+            if (decision.IsGap)
+            {
+                // Reported only once the read that recovers from it has succeeded. Reporting on the
+                // decision alone would re-emit the same gap on every poll while a volume's reads keep
+                // failing, because the cursor that resolves it is only saved after a successful read.
+                //
+                // Loss is reported and reconciled, never absorbed (ADR-0003). The journal cannot say
+                // what was in the lost span, so a Tier 0 snapshot resolves persistent state.
+                _repository.RecordGap(volumeKey, reader.VolumeSerialNumber, driveLetter,
+                    decision.Reason, stored?.LastReadUsn, decision.StartUsn);
+                _health.CoverageGap(SourceName, $"{driveLetter}:", decision.Reason);
+                _snapshots.RequestFileSystemSnapshot($"UsnJournal{decision.Reason}", $"{driveLetter}:");
+                _logger.LogWarning("USN journal coverage gap on {Drive}: ({Reason}); resuming at USN {Usn}",
+                    driveLetter, decision.Reason, decision.StartUsn);
             }
 
             var published = 0;

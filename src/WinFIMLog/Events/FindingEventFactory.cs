@@ -30,6 +30,13 @@ namespace WinFIMLog.Events
                     ["currentAcl"] = change.ACLs,
                     ["previousAcl"] = change.PreviousACL,
                     ["objectType"] = change.ObjectType.ToString(),
+
+                    // Which tier saw this. A UsnJournal finding is namespace evidence only, so a
+                    // consumer must not read its absent hash or attribution as a failed lookup.
+                    ["observationSource"] = change.ObservationSource,
+                    ["usn"] = change.UsnValue,
+                    ["usnReason"] = change.UsnReason,
+                    ["pathUnresolved"] = change.PathUnresolved ? true : null,
                     ["renameCorrelationMethod"] = change.OldPath is not null ? "RuntimeAdjacentBufferPair" : null,
                     ["renameCorrelationConfidence"] = change.OldPath is not null ? "Low" : null,
                     ["attributionStatus"] = change.AttributionStatus.ToString(),

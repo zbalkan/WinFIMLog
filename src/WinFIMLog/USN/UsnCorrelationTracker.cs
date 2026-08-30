@@ -23,7 +23,7 @@ namespace WinFIMLog.USN
     /// is a backstop: overflow drops the oldest entries, which can only cause a duplicate event,
     /// never a missed one.
     /// </remarks>
-    internal sealed class UsnCorrelationTracker
+    public sealed class UsnCorrelationTracker
     {
         private const int MaxEntries = 50_000;
 

@@ -1,6 +1,6 @@
 # ADR-0014 — Explicit product limitations
 
-* Status: Accepted
+* Status: Accepted, amended by ADR-0020
 * Date: 2026-08-16
 
 ## Decision
@@ -12,11 +12,19 @@ best-effort attribution. The following limitations remain explicit.
 ## Completeness and evidence
 
 * Activity which creates and deletes an object entirely between snapshots may
-  be absent if the notification source also misses it. WinFIMLog does not own a
-  replayable audit history.
+  be absent if the notification source also misses it. Tier 0.5 (ADR-0020)
+  covers this on NTFS volumes with an active journal; it remains uncovered on
+  other volumes, where the journal is inactive, and where the record's path
+  cannot be resolved. WinFIMLog does not own a replayable audit history.
 * Service downtime and boot activity have no live notification coverage.
   Persistent filesystem or registry state left by that activity is detected by
-  the next complete snapshot; transient activity is not guaranteed.
+  the next complete snapshot. Tier 0.5 replays the downtime window from a
+  persisted cursor where the journal still retains it; a downtime longer than
+  journal retention is a reported gap, and registry activity is not covered.
+* Tier 0.5 findings carry no content hash, no ACL evidence and no attribution
+  when the object no longer exists. They are namespace evidence, marked
+  `observationSource: UsnJournal`, and a record whose parent directory was also
+  deleted carries `pathUnresolved` and an unmatched placeholder path.
 * A failed or interrupted snapshot is retained as `Building` or `Invalid` and
   is never completeness evidence. Detection is delayed until a later successful
   snapshot.

@@ -1,6 +1,6 @@
 # ADR-0001 — Notification sources are not integrity monitoring
 
-* Status: Accepted
+* Status: Accepted, amended by ADR-0020
 * Date: 2026-08-16
 
 ## Decision
@@ -14,6 +14,11 @@ transient operation.
 The rejected alternative was a hybrid durable journal. It would require durable
 append and source cursors before acknowledging every source event, which neither
 `FileSystemWatcher` nor the current registry ETW source can supply end to end.
+
+ADR-0020 scopes that rejection to notification sources. The NTFS change journal
+supplies the durable append itself and exposes a resumable position, so it is
+admitted as a bounded Tier 0.5 source. It remains subordinate: it is not
+completeness authority and does not change the snapshot-first decision above.
 
 ## Guarantees and migration
 

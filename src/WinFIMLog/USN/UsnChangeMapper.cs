@@ -78,8 +78,16 @@ namespace WinFIMLog.USN
             string.IsNullOrEmpty(parentPath) ||
             parentPath.EndsWith(UnresolvedSegment, StringComparison.Ordinal);
 
+        /// <summary>Joins a resolved parent path to a record's filename.</summary>
+        /// <remarks>
+        /// The separator is hard-coded rather than taken from <see cref="Path.DirectorySeparatorChar"/>
+        /// because these are NTFS volume paths, which are backslash-delimited irrespective of the
+        /// separator the running runtime happens to prefer.
+        /// </remarks>
         internal static string CombinePath(string parentPath, string filename)
         {
+            const char separator = '\\';
+
             if (string.IsNullOrEmpty(filename))
             {
                 return parentPath;
@@ -90,10 +98,9 @@ namespace WinFIMLog.USN
                 return filename;
             }
 
-            return parentPath.EndsWith(Path.DirectorySeparatorChar) ||
-                   parentPath.EndsWith(Path.AltDirectorySeparatorChar)
+            return parentPath.EndsWith(separator) || parentPath.EndsWith('/')
                 ? parentPath + filename
-                : parentPath + Path.DirectorySeparatorChar + filename;
+                : parentPath + separator + filename;
         }
 
         /// <summary>Builds the namespace-only change for a record whose path could not be resolved.</summary>

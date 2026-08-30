@@ -8,6 +8,7 @@ using WinFIMLog.FIM;
 using WinFIMLog.Health;
 using WinFIMLog.Jobs;
 using WinFIMLog.Snapshots;
+using WinFIMLog.USN;
 
 namespace WinFIMLog
 {
@@ -25,6 +26,7 @@ namespace WinFIMLog
 
         private readonly Settings _settings;
         private readonly ISnapshotCoordinator _snapshots;
+        private readonly FileSystemUsnJournalMonitorJob? _usnMonitor;
         private CancellationTokenSource? _registryMonitorCancellation;
         private Task? _registryMonitorTask;
 
@@ -34,7 +36,10 @@ namespace WinFIMLog
                       Settings settings,
                       IHealthReporter health,
                       HealthMetrics metrics,
-                      ISnapshotCoordinator snapshots)
+                      ISnapshotCoordinator snapshots,
+                      IBuffer<FileSystemChange> fileSystemStore,
+                      UsnJournalCursorRepository usnCursors,
+                      UsnCorrelationTracker usnCorrelation)
         {
             _logger = logger;
             _settings = settings;
@@ -44,6 +49,14 @@ namespace WinFIMLog
             _capture = capture;
             _regMonitor = new RegistryMonitorJob(_logger, regStore, settings, snapshots);
             _fsMonitor = new FileSystemMonitorJob(_logger, capture, health, settings, snapshots);
+
+            // Tier 0.5 is opt-in until its load profile is qualified, so the job is not even
+            // constructed when disabled; the setting is fixed at startup like the capture queue.
+            if (settings.EnableUsnJournalMonitoring)
+            {
+                _usnMonitor = new FileSystemUsnJournalMonitorJob(_logger, fileSystemStore, usnCursors,
+                    usnCorrelation, settings, health, snapshots);
+            }
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
@@ -64,7 +77,7 @@ namespace WinFIMLog
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken) => ExecutableTask(stoppingToken);
 
-        private async Task CleanupAsync(Task? fileSystemMonitorTask)
+        private async Task CleanupAsync(Task? fileSystemMonitorTask, Task? usnMonitorTask)
         {
             try
             {
@@ -73,12 +86,18 @@ namespace WinFIMLog
                     await fileSystemMonitorTask;
                 }
 
+                if (usnMonitorTask != null)
+                {
+                    await usnMonitorTask;
+                }
+
                 await StopRegistryMonitorAsync();
             }
             finally
             {
                 _fsMonitor.Dispose();
                 _regMonitor.Dispose();
+                _usnMonitor?.Dispose();
             }
         }
 
@@ -88,6 +107,7 @@ namespace WinFIMLog
         {
             Task? fileSystemMonitorTask = null;
             Task? scopeRefreshTask = null;
+            Task? usnMonitorTask = null;
 
             try
             {
@@ -95,6 +115,7 @@ namespace WinFIMLog
                 // retained only for upgrade compatibility and is never an execution gate.
                 fileSystemMonitorTask = _fsMonitor.RunAsync(stoppingToken);
                 scopeRefreshTask = RefreshScopeAsync(stoppingToken);
+                usnMonitorTask = _usnMonitor?.RunAsync(stoppingToken);
 
                 if (_settings.EnableRegistryMonitoring)
                 {
@@ -125,7 +146,7 @@ namespace WinFIMLog
                     try { await scopeRefreshTask; }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
                 }
-                await CleanupAsync(fileSystemMonitorTask);
+                await CleanupAsync(fileSystemMonitorTask, usnMonitorTask);
             }
         }
 

@@ -79,6 +79,7 @@ namespace WinFIMLog
                     _ = services.AddSingleton<FileSystemCaptureQueue>();
                     _ = services.AddSingleton(provider => new UsnCorrelationTracker(
                         TimeSpan.FromSeconds(provider.GetRequiredService<Settings>().UsnCorrelationWindowSeconds)));
+                    _ = services.AddSingleton<UsnJournalCursorRepository>();
                     _ = services.AddSingleton<ITpmBaselineIntegrity, TpmBaselineIntegrity>();
                     _ = services.AddSingleton<BaselineRepository>();
                     _ = services.AddSingleton<FileSystemBaselineAvailability>();

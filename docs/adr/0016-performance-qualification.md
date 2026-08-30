@@ -1,6 +1,6 @@
 # ADR-0016 — Performance qualification gate
 
-* Status: Accepted
+* Status: Accepted, amended by ADR-0020
 * Date: 2026-08-16
 
 ## Decision
@@ -29,6 +29,13 @@ Run `scripts/phase2-fault-injection.ps1` in an elevated Windows test VM. Attach
 the resulting Event Log export and performance table to the release gate. A
 profile is supported only when it has no unexplained gaps, no unbounded growth,
 and queue lag returns to zero after the burst.
+
+## Tier 0.5 journal gate
+
+The NTFS change journal source (ADR-0020) ships opt-in and stays opt-in until its own
+measurements are recorded. Its cost scales with total volume write activity rather than with
+monitored scope, because the journal is read per volume and filtered afterwards. ADR-0020 lists
+the required measurements and the pass condition.
 
 ## Supported publish mode
 

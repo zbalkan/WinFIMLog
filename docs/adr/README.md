@@ -20,3 +20,4 @@
 * [ADR-0018 — Architecture remediation closure](0018-architecture-remediation-closure.md)
 * [ADR-0019 — Defect closure register](0019-defect-closure-register.md)
 * [ADR-0020 — NTFS change journal replay as a Tier 0.5 source](0020-usn-journal-tier.md)
+* [ADR-0021 — NTFS Object IDs and file reference numbers rejected as entity identity](0021-file-identity-object-ids-rejected.md)

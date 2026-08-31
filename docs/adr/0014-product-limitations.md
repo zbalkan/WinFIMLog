@@ -1,6 +1,6 @@
 # ADR-0014 — Explicit product limitations
 
-* Status: Accepted, amended by ADR-0020
+* Status: Accepted, amended by ADR-0020, ADR-0021
 * Date: 2026-08-16
 
 ## Decision
@@ -28,6 +28,16 @@ best-effort attribution. The following limitations remain explicit.
   deleted carries `pathUnresolved` and an unmatched placeholder path. A replay
   can also re-report an operation Tier 1 already reported at a gap boundary;
   consumers deduplicate these by `RecordId` as they do any other retry.
+* Tier 0.5 path resolution (ADR-0021) has two identifier-derived limitations. A
+  monitored directory with multiple hard links resolves to whichever name
+  `GetFinalPathNameByHandle` returns, chosen by the API and not by WinFIMLog; a
+  finding's path is not guaranteed to be the name an operator or
+  `MonitoredPaths` would recognize as canonical. Parent-directory path
+  resolution is cached by `FileReferenceNumber` with no TTL, only a
+  clear-on-overflow backstop; because NTFS can reuse an MFT record after
+  deletion, a cache entry could in principle serve a stale path for a reused
+  reference before eviction. Both affect only the path label on a namespace
+  finding, never Tier 0 identity or evidence.
 * A failed or interrupted snapshot is retained as `Building` or `Invalid` and
   is never completeness evidence. Detection is delayed until a later successful
   snapshot.

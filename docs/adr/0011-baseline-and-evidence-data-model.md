@@ -1,6 +1,6 @@
 # ADR-0011 — Baseline and evidence data model
 
-* Status: Accepted
+* Status: Accepted, amended by ADR-0021
 * Date: 2026-08-16
 
 ## Decision
@@ -12,6 +12,10 @@ represented explicitly by `OldPath` and `NewPath` in reconciliation results,
 but path identity cannot prove rename continuity: a rename appears as deletion
 plus creation, and delete/recreate at one path is ambiguous. Reuse-safe file ID
 is deferred. Registry values use their canonical hive/key/value path.
+
+ADR-0021 records why the deferral stands: NTFS Object IDs and `FileReferenceNumber` were both
+evaluated against their actual Win32 contracts and rejected as identity, for reasons that do not
+resolve if simply revisited later without new evidence.
 
 ## Baseline lifecycle
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using WinFIMLog.Utils;
 
@@ -75,10 +76,14 @@ namespace WinFIMLog.USN
             var handle = IntPtr.Zero;
             try
             {
-                var fileId = new NativeMethods.FileIdFull
+                // Type = FileId selects the 64-bit LARGE_INTEGER union member; Size must be the
+                // full FILE_ID_DESCRIPTOR size, not just the bytes this call happens to populate,
+                // because that is what a real caller passes and what Size documents (ADR-0021).
+                var fileId = new NativeMethods.FileIdDescriptor
                 {
-                    LowPart = fileRef & 0xFFFFFFFFUL,
-                    HighPart = (long)((fileRef >> 32) & 0xFFFFFFFFUL)
+                    Size = (uint)Marshal.SizeOf<NativeMethods.FileIdDescriptor>(),
+                    Type = NativeMethods.FileId,
+                    FileIdValue = unchecked((long)fileRef)
                 };
 
                 handle = NativeMethods.OpenFileById(volumeHandle, ref fileId, NativeMethods.GENERIC_READ,

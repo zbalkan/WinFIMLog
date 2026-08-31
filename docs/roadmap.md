@@ -31,26 +31,21 @@ verified against the decision, not around it.
 No code changed in this step. Everything after this point should be read against these three
 documents, not against assumptions the earlier Tier 0.5 work carried.
 
-## 2. Fix: `OpenFileById` parameter layout
+## 2. Fix: `OpenFileById` parameter layout — done, this session
 
-**Priority: before any Windows validation, not after.** `NativeMethods.FileIdFull` (16 bytes: two
-integer fields) does not match Win32's `FILE_ID_DESCRIPTOR` (24 bytes: `dwSize` + `Type` + a
-16-byte union). The call has never executed for real; on real Windows it most likely fails
-`OpenFileById` outright rather than corrupting memory, since the marshalled buffer is smaller than
-what the callee expects to read — but "path resolution fails on every call" silently degrades
-Tier 0.5 to placeholder paths for everything, which is worse than a build error because nothing
-currently detects it.
+`NativeMethods.FileIdFull` is replaced by `FileIdDescriptor`, matching Win32's real 24-byte
+`{ dwSize; Type; union { LARGE_INTEGER; GUID; FILE_ID_128; }; }`. The bug was worse on inspection
+than first estimated: the original struct's `LowPart`/`HighPart` naming borrowed
+`LARGE_INTEGER`'s alternate 32+32 view, but declared both fields as 8-byte (`ulong`/`long`)
+rather than 4-byte, so it neither carried the required discriminator nor reconstructed the
+64-bit value correctly even by accident. `DirectoryPathCache.Resolve` now sets
+`Type = FileId` (the plain 64-bit member, per ADR-0021 — never `ObjectId`) and `Size` from
+`Marshal.SizeOf`, and reinterprets the `ulong` file reference into the field's bit pattern
+directly rather than splitting it.
 
-Fix shape (not applied here, per the no-change instruction under which it was found):
-add `dwSize` (`uint`, = 24) and `Type` (`uint`, `FileIdType` = 0 for the 64-bit
-`FileReferenceNumber` this codebase actually uses) ahead of the existing 16-byte payload in a
-corrected struct, and update `DirectoryPathCache.Resolve` to populate them. A `Marshal.OffsetOf`
-test in the style of `UsnRecordParserTests.Record_header_field_offsets_match_the_win32_layout`
-should pin the corrected layout the same way that test already pins `USN_RECORD_V2`, so a future
-edit can't silently reintroduce the mismatch.
-
-Ships with: a unit test proving the struct's total size and field offsets against the documented
-`FILE_ID_DESCRIPTOR` layout, without requiring Windows to catch a regression.
+`FileIdDescriptorTests` pins the struct's total size (24) and field offsets via
+`Marshal.OffsetOf`, in the same style as `UsnRecordParserTests.Record_header_field_offsets_match_the_win32_layout`,
+plus a round-trip check for a file reference with its top bit set. 195 tests passing (191 + 4 new).
 
 ## 3. Windows validation (carried over, unstarted)
 
@@ -85,13 +80,12 @@ stays `0` until this is recorded, per ADR-0016's release gate.
 
 ## 6. Process note, not an action item
 
-This session found two real defects (`USN_RECORD_V2`/`READ_USN_JOURNAL_DATA` field widths, now
-fixed; `FILE_ID_DESCRIPTOR`, item 2 above) in code that was written, unit-tested, and committed
-without ever running against real Windows or NTFS. Both were structurally undetectable by the
-test suite as it existed at the time each defect was introduced — they surfaced only from reading
-the Win32 contracts directly against the code, once for a build failure and once for an unrelated
+This session found and fixed three real defects (`USN_RECORD_V2` and `READ_USN_JOURNAL_DATA`
+field widths; `FILE_ID_DESCRIPTOR`, item 2) in code that was written, unit-tested, and committed
+without ever running against real Windows or NTFS. All three were structurally undetectable by
+the test suite as it existed at the time each was introduced — they surfaced only from reading the
+Win32 contracts directly against the code: twice chasing a build failure, once for an unrelated
 question about file GUIDs. Worth naming plainly: nothing about this repository's CI currently
-executes Tier 0.5 code on Windows, so a third such defect is exactly as likely to be sitting in
-`UsnJournalReader` or `DirectoryPathCache` right now as the first two were before they were found.
-Item 3 is the only thing that closes that risk; no amount of additional unit testing on the
-current CI matrix can.
+executes Tier 0.5 code on Windows, so a fourth such defect is exactly as likely to be sitting in
+`UsnJournalReader` right now as the first three were before they were found. Item 3 is the only
+thing that closes that risk; no amount of additional unit testing on the current CI matrix can.

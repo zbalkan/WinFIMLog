@@ -143,12 +143,31 @@ namespace WinFIMLog.Utils
             public ulong AllocationDelta;
         }
 
-        /// <summary>FILE_ID_FULL structure for OpenFileById</summary>
+        /// <summary>FILE_ID_TYPE: which union member <see cref="FileIdDescriptor"/> carries.</summary>
+        /// <remarks>This codebase only ever sets <see cref="FileId"/>, per ADR-0021.</remarks>
+        public const uint FileId = 0;
+
+        /// <summary>
+        /// FILE_ID_DESCRIPTOR, the actual parameter OpenFileById takes.
+        /// </summary>
+        /// <remarks>
+        /// The real struct is <c>{ DWORD dwSize; FILE_ID_TYPE Type; union { LARGE_INTEGER FileId;
+        /// GUID ObjectId; FILE_ID_128 ExtendedFileId; }; }</c> — 24 bytes, not the bare 64-bit value
+        /// a caller might expect. A prior version of this struct modeled only 16 bytes with no
+        /// discriminator, which does not describe any layout OpenFileById actually reads; see
+        /// ADR-0021 for how that surfaced and why this codebase only ever populates the 64-bit
+        /// <see cref="FileIdValue"/> member (Type = <see cref="FileId"/>), never an Object ID.
+        /// <see cref="FileIdDescriptorTests"/> pins the offsets and total size against this contract.
+        /// </remarks>
         [StructLayout(LayoutKind.Sequential)]
-        public struct FileIdFull
+        public struct FileIdDescriptor
         {
-            public ulong LowPart;
-            public long HighPart;
+            public uint Size;
+            public uint Type;
+            public long FileIdValue;
+
+            /// <summary>Unused tail of the union (GUID/FILE_ID_128 are 16 bytes; FileId is 8).</summary>
+            private readonly long reserved;
         }
 
         /// <summary>Invokes FSCTL_READ_USN_JOURNAL or FSCTL_QUERY_USN_JOURNAL on a volume</summary>
@@ -202,7 +221,7 @@ namespace WinFIMLog.Utils
         [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode), SuppressUnmanagedCodeSecurity]
         public static extern IntPtr OpenFileById(
             IntPtr hVolumeHandle,
-            ref FileIdFull lpFileID,
+            ref FileIdDescriptor lpFileID,
             uint dwDesiredAccess,
             uint dwShareMode,
             IntPtr lpSecurityAttributes,

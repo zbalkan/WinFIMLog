@@ -51,14 +51,14 @@ $missing = @(7776,7777,7778,7786,7787,7788 | Where-Object { $_ -notin $found })
 if ($missing.Count) { throw "Phase 1 smoke test missed event IDs: $($missing -join ', '). Verify the smoke directory and HKCU Run key are monitored." }
 $expectedTypes = @{ 7776='FileSystemFinding'; 7777='FileSystemFinding'; 7778='FileSystemFinding'; 7786='RegistryFinding'; 7787='RegistryFinding'; 7788='RegistryFinding' }
 $records = @()
-foreach ($event in $events) {
-  try { $record = $event.Message | ConvertFrom-Json }
-  catch { throw "Event $($event.Id) was written, but its message is not a structured EventContract: $($_.Exception.Message)" }
-  if ($record.eventId -ne $event.Id) {
-    throw "Event Log ID $($event.Id) does not match envelope eventId $($record.eventId)."
+foreach ($log in $events) {
+  try { $record = $log.Message | ConvertFrom-Json }
+  catch { throw "Event $($log.Id) was written, but its message is not a structured EventContract: $($_.Exception.Message)" }
+  if ($record.eventId -ne $log.Id) {
+    throw "Event Log ID $($log.Id) does not match envelope eventId $($record.eventId)."
   }
-  if ($record.recordType -ne $expectedTypes[$event.Id]) {
-    throw "Event $($event.Id) used record type '$($record.recordType)' instead of '$($expectedTypes[$event.Id])'."
+  if ($record.recordType -ne $expectedTypes[$log.Id]) {
+    throw "Event $($log.Id) used record type '$($record.recordType)' instead of '$($expectedTypes[$log.Id])'."
   }
   $records += $record
 }

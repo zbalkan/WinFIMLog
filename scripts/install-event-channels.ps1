@@ -23,4 +23,4 @@ else {
 }
 
 & wevtutil.exe sl $logName "/ms:$MaxBytes" /rt:false "/ca:$sddl"
-if ($LASTEXITCODE) { throw "wevtutil failed for $logName: $LASTEXITCODE" }
+if ($LASTEXITCODE) { throw "wevtutil failed for ${$logName}: $LASTEXITCODE" }

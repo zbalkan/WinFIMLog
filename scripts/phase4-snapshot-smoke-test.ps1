@@ -17,9 +17,9 @@ function Wait-WinFIMLogEvent([datetime]$after, [scriptblock]$predicate, [string]
     [string]$logName = 'WinFIMLog', [string]$providerName = 'WinFIMLog') {
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     do {
-        $event = Get-WinEvent -FilterHashtable @{ LogName=$logName; ProviderName=$providerName; StartTime=$after } -ErrorAction SilentlyContinue |
+        $log = Get-WinEvent -FilterHashtable @{ LogName=$logName; ProviderName=$providerName; StartTime=$after } -ErrorAction SilentlyContinue |
             Where-Object $predicate | Select-Object -First 1
-        if ($event) { return $event }
+        if ($log) { return $log }
         Start-Sleep -Seconds 5
     } while ((Get-Date) -lt $deadline)
     throw "Timed out waiting for $description."
